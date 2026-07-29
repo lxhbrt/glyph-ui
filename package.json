@@ -6,23 +6,23 @@
   "description": "Grok Build Terminal — browser UI for Grok Build via ACP",
   "author": {
     "name": "Alexander Hubert",
-    "url": "https://github.com/lxndrhbrt"
+    "url": "https://github.com/lxhbrt"
   },
   "contributors": [
     {
       "name": "Alexander Hubert",
-      "url": "https://github.com/lxndrhbrt"
+      "url": "https://github.com/lxhbrt"
     }
   ],
   "license": "MIT",
   "copyright": "Copyright (c) 2026 Alexander Hubert",
-  "homepage": "https://github.com/lxndrhbrt/grok-chat-ui#readme",
+  "homepage": "https://github.com/lxhbrt/grok-chat-ui#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lxndrhbrt/grok-chat-ui.git"
+    "url": "git+https://github.com/lxhbrt/grok-chat-ui.git"
   },
   "bugs": {
-    "url": "https://github.com/lxndrhbrt/grok-chat-ui/issues"
+    "url": "https://github.com/lxhbrt/grok-chat-ui/issues"
   },
   "keywords": [
     "grok",
