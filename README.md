@@ -68,12 +68,15 @@ npm run service:uninstall
 Doppelklick auf `scripts/Open Glyph.command`  
 oder: `npm run open` → öffnet **http://127.0.0.1:5174/**
 
-### Smoke-Tests
+### Tests & CI
 
 ```bash
-npm test                  # temp. Server: Health + WS + Sessions
-SMOKE_URL=http://127.0.0.1:5174 npm test   # gegen laufenden Prod-Service
+npm test                  # Unit + Smoke (temp. Server: Health + WS + CSRF + Sessions)
+npm run lint              # ESLint
+SMOKE_URL=http://127.0.0.1:5174 npm test   # Smoke gegen laufenden Prod-Service
 ```
+
+Auf `main` und bei Pull Requests läuft dasselbe über GitHub Actions (Node 22 → `npm ci` → lint → test).
 
 ## Nutzung
 
