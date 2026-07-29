@@ -22,6 +22,7 @@
  *   { type: "thought_chunk", text }
  *   { type: "tool", title, status, kind?, toolCallId? }
  *   { type: "plan", entries: PlanEntry[], planId? }  // ACP agent plan (full replace)
+ *   { type: "available_commands", commands: AvailableCommand[] }
  *   { type: "system", text }            // bridge notices (fork, deep search start, …)
  *   { type: "turn_done", stopReason? }
  *   { type: "error", message }
@@ -42,6 +43,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import * as acp from "@agentclientprotocol/sdk";
+import {
+  commandsBroadcastPayload,
+  normalizeAvailableCommands,
+} from "./commands.js";
 import {
   planBroadcastPayload,
   planUpdateFromSession,
@@ -1039,6 +1044,11 @@ class GrokBridge {
      * @type {{ planId: string | null, entries: Array<{ content: string, status: string, priority: string }> } | null}
      */
     this.plan = null;
+    /**
+     * Latest availableCommands from the agent (sessionUpdate).
+     * @type {Array<{ name: string, description: string, inputHint: string }>}
+     */
+    this.availableCommands = [];
   }
 
   statusPayload(extra = {}) {
@@ -1053,7 +1063,6 @@ class GrokBridge {
       ...extra,
     };
   }
-
 
   /** Apply plan state and fan out to browsers. */
   setPlan(entries, planId = null) {
@@ -1076,6 +1085,20 @@ class GrokBridge {
     this.plan = null;
     if (broadcast) {
       this.broadcast(planBroadcastPayload([]));
+    }
+  }
+
+  setAvailableCommands(raw, { broadcast = true } = {}) {
+    this.availableCommands = normalizeAvailableCommands(raw);
+    if (broadcast) {
+      this.broadcast(commandsBroadcastPayload(this.availableCommands));
+    }
+  }
+
+  clearAvailableCommands({ broadcast = true } = {}) {
+    this.availableCommands = [];
+    if (broadcast) {
+      this.broadcast(commandsBroadcastPayload([]));
     }
   }
 
@@ -1144,6 +1167,11 @@ class GrokBridge {
         JSON.stringify(
           planBroadcastPayload(this.plan.entries, this.plan.planId),
         ),
+      );
+    }
+    if (this.availableCommands.length) {
+      ws.send(
+        JSON.stringify(commandsBroadcastPayload(this.availableCommands)),
       );
     }
   }
@@ -1414,6 +1442,7 @@ class GrokBridge {
       const parsed = planUpdateFromSession(update);
       if (!parsed) return;
       if (parsed.remove) {
+        // Only clear if this removal matches the active plan (or no id)
         if (
           !parsed.planId ||
           !this.plan?.planId ||
@@ -1424,6 +1453,12 @@ class GrokBridge {
         return;
       }
       this.setPlan(parsed.entries, parsed.planId);
+      return;
+    }
+
+    // Live slash-command catalog from the agent (replaces static UI lists)
+    if (kind === "available_commands_update") {
+      this.setAvailableCommands(update.availableCommands);
     }
   }
 
@@ -1664,6 +1699,7 @@ class GrokBridge {
     this.sessionId = newId;
     this.adoptConfigOptions(result.configOptions);
     this.clearPlan({ broadcast: true });
+    this.clearAvailableCommands({ broadcast: true });
     this.broadcast(
       this.statusPayload({
         forked: true,
@@ -1795,6 +1831,9 @@ class GrokBridge {
     if (!this.connection) throw new Error("Not connected");
     await this.createSession();
     this.clearPlan({ broadcast: true });
+    // Commands usually re-arrive after session/new; clear so the UI does not
+    // show a catalog from the previous session until the agent refreshes it.
+    this.clearAvailableCommands({ broadcast: true });
     this.broadcast({
       type: "status",
       connected: true,
@@ -1817,6 +1856,7 @@ class GrokBridge {
       this.clearCancelWatchdog();
       this.activeTools.clear();
       this.clearPlan({ broadcast: false });
+      this.clearAvailableCommands({ broadcast: false });
       return;
     }
 
@@ -1829,6 +1869,7 @@ class GrokBridge {
     this.clearCancelWatchdog();
     this.activeTools.clear();
     this.clearPlan({ broadcast: true });
+    this.clearAvailableCommands({ broadcast: true });
     this.sessionId = null;
     this.connection = null;
     if (

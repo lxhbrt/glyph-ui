@@ -98,6 +98,11 @@ const COMMAND_LEGEND = [
         need: "optional",
         desc: "Grok-Antwort vorlesen (Grok TTS). Button am Nachrichten-Kopf. Stimme wählbar.",
       },
+      {
+        cmd: "Kopieren",
+        need: "optional",
+        desc: "Nachricht in die Zwischenablage (Button neben Vorlesen). Ersetzt TUI /copy.",
+      },
     ],
   },
   {
@@ -121,102 +126,12 @@ const COMMAND_LEGEND = [
       {
         cmd: "Bilder / Video",
         need: "auf Anfrage",
-        desc: "Im TUI: /imagine, /imagine-video. Im Chat oft als Freitext möglich.",
+        desc: "Über Agent-Slash-Befehle (live unten) oder Freitext.",
       },
       {
         cmd: "Skills · Workflows · Subagents",
         need: "optional",
         desc: "Installierte Skills/Workflows; parallele Agenten bei komplexen Tasks.",
-      },
-    ],
-  },
-  {
-    group: "Wichtige Slash-Befehle (TUI / Agent)",
-    items: [
-      {
-        cmd: "/new · /clear",
-        need: "optional",
-        desc: "Neue Session (Disk bleibt). Hier: Stift / Neuer Chat.",
-      },
-      {
-        cmd: "/delete",
-        need: "optional",
-        desc: "Session-Historie endgültig löschen. Hier: Lupe → Schließen → Löschen.",
-      },
-      {
-        cmd: "/resume · /dashboard",
-        need: "optional",
-        desc: "Sessions laden / Agent-Dashboard. Hier: Lupe (Overview).",
-      },
-      {
-        cmd: "/fork",
-        need: "optional",
-        desc: "Session branchen. Hier: Aktion „Fork“ im Composer.",
-      },
-      {
-        cmd: "/compact [notiz]",
-        need: "bei vollem Kontext",
-        desc: "Verlauf komprimieren, Context-Fenster freimachen.",
-      },
-      {
-        cmd: "/context · /session-info",
-        need: "optional",
-        desc: "Context-Nutzung & Session-Status. Alias: /status, /info.",
-      },
-      {
-        cmd: "/plan [text] · /view-plan",
-        need: "optional",
-        desc: "Plan-Modus: erst spezifizieren, dann umsetzen.",
-      },
-      {
-        cmd: "/effort low|medium|high|xhigh",
-        need: "optional",
-        desc: "Reasoning-Aufwand (TUI). Beeinflusst Tiefe/Geschwindigkeit.",
-      },
-      {
-        cmd: "/model <name>",
-        need: "optional",
-        desc: "Modell wechseln (TUI). Diese UI nutzt typisch Grok Build.",
-      },
-      {
-        cmd: "/deep-research <query>",
-        need: "optional",
-        desc: "Hintergrund-Recherche mit Quellen. Hier: Aktion Deep Search.",
-      },
-      {
-        cmd: "/workflow · /workflows · /goal",
-        need: "optional",
-        desc: "Workflows starten/steuern; Goals für längere autonome Aufgaben.",
-      },
-      {
-        cmd: "/imagine · /imagine-video",
-        need: "optional",
-        desc: "Bild- bzw. Video-Generierung (TUI/Agent).",
-      },
-      {
-        cmd: "/skills · /plugins · /mcps · /hooks",
-        need: "optional",
-        desc: "Erweiterungen, MCP-Server, Hooks (TUI-Modals).",
-      },
-      {
-        cmd: "/remember · /memory · /flush · /dream",
-        need: "optional",
-        desc: "Memory notieren/verwalten (teilw. experimentell).",
-      },
-      {
-        cmd: "/copy · /export",
-        need: "optional",
-        desc: "Letzte Antwort kopieren bzw. Gespräch exportieren.",
-      },
-      {
-        cmd: "/doctor · /docs · /login",
-        need: "bei Problemen",
-        desc: "Diagnose, Doku, Auth. Alias Docs: /howto, /guides.",
-      },
-      {
-        cmd: "/quit · /exit",
-        need: "optional",
-        desc: "Agent beenden. Hier: Pill „verbunden“ klicken.",
       },
     ],
   },
@@ -240,22 +155,51 @@ const COMMAND_LEGEND = [
       },
     ],
   },
-  {
-    group: "Hinweis",
+];
+
+/** Built after agentCommands are known (live ACP catalog). */
+function agentCommandGroup(agentCommands) {
+  if (agentCommands?.length) {
+    return {
+      group: "Agent-Befehle (live)",
+      items: agentCommands.map((c) => {
+        const slash = c.name.startsWith("/") ? c.name : `/${c.name}`;
+        const cmd = c.inputHint ? `${slash} ${c.inputHint}` : slash;
+        return {
+          cmd,
+          need: "agent",
+          desc: c.description || "—",
+        };
+      }),
+    };
+  }
+  return {
+    group: "Agent-Befehle (live)",
     items: [
       {
-        cmd: "Slash in dieser UI",
-        need: "hilfreich",
-        desc: "Viele /Befehle sind TUI-Pager-Builtins. Im Browser oft Freitext an den Agenten; Deep Search/Fork/Sessions sind hier extra verdrahtet.",
-      },
-      {
-        cmd: "Vollständige Liste",
-        need: "optional",
-        desc: "TUI: /docs · Datei: ~/.grok/docs/user-guide/04-slash-commands.md",
+        cmd: "noch leer",
+        need: "auto",
+        desc: "Erscheint nach Verbindung, sobald Grok available_commands_update sendet — keine statische Pflege mehr.",
       },
     ],
-  },
-];
+  };
+}
+
+const COMMAND_HINTS = {
+  group: "Hinweis",
+  items: [
+    {
+      cmd: "Slash in dieser UI",
+      need: "hilfreich",
+      desc: "Live-Liste = was der Agent wirklich anbietet. Glyph-eigene Aktionen: Deep Search, Fork, Sessions, Kopieren, Plan-Leiste.",
+    },
+    {
+      cmd: "TUI-Doku",
+      need: "optional",
+      desc: "Zusätzlich: ~/.grok/docs/user-guide/04-slash-commands.md · TUI /docs",
+    },
+  ],
+};
 
 /** Render short handbook lines with optional **bold** spans. */
 function HandbookText({ children }) {
@@ -402,7 +346,12 @@ const SHORT_HANDBOOK = [
   },
 ];
 
-function CommandLegend({ open, onClose, initialTab = "handbook" }) {
+function CommandLegend({
+  open,
+  onClose,
+  initialTab = "handbook",
+  agentCommands = [],
+}) {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState(initialTab); // handbook | commands
   const panelRef = useRef(null);
@@ -415,20 +364,31 @@ function CommandLegend({ open, onClose, initialTab = "handbook" }) {
     }
   }, [open, initialTab]);
 
+  const commandGroups = useMemo(
+    () => [
+      ...COMMAND_LEGEND,
+      agentCommandGroup(agentCommands),
+      COMMAND_HINTS,
+    ],
+    [agentCommands],
+  );
+
   const filteredCommands = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return COMMAND_LEGEND;
-    return COMMAND_LEGEND.map((g) => ({
-      ...g,
-      items: g.items.filter(
-        (it) =>
-          it.cmd.toLowerCase().includes(q) ||
-          it.desc.toLowerCase().includes(q) ||
-          it.need.toLowerCase().includes(q) ||
-          g.group.toLowerCase().includes(q),
-      ),
-    })).filter((g) => g.items.length > 0);
-  }, [query]);
+    if (!q) return commandGroups;
+    return commandGroups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter(
+          (it) =>
+            it.cmd.toLowerCase().includes(q) ||
+            it.desc.toLowerCase().includes(q) ||
+            it.need.toLowerCase().includes(q) ||
+            g.group.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [query, commandGroups]);
 
   const filteredHandbook = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -507,10 +467,12 @@ function CommandLegend({ open, onClose, initialTab = "handbook" }) {
           </p>
         ) : (
           <p className="overview-hint">
-            <strong>Pflicht:</strong> keine — Freitext reicht.{" "}
-            <strong>Empfohlen:</strong> verbunden + klare Aufgabe.{" "}
-            <strong>Slash:</strong> im TUI nativ; hier u. a. Deep Search, Fork,
-            Sessions.
+            <strong>UI:</strong> Leiste &amp; Composer (statisch).{" "}
+            <strong>Agent:</strong> live aus der Session (
+            {agentCommands.length
+              ? `${agentCommands.length} Befehle`
+              : "warte auf Katalog"}
+            ). <strong>Kopieren:</strong> Button an der Nachricht.
           </p>
         )}
 
@@ -574,7 +536,9 @@ function CommandLegend({ open, onClose, initialTab = "handbook" }) {
                             it.need === "bei vollem Kontext" ||
                             it.need === "bei Problemen"
                               ? "soft"
-                              : it.need === "normal" || it.need === "auto"
+                              : it.need === "normal" ||
+                                  it.need === "auto" ||
+                                  it.need === "agent"
                                 ? "ok"
                                 : "muted"
                           }`}

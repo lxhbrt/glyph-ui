@@ -22,6 +22,8 @@ import {
   IconMic,
   IconSpeaker,
   IconSpeakerOff,
+  IconCopy,
+  IconCheck,
   IconRefresh,
 } from "./components/icons.jsx";
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
@@ -71,6 +73,11 @@ export default function App() {
   /** ACP execution plan (agent todo list) — slim bar above composer. */
   const [planEntries, setPlanEntries] = useState([]);
   const [planCollapsed, setPlanCollapsed] = useState(false);
+  /** Live slash catalog from available_commands_update. */
+  const [agentCommands, setAgentCommands] = useState([]);
+  /** Flash "copied" on message action button. */
+  const [copiedId, setCopiedId] = useState(null);
+  const copiedTimerRef = useRef(null);
   /** Composer action: chat | deep-search | fork (TUI-aligned, not thinking toggle). */
   const [sendAction, setSendAction] = useState(() => {
     try {
@@ -247,6 +254,33 @@ export default function App() {
     setTtsBusyId(null);
   }, []);
 
+  const copyMessage = useCallback(async (id, rawText) => {
+    const text = String(rawText || "").trim();
+    if (!text) {
+      setError("Nichts zum Kopieren.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      setCopiedId(id);
+      copiedTimerRef.current = setTimeout(() => {
+        setCopiedId((cur) => (cur === id ? null : cur));
+        copiedTimerRef.current = null;
+      }, 1600);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Kopieren fehlgeschlagen",
+      );
+    }
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    },
+    [],
+  );
 
   const speakText = useCallback(
     async (id, rawText) => {
@@ -731,7 +765,10 @@ export default function App() {
             }
             // New session or opened history: plan is turn-scoped
             setPlanEntries([]);
-            if (!msg.opened) return;
+            if (!msg.opened) {
+              setAgentCommands([]);
+              return;
+            }
           }
           // Server became idle without turn_done (or after it) → drain queue
           // Never drain while cancelling is still true (busy should stay true).
@@ -789,6 +826,20 @@ export default function App() {
         if (msg.type === "plan") {
           // Full-replace ACP plan (classic plan + plan_update items)
           setPlanEntries(normalizeClientPlanEntries(msg.entries));
+          return;
+        }
+
+        if (msg.type === "available_commands") {
+          const list = Array.isArray(msg.commands) ? msg.commands : [];
+          setAgentCommands(
+            list
+              .filter((c) => c && c.name)
+              .map((c) => ({
+                name: String(c.name),
+                description: String(c.description || ""),
+                inputHint: String(c.inputHint || ""),
+              })),
+          );
           return;
         }
 
@@ -1593,35 +1644,66 @@ export default function App() {
                                 : "Tool"}
                         {m.streaming ? " …" : ""}
                       </span>
-                      {m.role === "assistant" && !m.streaming && m.text?.trim() ? (
-                        <button
-                          type="button"
-                          className={`msg-speak-btn${
-                            speakingId === m.id ? " is-speaking" : ""
-                          }${ttsBusyId === m.id ? " is-busy" : ""}`}
-                          title={
-                            speakingId === m.id
-                              ? "Vorlesen stoppen"
-                              : ttsBusyId === m.id
-                                ? "Erzeuge Sprache…"
-                                : voiceAvailable
-                                  ? "Mit Grok TTS vorlesen"
-                                  : voiceHint || "TTS: XAI_API_KEY setzen"
-                          }
-                          aria-label={
-                            speakingId === m.id
-                              ? "Vorlesen stoppen"
-                              : "Antwort vorlesen"
-                          }
-                          disabled={Boolean(ttsBusyId && ttsBusyId !== m.id)}
-                          onClick={() => void speakText(m.id, m.text)}
-                        >
-                          {speakingId === m.id ? (
-                            <IconSpeakerOff size={14} />
-                          ) : (
-                            <IconSpeaker size={14} />
-                          )}
-                        </button>
+                      {(m.role === "assistant" || m.role === "user") &&
+                      !m.streaming &&
+                      m.text?.trim() ? (
+                        <span className="msg-actions">
+                          <button
+                            type="button"
+                            className={`msg-action-btn${
+                              copiedId === m.id ? " is-copied" : ""
+                            }`}
+                            title={
+                              copiedId === m.id
+                                ? "Kopiert"
+                                : "Nachricht kopieren"
+                            }
+                            aria-label={
+                              copiedId === m.id
+                                ? "Kopiert"
+                                : "Nachricht kopieren"
+                            }
+                            onClick={() => void copyMessage(m.id, m.text)}
+                          >
+                            {copiedId === m.id ? (
+                              <IconCheck size={14} />
+                            ) : (
+                              <IconCopy size={14} />
+                            )}
+                          </button>
+                          {m.role === "assistant" ? (
+                            <button
+                              type="button"
+                              className={`msg-action-btn msg-speak-btn${
+                                speakingId === m.id ? " is-speaking" : ""
+                              }${ttsBusyId === m.id ? " is-busy" : ""}`}
+                              title={
+                                speakingId === m.id
+                                  ? "Vorlesen stoppen"
+                                  : ttsBusyId === m.id
+                                    ? "Erzeuge Sprache…"
+                                    : voiceAvailable
+                                      ? "Mit Grok TTS vorlesen"
+                                      : voiceHint || "TTS: XAI_API_KEY setzen"
+                              }
+                              aria-label={
+                                speakingId === m.id
+                                  ? "Vorlesen stoppen"
+                                  : "Antwort vorlesen"
+                              }
+                              disabled={Boolean(
+                                ttsBusyId && ttsBusyId !== m.id,
+                              )}
+                              onClick={() => void speakText(m.id, m.text)}
+                            >
+                              {speakingId === m.id ? (
+                                <IconSpeakerOff size={14} />
+                              ) : (
+                                <IconSpeaker size={14} />
+                              )}
+                            </button>
+                          ) : null}
+                        </span>
                       ) : null}
                     </div>
                     {m.role === "user" && m.attachments?.length ? (
@@ -1946,6 +2028,7 @@ export default function App() {
         open={showLegend}
         onClose={() => setShowLegend(false)}
         initialTab={legendTab}
+        agentCommands={agentCommands}
       />
       <CommandOverview
         open={showOverview}
