@@ -45,6 +45,13 @@ export default function App() {
   const [reconnecting, setReconnecting] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [cwd, setCwd] = useState("");
+  /**
+   * True while the message list is an offline disk archive (not the live agent
+   * session). Cleared on successful live open or reconnect — reconnect must
+   * wipe the archive view so the user does not write into a fresh session
+   * while still looking at old history.
+   */
+  const viewingArchiveRef = useRef(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
@@ -695,6 +702,7 @@ export default function App() {
           // "opened" reset is handled by onOpenSession with transcript;
           // only clear on plain Neue-Session reset.
           if (msg.reset && !msg.opened) {
+            viewingArchiveRef.current = false;
             setMessages([]);
             assistantBuf.current = "";
             thoughtBuf.current = "";
@@ -1010,6 +1018,7 @@ export default function App() {
   const reset = useCallback(() => {
     if (!wsRef.current || busy) return;
     wsRef.current.send(JSON.stringify({ type: "reset" }));
+    viewingArchiveRef.current = false;
     setMessages([]);
     setError("");
     setBusy(false);
@@ -1035,6 +1044,13 @@ export default function App() {
         setConnected(true);
         setSessionId(json.sessionId || null);
         setError("");
+        // Fresh agent session after offline archive browse — drop the stale view.
+        if (viewingArchiveRef.current) {
+          viewingArchiveRef.current = false;
+          setMessages([]);
+          assistantBuf.current = "";
+          thoughtBuf.current = "";
+        }
       } else {
         throw new Error(json.error || "Grok ist nach dem Start noch offline");
       }
@@ -1112,9 +1128,11 @@ export default function App() {
       thoughtBuf.current = "";
       // Pin live id only after a successful session/load (or already-active open).
       if (liveOk && payload?.sessionId) {
+        viewingArchiveRef.current = false;
         setSessionId(payload.sessionId);
       } else if (!liveOk && payload?.session?.id) {
         // Offline archive view — show which disk session is on screen.
+        viewingArchiveRef.current = true;
         setSessionId(payload.session.id);
       }
       if (payload?.session?.cwd) setCwd(payload.session.cwd);
@@ -1143,6 +1161,17 @@ export default function App() {
     }
   }, [isWorking, queue.length, connected, scheduleDrainQueue]);
   const workingSeconds = useWorkingSeconds(isWorking);
+
+  /** Short path for the header (home → ~). Full path stays in title tooltip. */
+  const cwdLabel = useMemo(() => {
+    if (!cwd) return "";
+    // /Users/name or /home/name → ~/…
+    const tilde = cwd.replace(/^\/(?:Users|home)\/[^/]+/, "~");
+    if (tilde.length <= 36) return tilde;
+    const parts = tilde.split("/").filter(Boolean);
+    if (parts.length <= 2) return tilde;
+    return `…/${parts.slice(-2).join("/")}`;
+  }, [cwd]);
 
   const composerPlaceholder = useMemo(() => {
     if (!connected) return "Warte auf Grok-Verbindung…";
@@ -1281,9 +1310,13 @@ export default function App() {
         <header className="top">
           <div>
             <h1>Glyph</h1>
-            <p className="sub" title={sessionId || undefined}>
+            <p
+              className="sub"
+              title={[sessionId, cwd].filter(Boolean).join("\n") || undefined}
+            >
               Build Term for Grok · ACP
               {sessionId ? ` · ${sessionId.slice(0, 8)}` : ""}
+              {cwdLabel ? ` · ${cwdLabel}` : ""}
             </p>
           </div>
           <div className="top-actions">

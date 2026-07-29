@@ -467,6 +467,9 @@ async function saveAttachmentFile({ name, mimeType, dataBase64 }) {
     throw Object.assign(new Error("Ungültiger Speicherpfad"), { status: 400 });
   }
   await fs.writeFile(filePath, buf);
+  // Opportunistic sweep so long-lived LaunchAgent processes still honor TTL
+  // without waiting for the next hourly interval / process restart.
+  void cleanupUploads().catch(() => {});
   return {
     id,
     name: safeName,
@@ -1902,18 +1905,30 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`Grok connected     → ${bridge.connected}`);
 
   // Ensure upload dir exists so the first attachment does not race mkdir.
+  const logUploadCleanup = (r) => {
+    if (r?.removed > 0) {
+      console.log(
+        `Uploads cleanup     → removed ${r.removed} file(s), freed ${r.freedBytes} B`,
+      );
+    }
+  };
   ensureUploadDir()
     .then(() => cleanupUploads())
-    .then((r) => {
-      if (r.removed > 0) {
-        console.log(
-          `Uploads cleanup     → removed ${r.removed} file(s), freed ${r.freedBytes} B`,
-        );
-      }
-    })
+    .then(logUploadCleanup)
     .catch((err) => {
       console.error("Could not create/cleanup upload dir:", err);
     });
+
+  // LaunchAgent KeepAlive can keep this process up for weeks — re-sweep hourly
+  // so the 24h maxAge actually applies without a reboot. unref: don't block exit.
+  const uploadCleanupTimer = setInterval(() => {
+    void cleanupUploads()
+      .then(logUploadCleanup)
+      .catch((err) => console.error("Uploads cleanup failed:", err));
+  }, 60 * 60 * 1000);
+  if (typeof uploadCleanupTimer.unref === "function") {
+    uploadCleanupTimer.unref();
+  }
 
   // Connect ACP agent after the UI is already reachable.
   bridge.start().catch((err) => {
