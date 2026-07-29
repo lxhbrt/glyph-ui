@@ -25,6 +25,7 @@ import {
 } from "./components/icons.jsx";
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
 import { invalidateWsToken, wsUrl } from "./utils/format.js";
+import { upsertToolMessage } from "./utils/messages.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
 
@@ -749,17 +750,11 @@ export default function App() {
         }
 
         if (msg.type === "tool") {
+          // tool_call + tool_call_update share toolCallId — upsert one row
+          // (same pattern as upsertStreaming) instead of appending duplicates.
           busyRef.current = true;
           setBusy(true);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `tool-${msg.toolCallId || Date.now()}`,
-              role: "tool",
-              text: `${msg.title}${msg.status ? ` · ${msg.status}` : ""}`,
-              streaming: false,
-            },
-          ]);
+          setMessages((prev) => upsertToolMessage(prev, msg));
           scrollToBottom();
           return;
         }
