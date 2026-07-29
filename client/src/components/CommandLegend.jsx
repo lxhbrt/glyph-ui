@@ -71,7 +71,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "↵ / Snack · Stopp",
         need: "auto",
-        desc: "Idle = Enter. Während Arbeit: Text+Enter = Queue; leerer Klick/Snack = sofortiger Soft-Abbruch (ACP). Kritische Tools laufen sicher zu Ende mit Hinweis.",
+        desc: "Runder Button: idle = ↵. Während Arbeit: Text+Enter = Queue; leerer Klick/Snack (runder Stopp-Punkt) = Soft-Abbruch (ACP). Kritische Tools laufen sicher zu Ende mit Hinweis.",
       },
       {
         cmd: "Chat | Deep Search | Fork",
@@ -338,9 +338,9 @@ const SHORT_HANDBOOK = [
     title: "Während Grok arbeitet",
     rows: [
       ["Idle", "Button zeigt ↵ → senden"],
-      ["Arbeitet", "Snack-Animation (Schlange jagt Apfel)"],
+      ["Arbeitet", "Runder Snack (Schlange jagt roten Stopp-Punkt)"],
       ["Text + Enter", "Follow-up → Warteschlange (WARTE)"],
-      ["Leer / Snack", "Soft-Stop (ACP-Cancel)"],
+      ["Leer / Snack", "Soft-Stop (ACP-Cancel) im Kreis-Button"],
       ["× / Leeren", "Queue-Eintrag bzw. ganze Queue löschen"],
       ["Neue Ausgabe ↓", "Wieder ans aktuelle Chat-Ende springen"],
     ],

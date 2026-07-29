@@ -44,8 +44,9 @@ function snackMixColor(a, b, t) {
 }
 
 /**
- * Snack while Grok works: chases a coral STOP square on a dark arena.
+ * Snack while Grok works: chases a coral STOP target on a dark arena.
  * Gold snake (accent family) stays visible in light + dark theme.
+ * Board is square so it fills the round send/stop control cleanly.
  * Click = cancel turn.
  */
 function SnackBoard({ running, onStopClick }) {
@@ -81,14 +82,14 @@ function SnackBoard({ running, onStopClick }) {
     const parent = canvas.parentElement;
     const rect =
       parent?.getBoundingClientRect?.() || canvas.getBoundingClientRect();
-    const availW = Math.max(28, Math.floor(rect.width));
-    const availH = Math.max(40, Math.floor(rect.height));
+    // Round send button → square board that fits the circle
+    const avail = Math.max(28, Math.floor(Math.min(rect.width, rect.height)));
 
     const cols = 4;
-    let cell = Math.floor(Math.min(availW / cols, availH / 5));
+    const rows = 4; // square grid matches circular clip
+    let cell = Math.floor(avail / cols);
     // Floor matches side scrollbar / WARTE stones (SNACK_CELL)
     cell = Math.max(SNACK_CELL, cell);
-    const rows = Math.max(4, Math.floor(availH / cell));
     const boardW = cols * cell;
     const boardH = rows * cell;
     const maxLen = 5;
@@ -235,20 +236,22 @@ function SnackBoard({ running, onStopClick }) {
       return { gap, size: s, px: x * cell + gap, py: y * cell + gap };
     };
 
-    /** Coral stop block — clear target, not neon red */
+    /** Coral stop disc — round target, matches circular send/stop control */
     const drawStop = (x, y) => {
-      const pad = Math.max(1, Math.floor(cell * 0.08));
+      const pad = Math.max(1, Math.floor(cell * 0.12));
       const s = cell - pad * 2;
+      const cx = x * cell + pad + s / 2;
+      const cy = y * cell + pad + s / 2;
+      const r = s / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fillStyle = palette.stop;
-      ctx.fillRect(x * cell + pad, y * cell + pad, s, s);
-      const inn = Math.max(2, Math.floor(s * 0.22));
+      ctx.fill();
+      const inn = Math.max(1.5, s * 0.22);
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(1, r - inn), 0, Math.PI * 2);
       ctx.fillStyle = palette.stopInner;
-      ctx.fillRect(
-        x * cell + pad + inn,
-        y * cell + pad + inn,
-        s - inn * 2,
-        s - inn * 2,
-      );
+      ctx.fill();
     };
 
     /** Dark pupil on head, aimed at the stop target (works light + dark). */
@@ -315,7 +318,7 @@ function SnackBoard({ running, onStopClick }) {
 
       const next = [{ x: nx, y: ny }, ...s.snake];
       if (nx === s.food.x && ny === s.food.y) {
-        // Hit stop square in-game — just relocate; real stop is click
+        // Hit stop disc in-game — just relocate; real stop is click
         s.snake = next.slice(0, maxLen);
         s.food = placeFood(s.snake);
       } else {
@@ -324,7 +327,7 @@ function SnackBoard({ running, onStopClick }) {
       draw();
     };
 
-    // Any click on the snack board while working = stop (red square is the cue)
+    // Any click on the snack board while working = stop (red disc is the cue)
     const onClick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -351,7 +354,7 @@ function SnackBoard({ running, onStopClick }) {
     <canvas
       ref={canvasRef}
       className="snack-canvas snack-canvas--stop"
-      title="Rotes Rechteck = Stopp (klicken)"
+      title="Roter Punkt = Stopp (klicken)"
     />
   );
 }

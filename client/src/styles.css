@@ -24,10 +24,11 @@
   --gold-dim: color-mix(in srgb, var(--gold) 72%, #000000);
   --gold-deep: color-mix(in srgb, var(--gold) 45%, #000000);
 
-  --user: #1c1a18;
-  --assistant: #16141b;
-  --thought: #1a1814;
-  --tool: #181614;
+  /* Chat: assistant flat on --bg; user = Grok-style bubble fill */
+  --user: #2a272f;
+  --assistant: transparent;
+  --thought: transparent;
+  --tool: transparent;
 
   /* THE stop red (stop rim + snack target only) */
   --danger: #d94a4a;
@@ -71,10 +72,11 @@
   --gold-dim: color-mix(in srgb, var(--gold) 78%, #000000);
   --gold-deep: color-mix(in srgb, var(--gold) 52%, #000000);
 
-  --user: color-mix(in srgb, var(--gold) 8%, #f0ebe3);
-  --assistant: #f7f4ee;
-  --thought: #f0ebe3;
-  --tool: #f2efe9;
+  /* Chat: assistant flat on --bg; user bubble slightly warm */
+  --user: color-mix(in srgb, var(--gold) 10%, #e8e2d8);
+  --assistant: transparent;
+  --thought: transparent;
+  --tool: transparent;
 
   --danger: #d94a4a;
   --danger-bright: color-mix(in srgb, var(--danger) 55%, #ffffff);
@@ -398,7 +400,7 @@ button.send {
   font-size: 1.35rem;
   line-height: 1;
   letter-spacing: 0;
-  border-radius: 14px;
+  border-radius: 999px; /* same round language as composer bubble */
   align-self: stretch;
   position: relative;
   overflow: hidden;
@@ -406,7 +408,8 @@ button.send {
     background 0.2s ease,
     border-color 0.2s ease,
     box-shadow 0.2s ease,
-    color 0.2s ease;
+    color 0.2s ease,
+    border-radius 0.2s ease;
 }
 
 button.send:hover:not(:disabled):not(.send--working) {
@@ -523,7 +526,7 @@ button.send .send-snack {
   width: 100%;
   height: 100%;
   border: none;
-  border-radius: 10px;
+  border-radius: 999px; /* clip snack arena to the round send button */
   background: transparent;
   overflow: hidden;
 }
@@ -612,16 +615,16 @@ button.send .send-snack .snack-canvas {
 .messages-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   min-height: min-content;
 }
 
-/* Seamless answer area — same surface as the page chrome */
+/* Seamless answer area — same black as page chrome (--bg) */
 .messages.messages--borderless {
   border: none;
   border-radius: 0;
-  background: transparent;
-  padding: 8px 2px 14px;
+  background: var(--bg);
+  padding: 8px 8px 18px 4px;
 }
 
 /* Hide native scrollbar — SnackScrollbar is the rail */
@@ -684,10 +687,17 @@ button.send .send-snack .snack-canvas {
   line-height: 1.5;
 }
 
+/*
+  Chat layout (Grok Chat style):
+  - Assistant / thought / tool / system → flat text on --bg (no card)
+  - User prompts → right-aligned speech bubble
+*/
 .msg {
-  border-radius: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 6px 4px 10px;
+  border: none;
+  background: transparent;
+  max-width: 100%;
   transition:
     border-color 0.25s ease,
     box-shadow 0.25s ease,
@@ -695,30 +705,64 @@ button.send .send-snack .snack-canvas {
 }
 
 .msg-highlight {
-  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 65%, var(--border));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
     0 0 20px color-mix(in srgb, var(--accent) 18%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--assistant));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  padding: 10px 12px;
 }
 
+/* Prompt bubble — like Grok Chat app */
 .msg-user {
   background: var(--user);
   align-self: flex-end;
-  max-width: 85%;
+  max-width: min(82%, 34rem);
+  border: none;
+  /* Speech bubble: round, slightly sharper corner toward the “tail” (bottom-right) */
+  border-radius: 1.25rem 1.25rem 0.35rem 1.25rem;
+  padding: 10px 14px 11px;
+  box-shadow: none;
 }
 
+.msg-user .role {
+  display: none; /* bubble alone carries the prompt; no “Du” chrome */
+}
+
+.msg-user .body,
+.msg-user .md-body {
+  font-size: 0.97rem;
+  line-height: 1.45;
+}
+
+/* Answers sit directly on the black chat surface */
 .msg-assistant {
-  background: var(--assistant);
+  background: transparent;
+  align-self: stretch;
+  max-width: min(100%, 48rem);
+  padding: 4px 6px 12px 2px;
 }
 
 .msg-thought {
-  background: var(--thought);
-  opacity: 0.85;
+  background: transparent;
+  opacity: 0.78;
+  max-width: min(100%, 48rem);
+  padding: 2px 6px 8px 2px;
 }
 
 .msg-tool {
-  background: var(--tool);
+  background: transparent;
   font-size: 0.9rem;
+  max-width: min(100%, 48rem);
+  padding: 2px 6px 8px 2px;
+  opacity: 0.92;
+}
+
+.msg-system {
+  background: transparent;
+  max-width: min(100%, 48rem);
+  padding: 2px 6px 8px 2px;
+  opacity: 0.9;
 }
 
 .role {
@@ -727,6 +771,11 @@ button.send .send-snack .snack-canvas {
   letter-spacing: 0.08em;
   color: var(--muted);
   margin-bottom: 6px;
+}
+
+.msg-assistant .role {
+  margin-bottom: 4px;
+  opacity: 0.9;
 }
 
 .role-row {
@@ -973,9 +1022,9 @@ button.send .send-snack .snack-canvas {
 .msg-queue {
   flex: 0 0 auto;
   border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--border));
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--gold) 8%, var(--panel));
-  padding: 8px 10px;
+  border-radius: 1.15rem;
+  background: color-mix(in srgb, var(--gold) 8%, var(--user));
+  padding: 8px 12px;
 }
 
 .msg-queue-head {
@@ -1148,13 +1197,18 @@ button.send .send-snack .snack-canvas {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
+/* Input shell — same “bubble” language as user prompts */
 .composer-box {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--user) 70%, var(--border));
+  border-radius: 1.45rem;
+  background: var(--user);
   overflow: hidden;
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--bg) 55%, transparent);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .composer.composer--grok textarea {
@@ -1167,10 +1221,14 @@ button.send .send-snack .snack-canvas {
   border-radius: 0;
   background: transparent;
   color: var(--text);
-  padding: 14px 14px 8px;
+  padding: 16px 18px 10px;
   font: inherit;
-  line-height: 1.4;
+  line-height: 1.45;
   overflow-y: auto;
+}
+
+.composer.composer--grok textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
 }
 
 .composer.composer--grok textarea:focus {
@@ -1178,8 +1236,10 @@ button.send .send-snack .snack-canvas {
 }
 
 .composer-box:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 8px 28px color-mix(in srgb, var(--bg) 50%, transparent);
 }
 
 .composer-toolbar {
@@ -1187,8 +1247,10 @@ button.send .send-snack .snack-canvas {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 10px 10px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  padding: 6px 12px 12px;
+  /* Soft fade instead of hard card edge inside the bubble */
+  border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  background: color-mix(in srgb, var(--bg) 12%, transparent);
 }
 
 .composer-tools {
@@ -1261,13 +1323,15 @@ button.send .send-snack .snack-canvas {
   height: 3.25rem;
   min-height: 3.25rem;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 999px; /* idle ↵ and working snack/stop share one circle */
 }
 
-.composer.composer--grok .send.send--working {
+.composer.composer--grok .send.send--working,
+.composer.composer--grok .send.send--morph-out {
   width: 3.5rem;
   height: 3.5rem;
   min-height: 3.5rem;
+  border-radius: 999px; /* keep circle while snack is visible */
 }
 
 .composer.composer--grok .send.send--working .send-face--enter {
@@ -1385,8 +1449,8 @@ button.send .send-snack .snack-canvas {
   flex-wrap: wrap;
   gap: 0;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 35%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 28%, transparent);
   overflow: hidden;
   max-width: 100%;
 }
@@ -1427,9 +1491,11 @@ button.send .send-snack .snack-canvas {
   cursor: not-allowed;
 }
 
+/* System notices — flat on chat bg, thin gold accent (no card fill) */
 .msg-system {
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
-  border-left: 3px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: transparent;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  padding-left: 10px;
   opacity: 0.95;
 }
 
@@ -2243,6 +2309,13 @@ button.cal-cell {
   }
 
   .msg-user {
+    max-width: 92%;
+  }
+
+  .msg-assistant,
+  .msg-thought,
+  .msg-tool,
+  .msg-system {
     max-width: 100%;
   }
 

@@ -59,15 +59,32 @@ npm start                 # UI + Bridge auf Port 5174
 │ Lupe │  Grok Build Terminal          [verbunden]  │
 │ Stift│────────────────────────────────────────────│
 │ !    │                                            │
-│ Cal  │              Chat-Verlauf                  │
-│ ──── │              (Markdown)                    │
+│ Cal  │     Antworten flach auf Schwarz            │
+│ ──── │          Prompt-Bubbles →                  │
 │ Wiki │                    │ Snack-Scrollbar       │
 │ Ordn.│                    │ (Schlange / Apfel)    │
 │ ☀/🌙 │────────────────────────────────────────────│
 │ ↻    │  [WARTE-Warteschlange, falls gefüllt]      │
-│      │  Textfeld · Chat | Deep Search | Fork · ↵  │
+│      │  Composer-Bubble · Aktionen · ↵ / Snack ○  │
 └──────┴────────────────────────────────────────────┘
 ```
+
+### Design (Grok-Chat-Stil)
+
+Chat und Composer folgen der **Grok Chat App**-Ästhetik: schwarze Fläche, Prompts als Sprechblasen, runde Controls.
+
+| Element | Darstellung |
+|---------|-------------|
+| **Chat-Hintergrund** | Gleich wie App-Chrome (`--bg`, nahezu schwarz) |
+| **Grok-Antworten** | Flach auf dem Hintergrund — **kein** Kartenrahmen |
+| **Deine Prompts** | Rechte **Sprechblase** (Fill `--user`, abgerundet) |
+| **Thinking / Tool / System** | Transparent; System mit feinem Gold-Strich links |
+| **Composer** | Bubble-Shell (gleiche Fill-Familie wie Prompts), großer Radius, weicher Schatten |
+| **Senden ↵** | **Runder** Button |
+| **Snack / Stopp** | Derselbe **Kreis** während der Arbeit; Stopp-Ziel = roter **Punkt** (nicht Rechteck); Arena 4×4, rund geclippt |
+| **Theme** | Hell/Dunkel; Light: hellere Bubble, Antworten weiter flach |
+
+CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Snack-Palette). Snack-Logik: `client/src/components/Snack.jsx`.
 
 ---
 
@@ -107,8 +124,8 @@ Ohne **verbunden** ist das Eingabefeld deaktiviert.
 
 1. Status **verbunden** sicherstellen.
 2. Nachricht tippen (Pfad, Fehler, Ziel — je klarer, desto besser).
-3. **Enter** senden · **Shift+Enter** = neue Zeile.
-4. Antwort streamt live: **Du**, **Grok**, **Thinking**, **Tool**, **System**.
+3. **Enter** senden · **Shift+Enter** = neue Zeile. Der runde Button zeigt idle **↵**, während Grok arbeitet **Snack** (Klick / leerer Enter = Stopp).
+4. Antwort streamt live flach im Chat; dein Prompt erscheint als Bubble. Rollen: **Grok**, **Thinking**, **Tool**, **System** (Prompts ohne „Du“-Label).
 
 ### Composer-Aktionen
 

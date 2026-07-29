@@ -80,9 +80,20 @@ SMOKE_URL=http://127.0.0.1:5174 npm test   # gegen laufenden Prod-Service
 3. Composer-Aktion wählen: **Chat** (normal), **Deep Search** (`/deep-research`), **Fork** (Session branchen)
 4. Status-Button **verbunden** / **offline**: klicken startet den lokalen Grok-Agent neu
 5. **Neue Session** startet eine frische ACP-Session
-6. **Overview** listet lokale Grok-Sessions und erlaubt Schließen mit optionalem Wiki-Archiv
+6. **Overview** listet lokale Grok-Sessions und erlaubt Schließen mit optionalem Wiki-Archiv (**Löschen** ≈ TUI `/delete`)
 
 Details: [HANDBUCH.md](./HANDBUCH.md)
+
+## UI-Design (Grok Chat Stil)
+
+| Element | Look |
+|---------|------|
+| Chat-Fläche | Schwarz wie die Umgebung (`--bg`) |
+| Antworten | Flach, ohne Karte |
+| Prompts | Rechte Sprechblasen |
+| Composer | Bubble-Eingabe, runder **↵** / runder **Snack-Stopp** |
+
+Siehe [HANDBUCH.md §2 Design](./HANDBUCH.md#design-grok-chat-stil).
 
 ## Umgebungsvariablen
 
