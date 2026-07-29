@@ -12,9 +12,26 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const DEFAULT_WIKI =
+/** Expand leading ~/ or ~path to the user home directory. */
+function expandHome(p) {
+  const s = String(p || "").trim();
+  if (!s) return s;
+  if (s === "~") return os.homedir();
+  if (s.startsWith("~/") || s.startsWith("~" + path.sep)) {
+    return path.join(os.homedir(), s.slice(2));
+  }
+  return s;
+}
+
+/**
+ * Wiki root for session archives.
+ * Override with OPENCLAW_WIKI_PATH (e.g. an Obsidian vault).
+ * Default is app-local under ~/.glyph-ui — no personal vault path in repo.
+ */
+const DEFAULT_WIKI = expandHome(
   process.env.OPENCLAW_WIKI_PATH ||
-  path.join(os.homedir(), "ObsidianVaults", "OpenClaw memory-wiki");
+    path.join(os.homedir(), ".glyph-ui", "wiki"),
+);
 
 const ARCHIVE_DIR_NAME = "sources/grok-sessions";
 
@@ -53,15 +70,15 @@ export async function ensureWikiArchiveLayout(wikiRoot = DEFAULT_WIKI) {
         ``,
         `# Grok Sessions Archive`,
         ``,
-        `Schließen über **Grok Build Terminal → Command Overview** legt hier Zusammenfassungen ab`,
+        `Schließen über **Glyph UI → Sessions (Lupe)** legt hier Zusammenfassungen ab`,
         `und kann den lokalen Session-Ordner unter \`~/.grok/sessions\` entfernen (Notebook entlasten).`,
         ``,
         `OpenClaw managed blocks werden nicht angefasst — nur dieser Ordner.`,
         ``,
         `## Sessions`,
         ``,
-        `<!-- grok-chat-ui:session-index:start -->`,
-        `<!-- grok-chat-ui:session-index:end -->`,
+        `<!-- glyph-ui:session-index:start -->`,
+        `<!-- glyph-ui:session-index:end -->`,
         ``,
       ].join("\n"),
       "utf8",
@@ -78,11 +95,21 @@ async function upsertIndexLink(indexPath, { title, fileName, sessionId, closedAt
     return;
   }
 
-  const start = "<!-- grok-chat-ui:session-index:start -->";
-  const end = "<!-- grok-chat-ui:session-index:end -->";
-  const i0 = content.indexOf(start);
-  const i1 = content.indexOf(end);
-  if (i0 === -1 || i1 === -1 || i1 < i0) return;
+  const markers = [
+    ["<!-- glyph-ui:session-index:start -->", "<!-- glyph-ui:session-index:end -->"],
+    ["<!-- grok-chat-ui:session-index:start -->", "<!-- grok-chat-ui:session-index:end -->"],
+  ];
+  let start, end, i0 = -1, i1 = -1;
+  for (const [s, e] of markers) {
+    i0 = content.indexOf(s);
+    i1 = content.indexOf(e);
+    if (i0 !== -1 && i1 !== -1 && i1 >= i0) {
+      start = s;
+      end = e;
+      break;
+    }
+  }
+  if (!start || i0 === -1 || i1 === -1 || i1 < i0) return;
 
   const before = content.slice(0, i0 + start.length);
   const after = content.slice(i1);

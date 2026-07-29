@@ -10,10 +10,10 @@
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>com.lxndrhbrt.grok-chat-ui</string>
+    <string>com.lxndrhbrt.glyph-ui</string>
 
     <key>Comment</key>
-    <string>Grok Build Terminal — Node bridge + ACP agent (by Alexander Hubert)</string>
+    <string>Glyph UI — Node bridge + ACP agent (by Alexander Hubert)</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -48,15 +48,17 @@
       <string>127.0.0.1</string>
       <key>GROK_BIN</key>
       <string>__HOME__/.grok/bin/grok</string>
-      <key>GROK_CHAT_CWD</key>
+      <key>GLYPH_UI_CWD</key>
       <string>__HOME__</string>
+      <key>GLYPH_UI_STATE_DIR</key>
+      <string>__HOME__/.glyph-ui</string>
       <key>NODE_ENV</key>
       <string>production</string>
     </dict>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/Library/Logs/grok-chat-ui/stdout.log</string>
+    <string>__HOME__/Library/Logs/glyph-ui/stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>__HOME__/Library/Logs/grok-chat-ui/stderr.log</string>
+    <string>__HOME__/Library/Logs/glyph-ui/stderr.log</string>
   </dict>
 </plist>

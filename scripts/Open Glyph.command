@@ -9,20 +9,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PORT="${PORT:-5174}"
 URL="http://127.0.0.1:${PORT}/"
+LABEL="com.lxndrhbrt.glyph-ui"
 
 # If nothing is listening, try starting the service once.
 if ! curl -fsS --max-time 1 "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
   echo "Service not up on :${PORT} — starting…"
   if [[ -f "$ROOT/scripts/start-service.sh" ]]; then
     # Prefer launchd if installed
-    if launchctl print "gui/$(id -u)/com.lxndrhbrt.grok-chat-ui" >/dev/null 2>&1; then
-      launchctl kickstart -k "gui/$(id -u)/com.lxndrhbrt.grok-chat-ui" 2>/dev/null || true
+    if launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
+      launchctl kickstart -k "gui/$(id -u)/${LABEL}" 2>/dev/null || true
     else
       # One-shot background start (needs client/dist)
       if [[ ! -d "$ROOT/client/dist" ]]; then
         (cd "$ROOT" && npm run build) || true
       fi
-      nohup bash "$ROOT/scripts/start-service.sh" >/tmp/grok-chat-ui-start.log 2>&1 &
+      nohup bash "$ROOT/scripts/start-service.sh" >/tmp/glyph-ui-start.log 2>&1 &
     fi
     for _ in 1 2 3 4 5 6 7 8 9 10; do
       if curl -fsS --max-time 1 "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then

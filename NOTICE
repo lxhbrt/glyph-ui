@@ -1,13 +1,17 @@
-Grok Build Terminal (grok-chat-ui)
+Glyph (package / repo may still be named grok-chat-ui)
 Copyright (c) 2026 Alexander Hubert (Lx Hbrt / @lxhbrt)
 
 This product is the original work of Lx Hbrt (Alexander Hubert).
 Repository identity and package metadata name the author as creator.
 
+Product name: Glyph UI
+Tagline: Build Term for Grok — independent browser UI for the local
+Grok Build CLI via ACP (Agent Client Protocol).
+
 Third-party dependencies remain under their respective licenses
 (see package.json / package-lock.json).
 
 "Grok" and "Grok Build" are trademarks of their respective owners
-(xAI / SpaceXAI). This project is an independent browser UI that
-integrates with the local Grok Build CLI; it is not affiliated with
-or endorsed by xAI unless stated otherwise.
+(xAI / SpaceXAI). This project is an independent, unofficial browser
+UI that integrates with the local Grok Build CLI; it is not affiliated
+with, sponsored by, or endorsed by xAI unless stated otherwise.

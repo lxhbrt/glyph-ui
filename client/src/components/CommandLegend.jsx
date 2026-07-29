@@ -509,7 +509,7 @@ function CommandLegend({ open, onClose, initialTab = "handbook" }) {
           <p className="overview-hint">
             <strong>Pflicht:</strong> keine — Freitext reicht.{" "}
             <strong>Empfohlen:</strong> verbunden + klare Aufgabe.{" "}
-            <strong>Slash:</strong> im TUI nativ; hier u. a. Deep Search, Fork,
+            <strong>Slash:</strong> im TUI nativ; hier u. a. Deep Search, Fork,
             Sessions.
           </p>
         )}

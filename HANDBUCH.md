@@ -1,9 +1,10 @@
-# Grok Build Terminal — Handbuch
+# Glyph — Handbuch
 
-Browser-Oberfläche für **Grok Build** (lokaler Coding-Agent).  
+**Glyph** (*Build Term for Grok*) — unabhängige Browser-Oberfläche für **Grok Build** (lokaler Coding-Agent).  
 Du schreibst im Browser; im Hintergrund läuft der echte Grok-Agent auf deinem Mac.
 
-**Erstellt von Lx Hbrt** · Copyright © 2026 · MIT License
+**Erstellt von Lx Hbrt** · Copyright © 2026 · MIT License  
+*Inoffiziell / unabhängig — nicht von xAI unterstützt oder freigegeben.*
 
 ```
 Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►  grok agent
@@ -21,7 +22,7 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 ### Entwicklung starten
 
 ```bash
-cd ~/grok-chat-ui
+cd ~/glyph-ui
 npm install
 npm run dev
 ```
@@ -39,7 +40,7 @@ npm run dev
 npm run service:install   # baut UI neu + Start bei Login
 npm run service:status
 npm run service:uninstall # wieder entfernen
-npm run open              # oder Doppelklick: scripts/Open Grok Build Terminal.command
+npm run open              # oder Doppelklick: scripts/Open Glyph.command
 npm test                  # Smoke: Health + WS + Sessions
 ```
 
@@ -56,7 +57,7 @@ npm start                 # UI + Bridge auf Port 5174
 
 ```
 ┌──────┬────────────────────────────────────────────┐
-│ Lupe │  Grok Build Terminal          [verbunden]  │
+│ Lupe │  Glyph                        [verbunden]  │
 │ Stift│────────────────────────────────────────────│
 │ !    │                                            │
 │ Cal  │     Antworten flach auf Schwarz            │
@@ -238,11 +239,13 @@ Aktive Chat-Session ist **geschützt** (nicht schließbar) — zuerst **Stift** 
 
 ### Wiki-Ziel
 
+Standard:
+
 ```
-~/ObsidianVaults/OpenClaw memory-wiki/sources/grok-sessions/
+~/.glyph-ui/wiki/sources/grok-sessions/
 ```
 
-Seiten sind als Rohquellen markiert und haben einen eigenen Index in diesem Ordner (OpenClaw-Hauptindex bleibt unberührt).
+Mit `OPENCLAW_WIKI_PATH` auf einen beliebigen Ordner umleiten (z. B. Obsidian-Vault). Seiten sind als Rohquellen markiert und haben einen eigenen Index in diesem Ordner (OpenClaw-Hauptindex bleibt unberührt).
 
 ---
 
@@ -283,7 +286,7 @@ Beispiel: *12 Events · 2 Sessions* = an dem Tag 12 Aktivitätseinträge in 2 ve
 | **Wiki** | Index-Datei (z. B. `00 Index` / `WIKI.md` / `index.md`) im Vault |
 | **Workspace** | Aktuellen `cwd` im Finder |
 
-Workspace steuert, wo der Agent Dateien liest/schreibt (Standard oft Home oder `GROK_CHAT_CWD`).
+Workspace steuert, wo der Agent Dateien liest/schreibt (Standard oft Home oder `GLYPH_UI_CWD`).
 
 ---
 
@@ -336,16 +339,16 @@ In der App: Symbol **Befehle** (filterbare Legende).
 |----------|---------|-----------|
 | `PORT` | `5174` | Prod + Dev-Bridge (Vite-UI separat auf 5173) |
 | `HOST` | `127.0.0.1` | Nur lokal |
-| `GROK_CHAT_CWD` | Startverzeichnis | Workspace für neue Sessions |
+| `GLYPH_UI_CWD` | Startverzeichnis | Workspace für neue Sessions |
 | `GROK_BIN` | `grok` | Pfad zur CLI |
 | `GROK_HOME` | `~/.grok` | Sessions & Auth |
-| `OPENCLAW_WIKI_PATH` | `~/ObsidianVaults/OpenClaw memory-wiki` | Wiki-Archiv |
-| `GROK_CHAT_STATE_DIR` | `~/.grok-chat-ui` | UI-State (z. B. Closed-Log) |
+| `OPENCLAW_WIKI_PATH` | `~/.glyph-ui/wiki` | Wiki-Archiv (optional Obsidian-Vault o. Ä.) |
+| `GLYPH_UI_STATE_DIR` | `~/.glyph-ui` | UI-State (z. B. Closed-Log) |
 
 Beispiel:
 
 ```bash
-GROK_CHAT_CWD="$HOME/mein-projekt" npm run dev
+GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 ```
 
 ---
@@ -411,7 +414,7 @@ Diagnose im TUI: **`/doctor`**.
 
 - [ ] `grok` eingeloggt  
 - [ ] UI offen, Status **verbunden**  
-- [ ] Workspace passt (Header-Pfad / `GROK_CHAT_CWD`)  
+- [ ] Workspace passt (Header-Pfad / `GLYPH_UI_CWD`)  
 - [ ] Enter = senden, Shift+Enter = Zeile  
 - [ ] Während Arbeit: Text → Queue, leer → Stop  
 - [ ] Sessions: Lupe · Aktivität: Kalender · Wissen: Wiki  
@@ -419,4 +422,4 @@ Diagnose im TUI: **`/doctor`**.
 
 ---
 
-*Stand: passend zur lokalen App `grok-chat-ui`. In der App: **Buch** ganz unten in der Leiste → Kurzhandbuch; **Befehle** in der Mitte → Legende.*
+*Stand: passend zur lokalen App **Glyph** (Repo-Ordner: `glyph-ui`). In der App: **Buch** ganz unten in der Leiste → Kurzhandbuch; **Befehle** in der Mitte → Legende.*

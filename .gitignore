@@ -30,6 +30,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
+*.bak
+*.bak.*
 
 # Local / personal state (do not publish)
 .grok-chat-ui/

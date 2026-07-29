@@ -15,8 +15,8 @@ import os from "node:os";
 const GROK_HOME = process.env.GROK_HOME || path.join(os.homedir(), ".grok");
 const SESSIONS_ROOT = path.join(GROK_HOME, "sessions");
 const STATE_DIR =
-  process.env.GROK_CHAT_STATE_DIR ||
-  path.join(os.homedir(), ".grok-chat-ui");
+  process.env.GLYPH_UI_STATE_DIR ||
+  path.join(os.homedir(), ".glyph-ui");
 const CLOSED_LOG = path.join(STATE_DIR, "closed-sessions.json");
 
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -89,6 +89,10 @@ function formatBytes(n) {
   return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
+/**
+ * Resolve a session directory and ensure it stays under SESSIONS_ROOT
+ * (no symlink escape, no path traversal via group names).
+ */
 async function findSessionDir(sessionId) {
   if (!isSessionId(sessionId)) return null;
   let groups;
@@ -97,17 +101,57 @@ async function findSessionDir(sessionId) {
   } catch {
     return null;
   }
+  let rootReal;
+  try {
+    rootReal = await fs.realpath(SESSIONS_ROOT);
+  } catch {
+    return null;
+  }
   for (const group of groups) {
     if (!group.isDirectory() || group.name.startsWith(".")) continue;
+    // Group names are encoded cwd paths — never allow path segments.
+    if (group.name === ".." || group.name.includes("/") || group.name.includes("\\")) {
+      continue;
+    }
     const candidate = path.join(SESSIONS_ROOT, group.name, sessionId);
     try {
-      const st = await fs.stat(candidate);
-      if (st.isDirectory()) return candidate;
+      const st = await fs.lstat(candidate);
+      if (!st.isDirectory() || st.isSymbolicLink()) continue;
+      const real = await fs.realpath(candidate);
+      const rel = path.relative(rootReal, real);
+      if (rel.startsWith("..") || path.isAbsolute(rel)) continue;
+      // Must be exactly <root>/<group>/<uuid>
+      if (rel.split(path.sep).length !== 2) continue;
+      return real;
     } catch {
       /* continue */
     }
   }
   return null;
+}
+
+/** Final guard before recursive delete — never rm outside sessions root. */
+async function assertSafeSessionDir(dir) {
+  if (!dir || typeof dir !== "string") {
+    throw new Error("Session path missing");
+  }
+  let rootReal;
+  let dirReal;
+  try {
+    rootReal = await fs.realpath(SESSIONS_ROOT);
+    dirReal = await fs.realpath(dir);
+  } catch {
+    throw new Error("Session path not resolvable");
+  }
+  const rel = path.relative(rootReal, dirReal);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error("Refusing to delete path outside sessions root");
+  }
+  const parts = rel.split(path.sep);
+  if (parts.length !== 2 || !isSessionId(parts[1])) {
+    throw new Error("Refusing to delete unexpected session path shape");
+  }
+  return dirReal;
 }
 
 function titleFromSummary(summary) {
@@ -233,7 +277,7 @@ function buildSummaryMarkdown({ meta, turns, truncated, freedBytes }) {
       ``,
       `# Grok Session: ${title}`,
       ``,
-      `Archiviert aus Grok Build Terminal (Command Overview) am ${date}.`,
+      `Archiviert aus Glyph UI (Command Overview) am ${date}.`,
       ``,
       `## Meta`,
       ``,
@@ -529,7 +573,8 @@ export async function closeSession(sessionId, {
   }
 
   if (deleteDisk) {
-    await fs.rm(dir, { recursive: true, force: true });
+    const safeDir = await assertSafeSessionDir(dir);
+    await fs.rm(safeDir, { recursive: true, force: true });
   }
 
   const entry = {

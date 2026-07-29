@@ -1,8 +1,10 @@
-# Grok Build Terminal
+# Glyph
 
-Browser-UI für **Grok Build** (Terminal/Agent) über ACP (Agent Client Protocol).
+**Build Term for Grok** — unabhängige Browser-UI für die lokale **Grok Build**-CLI über ACP (Agent Client Protocol).
 
 **Erstellt von [Lx Hbrt](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
+
+> Unofficial / independent — **not affiliated with or endorsed by xAI**. „Grok“ und „Grok Build“ sind Marken der jeweiligen Rechteinhaber.
 
 **Anwendungshandbuch (DE):** [HANDBUCH.md](./HANDBUCH.md)
 
@@ -18,8 +20,8 @@ Browser (React)  --WebSocket-->  Node Bridge  --stdio ACP-->  grok agent
 ## Installation
 
 ```bash
-git clone https://github.com/lxhbrt/grok-chat-ui.git
-cd grok-chat-ui
+git clone https://github.com/lxhbrt/glyph-ui.git
+cd glyph-ui
 npm install
 ```
 
@@ -63,7 +65,7 @@ npm run service:uninstall
 
 ### App öffnen (macOS)
 
-Doppelklick auf `scripts/Open Grok Build Terminal.command`  
+Doppelklick auf `scripts/Open Glyph.command`  
 oder: `npm run open` → öffnet **http://127.0.0.1:5174/**
 
 ### Smoke-Tests
@@ -97,20 +99,22 @@ Siehe [HANDBUCH.md §2 Design](./HANDBUCH.md#design-grok-chat-stil).
 
 ## Umgebungsvariablen
 
-Siehe [`.env.example`](./.env.example). Wichtige Variablen:
+Siehe [`.env.example`](./.env.example). `npm start` / `npm run dev` laden `.env` nativ (`node --env-file-if-exists=.env`); die Datei ist optional.
+
+Wichtige Variablen:
 
 | Variable | Default | Bedeutung |
 |----------|---------|-----------|
 | `PORT` | `5174` | Prod-Port (UI + Bridge; Dev-Bridge ebenfalls) |
 | `HOST` | `127.0.0.1` | Bind-Adresse |
-| `GROK_CHAT_CWD` | Home-Verzeichnis | Workspace für `session/new` |
+| `GLYPH_UI_CWD` | Home-Verzeichnis | Workspace für `session/new` |
 | `GROK_BIN` | `grok` | Pfad zur Grok-CLI |
 | `XAI_API_KEY` | — | Voice (STT/TTS) — [console.x.ai](https://console.x.ai) |
 
 Beispiel:
 
 ```bash
-GROK_CHAT_CWD="$HOME/mein-projekt" npm run dev
+GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 ```
 
 ## Architektur
@@ -128,9 +132,11 @@ Nur auf **localhost** laufen lassen. Die Bridge startet Grok mit `--always-appro
 
 ## Urheberrecht & Marken
 
+- **Produktname:** **Glyph** (eigenständig; „Build Term for Grok“ ist die Funktionsbeschreibung).
 - **Software:** Copyright © 2026 [Lx Hbrt](https://github.com/lxhbrt) (Alexander Hubert). Lizenziert unter [MIT](./LICENSE).
 - **Autorenliste:** [AUTHORS](./AUTHORS) · [NOTICE](./NOTICE)
-- „Grok“ / „Grok Build“ sind Marken der jeweiligen Rechteinhaber (xAI / SpaceXAI). Dieses Projekt ist eine unabhängige Browser-Oberfläche für die lokale CLI und steht in keiner offiziellen Partnerschaft, sofern nicht anders angegeben.
+- „Grok“ / „Grok Build“ sind Marken der jeweiligen Rechteinhaber (xAI / SpaceXAI). Dieses Projekt ist eine **unabhängige, inoffizielle** Browser-Oberfläche für die **lokale** Grok-Build-CLI. Es steht in **keiner** Partnerschaft mit xAI und wird von xAI **nicht** unterstützt oder freigegeben, sofern nicht ausdrücklich anders angegeben.
+- Glyph nutzt Grok nur als **Interoperabilitätsbezug** (CLI/ACP). Keine xAI-Logos oder offiziellen Assets als eigene Marke.
 
 ## Contributing
 

@@ -6,6 +6,9 @@
 /**
  * Activity calendar heatmap from local Grok sessions.
  * Source of truth: events.jsonl `ts` per session; fallback to summary dates.
+ *
+ * Days are calendar days in the server's local timezone (not UTC), so late-night
+ * work in CET/CEST lands on the correct heatmap day.
  */
 
 import { createReadStream, promises as fs } from "node:fs";
@@ -16,42 +19,74 @@ import readline from "node:readline";
 const GROK_HOME = process.env.GROK_HOME || path.join(os.homedir(), ".grok");
 const SESSIONS_ROOT = path.join(GROK_HOME, "sessions");
 const STATE_DIR =
-  process.env.GROK_CHAT_STATE_DIR ||
-  path.join(os.homedir(), ".grok-chat-ui");
+  process.env.GLYPH_UI_STATE_DIR ||
+  path.join(os.homedir(), ".glyph-ui");
 const CLOSED_LOG = path.join(STATE_DIR, "closed-sessions.json");
 
 const SESSION_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Full heatmap response TTL — invalidated on session close. */
+const ACTIVITY_CACHE_TTL_MS = 45_000;
+
+/** @type {{ key: string, at: number, data: object | null }} */
+let activityCache = { key: "", at: 0, data: null };
+
+/**
+ * Per-session events.jsonl rollup cache (mtime + size).
+ * @type {Map<string, { mtimeMs: number, size: number, byDay: Map<string, number>, total: number }>}
+ */
+const eventDayCache = new Map();
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+/** Local calendar day YYYY-MM-DD from a Date. */
+function localDayFromDate(d) {
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function todayLocal() {
+  return localDayFromDate(new Date());
+}
+
+/**
+ * Map a timestamp to a local calendar day.
+ * Bare YYYY-MM-DD (no time) is kept as-is; ISO/epoch convert via local TZ.
+ */
 function dayKey(isoOrDate) {
-  if (!isoOrDate) return null;
+  if (isoOrDate == null || isoOrDate === "") return null;
   if (typeof isoOrDate === "number") {
-    // unix seconds or ms
     const ms = isoOrDate < 1e12 ? isoOrDate * 1000 : isoOrDate;
-    const d = new Date(ms);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toISOString().slice(0, 10);
+    return localDayFromDate(new Date(ms));
   }
-  const s = String(isoOrDate);
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const s = String(isoOrDate).trim();
+  // Date-only: already a calendar day (do not re-parse as UTC midnight)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
+  return localDayFromDate(d);
 }
 
 function addDays(day, n) {
-  const d = new Date(`${day}T12:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = day.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return localDayFromDate(dt);
 }
 
 function startOfWeekMonday(day) {
-  const d = new Date(`${day}T12:00:00.000Z`);
-  // JS: 0=Sun … 6=Sat → Monday-based index
-  const dow = d.getUTCDay(); // 0 Sun
+  const [y, m, d] = day.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = dt.getDay(); // local: 0=Sun … 6=Sat
   const monOffset = dow === 0 ? -6 : 1 - dow;
-  d.setUTCDate(d.getUTCDate() + monOffset);
-  return d.toISOString().slice(0, 10);
+  dt.setDate(dt.getDate() + monOffset);
+  return localDayFromDate(dt);
+}
+
+export function invalidateActivityCache() {
+  activityCache = { key: "", at: 0, data: null };
+  // Keep per-file event caches; mtime check still applies. Drop if path gone later.
 }
 
 async function readClosedLog() {
@@ -66,9 +101,26 @@ async function readClosedLog() {
 
 /**
  * Count events by day for one session. Returns Map day → count.
+ * Cached by events.jsonl mtime + size so repeat /api/activity is cheap.
  */
 async function countEventsByDay(sessionDir, maxLines = 50_000) {
   const eventsPath = path.join(sessionDir, "events.jsonl");
+  let st;
+  try {
+    st = await fs.stat(eventsPath);
+  } catch {
+    return { byDay: new Map(), total: 0 };
+  }
+
+  const hit = eventDayCache.get(eventsPath);
+  if (
+    hit &&
+    hit.mtimeMs === st.mtimeMs &&
+    hit.size === st.size
+  ) {
+    return { byDay: hit.byDay, total: hit.total };
+  }
+
   const byDay = new Map();
   let total = 0;
 
@@ -100,6 +152,19 @@ async function countEventsByDay(sessionDir, maxLines = 50_000) {
   } catch {
     /* incomplete read ok */
   }
+
+  eventDayCache.set(eventsPath, {
+    mtimeMs: st.mtimeMs,
+    size: st.size,
+    byDay,
+    total,
+  });
+  // Bound cache growth (session paths are stable UUIDs)
+  if (eventDayCache.size > 400) {
+    const first = eventDayCache.keys().next().value;
+    if (first) eventDayCache.delete(first);
+  }
+
   return { byDay, total };
 }
 
@@ -124,11 +189,21 @@ function titleFromSummary(summary, fallbackId) {
 }
 
 /**
- * Build activity heatmap for the last `weeks` weeks (ending today UTC).
+ * Build activity heatmap for the last `weeks` weeks (ending today, local TZ).
  */
 export async function buildActivity({ weeks = 20 } = {}) {
   const weekCount = Math.max(4, Math.min(52, Number(weeks) || 20));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
+  const cacheKey = `${weekCount}:${today}`;
+  const now = Date.now();
+  if (
+    activityCache.data &&
+    activityCache.key === cacheKey &&
+    now - activityCache.at < ACTIVITY_CACHE_TTL_MS
+  ) {
+    return activityCache.data;
+  }
+
   const rangeEnd = today;
   // Align grid: start Monday of (end - weeks*7 + 1)
   const rawStart = addDays(rangeEnd, -(weekCount * 7 - 1));
@@ -161,6 +236,8 @@ export async function buildActivity({ weeks = 20 } = {}) {
     groups = [];
   }
 
+  /** @type {Array<{ sessionDir: string, id: string }>} */
+  const sessionJobs = [];
   for (const group of groups) {
     if (!group.isDirectory() || group.name.startsWith(".")) continue;
     if (group.name.endsWith(".sqlite")) continue;
@@ -173,17 +250,30 @@ export async function buildActivity({ weeks = 20 } = {}) {
     }
     for (const child of children) {
       if (!child.isDirectory() || !SESSION_ID_RE.test(child.name)) continue;
-      const sessionDir = path.join(groupPath, child.name);
+      sessionJobs.push({
+        sessionDir: path.join(groupPath, child.name),
+        id: child.name,
+      });
+    }
+  }
+
+  // Process sessions with bounded concurrency (I/O bound)
+  const CONCURRENCY = 8;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < sessionJobs.length) {
+      const i = cursor;
+      cursor += 1;
+      const { sessionDir, id } = sessionJobs[i];
       const summary = await loadSummary(sessionDir);
-      const title = titleFromSummary(summary, child.name);
+      const title = titleFromSummary(summary, id);
       const { byDay, total } = await countEventsByDay(sessionDir);
 
       if (total > 0) {
         for (const [day, n] of byDay) {
-          bump(day, child.name, title, n);
+          bump(day, id, title, n);
         }
       } else {
-        // Fallback: weight by chat messages on updated/created day
         const day =
           dayKey(summary.last_active_at) ||
           dayKey(summary.updated_at) ||
@@ -197,17 +287,21 @@ export async function buildActivity({ weeks = 20 } = {}) {
               1,
           ),
         );
-        bump(day, child.name, title, weight);
+        bump(day, id, title, weight);
       }
     }
   }
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, sessionJobs.length) }, () =>
+      worker(),
+    ),
+  );
 
   // Closed sessions (disk may be gone) — credit closed day + title
   const closed = await readClosedLog();
   for (const entry of closed) {
     if (!entry?.id) continue;
     const day = dayKey(entry.closedAt);
-    // Only add if we have no other signal that day for this session
     const cell = day ? days.get(day) : null;
     if (cell?.sessions?.has(entry.id)) continue;
     bump(day, entry.id, entry.title || entry.id, 3);
@@ -238,15 +332,22 @@ export async function buildActivity({ weeks = 20 } = {}) {
     return 1; // any activity at least level 1
   };
 
-  // Build week columns Mon→Sun
+  // Build week columns Mon→Sun (local calendar)
   const weekCols = [];
-  let cursor = rangeStart;
-  while (cursor <= rangeEnd) {
+  let colStart = rangeStart;
+  while (colStart <= rangeEnd) {
     const col = [];
     for (let i = 0; i < 7; i += 1) {
-      const d = addDays(cursor, i);
+      const d = addDays(colStart, i);
       if (d > rangeEnd) {
-        col.push({ date: d, count: 0, level: 0, peak: false, sessions: [], empty: true });
+        col.push({
+          date: d,
+          count: 0,
+          level: 0,
+          peak: false,
+          sessions: [],
+          empty: true,
+        });
         continue;
       }
       const cell = days.get(d);
@@ -265,7 +366,7 @@ export async function buildActivity({ weeks = 20 } = {}) {
       });
     }
     weekCols.push(col);
-    cursor = addDays(cursor, 7);
+    colStart = addDays(colStart, 7);
   }
 
   // Mark single global peak (darkest + eye)
@@ -294,7 +395,7 @@ export async function buildActivity({ weeks = 20 } = {}) {
   const activeDays = positive.length;
   const totalEvents = positive.reduce((s, n) => s + n, 0);
 
-  return {
+  const result = {
     weeks: weekCols,
     rangeStart,
     rangeEnd,
@@ -304,6 +405,7 @@ export async function buildActivity({ weeks = 20 } = {}) {
     activeDays,
     totalEvents,
     maxCount,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "local",
     legend: [
       { level: 0, label: "keine" },
       { level: 1, label: "wenig" },
@@ -312,4 +414,7 @@ export async function buildActivity({ weeks = 20 } = {}) {
       { level: 4, label: "Peak", peak: true },
     ],
   };
+
+  activityCache = { key: cacheKey, at: now, data: result };
+  return result;
 }

@@ -1,7 +1,7 @@
 {
-  "name": "Grok Build Terminal",
-  "short_name": "Grok Build",
-  "description": "Browser-UI für Grok Build über ACP",
+  "name": "Glyph",
+  "short_name": "Glyph UI",
+  "description": "Glyph — Build Term for Grok (independent browser UI via ACP).",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b0a0d",

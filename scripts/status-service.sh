@@ -1,12 +1,12 @@
 #!/bin/bash
-# Show LaunchAgent + HTTP health for Grok Build Terminal.
+# Show LaunchAgent + HTTP health for Glyph UI.
 # Prod port model: always 5174 (unless overridden in the installed plist).
 
 set -euo pipefail
 
-LABEL="com.lxndrhbrt.grok-chat-ui"
+LABEL="com.lxndrhbrt.glyph-ui"
 PLIST_DST="$HOME/Library/LaunchAgents/${LABEL}.plist"
-LOG_DIR="$HOME/Library/Logs/grok-chat-ui"
+LOG_DIR="$HOME/Library/Logs/glyph-ui"
 UID_NUM="$(id -u)"
 DOMAIN="gui/${UID_NUM}"
 # Production default — matches server/index.js and start-service.sh
@@ -25,7 +25,6 @@ fi
 
 if launchctl print "${DOMAIN}/${LABEL}" >/dev/null 2>&1; then
   echo "launchd: loaded"
-  # PID + last exit code
   launchctl print "${DOMAIN}/${LABEL}" 2>/dev/null | awk '
     /state =/ { print "  " $0 }
     /pid =/ { print "  " $0 }

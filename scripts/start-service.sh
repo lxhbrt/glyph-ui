@@ -1,7 +1,7 @@
 #!/bin/bash
-# Start Grok Build Terminal bridge + static UI as a background service.
+# Start Glyph UI bridge + static UI as a background service.
 # Designed for launchd: absolute paths, no TTY required.
-# App launcher "Grok Build Terminal" → http://localhost:5174/
+# App launcher "Glyph" → http://localhost:5174/
 #
 # Copyright (c) 2026 Alexander Hubert — MIT License
 
@@ -17,6 +17,7 @@ export NODE_ENV=production
 export HOST="${HOST:-127.0.0.1}"
 # Match Safari Web App start_url (http://localhost:5174/)
 export PORT="${PORT:-5174}"
+export GLYPH_UI_STATE_DIR="${GLYPH_UI_STATE_DIR:-${HOME_DIR}/.glyph-ui}"
 
 if [[ -z "${GROK_BIN:-}" ]]; then
   if [[ -x "${HOME_DIR}/.grok/bin/grok" ]]; then
@@ -26,7 +27,7 @@ if [[ -z "${GROK_BIN:-}" ]]; then
   fi
 fi
 
-export GROK_CHAT_CWD="${GROK_CHAT_CWD:-${HOME_DIR}}"
+export GLYPH_UI_CWD="${GLYPH_UI_CWD:-${HOME_DIR}}"
 export NO_COLOR=1
 
 cd "$ROOT"
@@ -53,21 +54,10 @@ else
   exit 1
 fi
 
-# Free our port if a leftover node from a previous crash still holds it.
-# Only kill listeners whose cwd/command is this project (never random apps).
-if command -v lsof >/dev/null 2>&1; then
-  for pid in $(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true); do
-    cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
-    if [[ "$cmd" == *"$ROOT/server/index.js"* ]] || [[ "$cmd" == *"grok-chat-ui/server/index.js"* ]]; then
-      echo "Releasing port $PORT (stale pid $pid)" >&2
-      kill "$pid" 2>/dev/null || true
-      sleep 0.4
-      kill -9 "$pid" 2>/dev/null || true
-    else
-      echo "Port $PORT held by pid $pid ($cmd) — not killing foreign process" >&2
-      exit 1
-    fi
-  done
-fi
+# Free our port if a leftover bridge from a previous crash still holds it.
+# shellcheck source=scripts/_release-own-port.sh
+source "$ROOT/scripts/_release-own-port.sh"
+release_own_port "$PORT" "$ROOT"
 
-exec "$NODE_EXEC" "$ROOT/server/index.js"
+# Load project .env when present (Node 22+; optional — no fail if missing)
+exec "$NODE_EXEC" --env-file-if-exists="$ROOT/.env" "$ROOT/server/index.js"

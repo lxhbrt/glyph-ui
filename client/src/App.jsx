@@ -1,5 +1,5 @@
 /**
- * Grok Build Terminal — browser chat UI
+ * Glyph UI — Build Term for Grok (ACP browser UI)
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
@@ -626,9 +626,28 @@ export default function App() {
     let retryTimer;
     let ws;
 
-    const connect = () => {
+    const connect = async () => {
       if (closed) return;
-      ws = new WebSocket(wsUrl());
+      let url;
+      try {
+        url = await wsUrl();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "WebSocket-Token konnte nicht geladen werden",
+        );
+        setConnected(false);
+        if (!closed) {
+          retryTimer = setTimeout(() => {
+            void connect();
+          }, 1500);
+        }
+        return;
+      }
+      if (closed) return;
+
+      ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -640,7 +659,9 @@ export default function App() {
         setBusy(false);
         setReconnecting(false);
         if (!closed) {
-          retryTimer = setTimeout(connect, 1500);
+          retryTimer = setTimeout(() => {
+            void connect();
+          }, 1500);
         }
       };
       ws.onerror = () => setError("WebSocket-Verbindung fehlgeschlagen");
@@ -762,7 +783,7 @@ export default function App() {
       };
     };
 
-    connect();
+    void connect();
     return () => {
       closed = true;
       clearTimeout(retryTimer);
@@ -1234,11 +1255,8 @@ export default function App() {
       <div className="app-main">
         <header className="top">
           <div>
-            <h1>Grok Build Terminal</h1>
-            <p className="sub">
-              Grok Build · ACP · {cwd || "…"}
-              {sessionId ? ` · ${sessionId.slice(0, 8)}…` : ""}
-            </p>
+            <h1>Glyph</h1>
+            <p className="sub">Build Term for Grok · ACP</p>
           </div>
           <div className="top-actions">
             <button
@@ -1280,7 +1298,7 @@ export default function App() {
             <div className="messages-content" ref={messagesContentRef}>
               {visibleMessages.length === 0 ? (
                 <div className="empty">
-                  Schreib eine Nachricht — Grok Build Terminal läuft lokal über ACP.
+                  Schreib eine Nachricht — Glyph verbindet lokal per ACP mit Grok Build.
                   <br />
                   <span className="empty-soft">
                     Sessions: <strong>Lupe</strong> · Wiki &amp; Workspace links

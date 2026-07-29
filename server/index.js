@@ -1,5 +1,5 @@
 /**
- * Minimal Grok Build Terminal bridge:
+ * Glyph UI — bridge (Build Term for Grok via ACP):
  *   Browser  ←WebSocket→  this server  ←ACP stdio→  `grok agent`
  *
  * Copyright (c) 2026 Alexander Hubert
@@ -61,16 +61,136 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 5174);
-const HOST = process.env.HOST || "127.0.0.1";
-const WORK_CWD = process.env.GROK_CHAT_CWD || process.cwd();
+const WORK_CWD = process.env.GLYPH_UI_CWD || process.cwd();
 const GROK_BIN = process.env.GROK_BIN || "grok";
 const STATE_DIR =
-  process.env.GROK_CHAT_STATE_DIR || path.join(os.homedir(), ".grok-chat-ui");
+  process.env.GLYPH_UI_STATE_DIR ||
+  path.join(os.homedir(), ".glyph-ui");
 const UPLOAD_DIR = path.join(STATE_DIR, "uploads");
 const MAX_ATTACHMENT_BYTES = Number(
-  process.env.GROK_CHAT_MAX_ATTACHMENT || 12 * 1024 * 1024,
+  process.env.GLYPH_UI_MAX_ATTACHMENT || 12 * 1024 * 1024,
 );
 const MAX_ATTACHMENTS_PER_MSG = 8;
+const ALLOW_REMOTE =
+  process.env.GLYPH_ALLOW_REMOTE === "1";
+/** Vite dev UI port (proxies /api and /ws → bridge). */
+const DEV_UI_PORT = 5173;
+/**
+ * Shared WS auth token (injected into served index.html; client sends on connect).
+ * Rotates every process start unless GLYPH_WS_TOKEN is set.
+ */
+const WS_TOKEN =
+  process.env.GLYPH_WS_TOKEN || crypto.randomBytes(32).toString("hex");
+
+/**
+ * Bind host: loopback only unless GLYPH_ALLOW_REMOTE=1.
+ * The bridge is unauthenticated and can delete sessions + drive the agent.
+ */
+function resolveBindHost(raw) {
+  const host = String(raw || "127.0.0.1").trim() || "127.0.0.1";
+  const lower = host.toLowerCase();
+  const loopback =
+    lower === "127.0.0.1" ||
+    lower === "localhost" ||
+    lower === "::1" ||
+    lower === "[::1]";
+  const allInterfaces =
+    lower === "0.0.0.0" || lower === "::" || lower === "[::]" || lower === "*";
+  if (loopback) return host === "localhost" ? "127.0.0.1" : host;
+  if (ALLOW_REMOTE) {
+    console.warn(
+      `[glyph] WARNING: binding to ${host} with GLYPH_ALLOW_REMOTE=1 — unauthenticated API is network-reachable`,
+    );
+    return host;
+  }
+  if (allInterfaces || !loopback) {
+    console.error(
+      `[glyph] Refusing to bind HOST=${host} (non-loopback). ` +
+        `Use 127.0.0.1 or set GLYPH_ALLOW_REMOTE=1 if you really mean it.`,
+    );
+    process.exit(1);
+  }
+  return "127.0.0.1";
+}
+
+const HOST = resolveBindHost(process.env.HOST || "127.0.0.1");
+
+function isLoopbackAddress(addr) {
+  if (!addr) return false;
+  const a = String(addr).replace(/^::ffff:/i, "");
+  return a === "127.0.0.1" || a === "::1" || a === "localhost";
+}
+
+/** Allowed browser Origins for WebSocket upgrades (prod UI + Vite dev UI). */
+function allowedWsOrigins() {
+  const origins = new Set([
+    `http://localhost:${PORT}`,
+    `http://127.0.0.1:${PORT}`,
+    `http://localhost:${DEV_UI_PORT}`,
+    `http://127.0.0.1:${DEV_UI_PORT}`,
+  ]);
+  return origins;
+}
+
+function isAllowedWsOrigin(origin) {
+  if (!origin) return false;
+  return allowedWsOrigins().has(String(origin));
+}
+
+/**
+ * Reject cross-origin browser pages and unauthenticated local clients.
+ * Origin alone is not enough on localhost (any local process can omit/forge it);
+ * the shared token from the served UI raises the bar for drive-by WS clients.
+ */
+function verifyWsClient(info) {
+  const ip = info.req?.socket?.remoteAddress || "";
+  if (!ALLOW_REMOTE && !isLoopbackAddress(ip)) {
+    console.warn(`[glyph] WS rejected: non-loopback ${ip || "(unknown)"}`);
+    return false;
+  }
+
+  const origin = info.origin || info.req?.headers?.origin || "";
+  if (!isAllowedWsOrigin(origin)) {
+    console.warn(`[glyph] WS rejected: origin ${origin || "(none)"}`);
+    return false;
+  }
+
+  let token = "";
+  try {
+    const host = info.req?.headers?.host || `127.0.0.1:${PORT}`;
+    const url = new URL(info.req.url || "/ws", `http://${host}`);
+    token = url.searchParams.get("token") || "";
+  } catch {
+    token = "";
+  }
+  // Constant-time compare when lengths match; reject early on empty/mismatch length.
+  const expected = Buffer.from(WS_TOKEN, "utf8");
+  const got = Buffer.from(String(token), "utf8");
+  if (
+    expected.length === 0 ||
+    got.length !== expected.length ||
+    !crypto.timingSafeEqual(got, expected)
+  ) {
+    console.warn("[glyph] WS rejected: invalid or missing token");
+    return false;
+  }
+  return true;
+}
+
+function injectWsToken(html) {
+  const inject = `<script>window.__GLYPH_WS_TOKEN__=${JSON.stringify(WS_TOKEN)};</script>`;
+  if (html.includes("</head>")) {
+    return html.replace("</head>", `${inject}\n</head>`);
+  }
+  return `${inject}\n${html}`;
+}
+
+async function sendIndexHtml(res) {
+  const filePath = path.join(ROOT, "client/dist", "index.html");
+  const raw = await fs.readFile(filePath, "utf8");
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html").send(injectWsToken(raw));
+}
 
 /** Safe single-segment filename for uploads. */
 function sanitizeFilename(name) {
@@ -210,12 +330,36 @@ async function buildPromptBlocks(text, attachments = []) {
 
 const app = express();
 const httpServer = createServer(app);
-const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+const wss = new WebSocketServer({
+  server: httpServer,
+  path: "/ws",
+  verifyClient: verifyWsClient,
+});
 
 // Default JSON body limit; large payloads use a route-local parser.
 app.use((req, res, next) => {
   if (req.path === "/api/stt" || req.path === "/api/attachments") return next();
   return express.json({ limit: "1mb" })(req, res, next);
+});
+
+/**
+ * Mutating API must come from loopback. Prevents drive-by CSRF / remote abuse
+ * if the process is ever reachable beyond localhost.
+ */
+app.use((req, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+    return next();
+  }
+  if (!req.path.startsWith("/api")) return next();
+  if (ALLOW_REMOTE) return next();
+  const ip = req.socket?.remoteAddress || "";
+  if (!isLoopbackAddress(ip)) {
+    res.status(403).json({
+      error: "Forbidden: mutating API is loopback-only (set GLYPH_ALLOW_REMOTE=1 to override)",
+    });
+    return;
+  }
+  next();
 });
 
 /** Normalize client attachment meta; only paths under UPLOAD_DIR are accepted later. */
@@ -231,6 +375,61 @@ function normalizeAttachments(raw) {
   }));
 }
 
+async function ensureUploadDir() {
+  await fs.mkdir(UPLOAD_DIR, { recursive: true });
+}
+
+/**
+ * Save one base64 payload under UPLOAD_DIR.
+ * @returns {Promise<{ id: string, name: string, mimeType: string, size: number, path: string, uri: string }>}
+ */
+async function saveAttachmentFile({ name, mimeType, dataBase64 }) {
+  const safeName = sanitizeFilename(name || "file");
+  const mime = String(mimeType || "application/octet-stream");
+  if (!dataBase64 || typeof dataBase64 !== "string") {
+    throw Object.assign(new Error(`dataBase64 fehlt: ${safeName}`), { status: 400 });
+  }
+  // Strip optional data-URL prefix
+  const b64 = dataBase64.includes(",")
+    ? dataBase64.slice(dataBase64.indexOf(",") + 1)
+    : dataBase64;
+  let buf;
+  try {
+    buf = Buffer.from(b64, "base64");
+  } catch {
+    throw Object.assign(new Error(`Base64 ungültig: ${safeName}`), { status: 400 });
+  }
+  if (!buf.length) {
+    throw Object.assign(new Error(`Leere Datei: ${safeName}`), { status: 400 });
+  }
+  if (buf.length > MAX_ATTACHMENT_BYTES) {
+    throw Object.assign(
+      new Error(
+        `Zu groß: ${safeName} (max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))} MB)`,
+      ),
+      { status: 413 },
+    );
+  }
+
+  await ensureUploadDir();
+  const id = crypto.randomUUID();
+  const ext = path.extname(safeName);
+  const stored = `${id}${ext || ""}`;
+  const filePath = path.join(UPLOAD_DIR, stored);
+  if (!isPathInside(UPLOAD_DIR, filePath)) {
+    throw Object.assign(new Error("Ungültiger Speicherpfad"), { status: 400 });
+  }
+  await fs.writeFile(filePath, buf);
+  return {
+    id,
+    name: safeName,
+    mimeType: mime,
+    size: buf.length,
+    path: filePath,
+    uri: pathToFileURL(filePath).href,
+  };
+}
+
 // API routes are registered below BEFORE static — do not move static above them.
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -241,7 +440,77 @@ app.get("/api/health", (_req, res) => {
     cwd: WORK_CWD,
     wikiRoot: getWikiRoot(),
     wikiArchive: path.join(getWikiRoot(), "sources/grok-sessions"),
+    uploads: UPLOAD_DIR,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
+    maxAttachmentsPerMsg: MAX_ATTACHMENTS_PER_MSG,
   });
+});
+
+/**
+ * Upload chat attachments (JSON + base64 — same style as /api/stt, no multer).
+ * Body: { files: [{ name, mimeType, dataBase64 }] } or a single file object.
+ * Response: { attachments: AttachmentMeta[] }
+ */
+const ATTACH_JSON_LIMIT = `${Math.ceil((MAX_ATTACHMENT_BYTES * MAX_ATTACHMENTS_PER_MSG * 1.4) / (1024 * 1024)) + 2}mb`;
+app.post(
+  "/api/attachments",
+  express.json({ limit: ATTACH_JSON_LIMIT }),
+  async (req, res) => {
+    try {
+      const body = req.body || {};
+      const rawFiles = Array.isArray(body.files)
+        ? body.files
+        : body.dataBase64 || body.data
+          ? [body]
+          : [];
+      if (!rawFiles.length) {
+        res.status(400).json({ error: "Keine Dateien (files[] oder dataBase64)" });
+        return;
+      }
+      if (rawFiles.length > MAX_ATTACHMENTS_PER_MSG) {
+        res.status(400).json({
+          error: `Maximal ${MAX_ATTACHMENTS_PER_MSG} Anhänge pro Upload`,
+        });
+        return;
+      }
+
+      const attachments = [];
+      for (const f of rawFiles) {
+        attachments.push(
+          await saveAttachmentFile({
+            name: f?.name,
+            mimeType: f?.mimeType || f?.type,
+            dataBase64: f?.dataBase64 || f?.data,
+          }),
+        );
+      }
+      res.json({ attachments });
+    } catch (err) {
+      const status = err?.status || 500;
+      res.status(status).json({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+);
+
+/**
+ * WS token for the UI when index.html is not served by this process (Vite dev).
+ * Loopback + allowed Origin only — same bar as the WebSocket handshake itself.
+ */
+app.get("/api/ws-token", (req, res) => {
+  if (!ALLOW_REMOTE && !isLoopbackAddress(req.socket?.remoteAddress || "")) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const origin = req.get("origin") || "";
+  // Same-origin navigations may omit Origin; require it when present to be allowed.
+  if (origin && !isAllowedWsOrigin(origin)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ token: WS_TOKEN });
 });
 
 /** Open a path (macOS `open` / Windows / xdg). Multiple strategies for robustness. */
@@ -387,19 +656,7 @@ app.post("/api/wiki/open", async (_req, res) => {
   }
 });
 
-// GET too — easier for debugging / accidental navigation
-app.get("/api/wiki/open", async (_req, res) => {
-  try {
-    const result = await openWikiEntry();
-    res.json(result);
-  } catch (err) {
-    console.error("[wiki/open]", err);
-    res.status(500).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
+// GET deliberately omitted: opening apps is a side effect (CSRF via localhost).
 
 app.post("/api/workspace/open", async (_req, res) => {
   try {
@@ -459,24 +716,18 @@ app.post("/api/bridge/disconnect", async (_req, res) => {
   }
 });
 
+/**
+ * List sessions only — never deletes.
+ * Empty-shell cleanup is POST /api/sessions/cleanup-empty (explicit).
+ */
 app.get("/api/sessions", async (_req, res) => {
   try {
-    // Drop empty/setup shells (no real user content) before listing
-    let cleaned = null;
-    try {
-      cleaned = await cleanupEmptySessions({
-        protectId: bridge?.sessionId || null,
-        deleteDisk: true,
-      });
-    } catch {
-      cleaned = null;
-    }
     const data = await listSessions();
     res.json({
       ...data,
       activeSessionId: bridge?.sessionId || null,
       wikiRoot: getWikiRoot(),
-      cleaned,
+      cleaned: null,
     });
   } catch (err) {
     res.status(500).json({
@@ -486,10 +737,17 @@ app.get("/api/sessions", async (_req, res) => {
 });
 
 /**
- * Explicit empty-session cleanup (no wiki). Same rules as auto-clean on list.
+ * Explicit empty-session cleanup (no wiki). Never run from GET/list.
+ * Body optional: { confirm: true } required so accidental POSTs are safe.
  */
-app.post("/api/sessions/cleanup-empty", async (_req, res) => {
+app.post("/api/sessions/cleanup-empty", async (req, res) => {
   try {
+    if (req.body?.confirm !== true) {
+      res.status(400).json({
+        error: "Bestätigung fehlt: body { confirm: true } erforderlich",
+      });
+      return;
+    }
     const result = await cleanupEmptySessions({
       protectId: bridge?.sessionId || null,
       deleteDisk: true,
@@ -660,8 +918,16 @@ app.post("/api/sessions/:id/close", async (req, res) => {
       res.status(400).json({ error: "Invalid session id" });
       return;
     }
-    const deleteDisk = req.body?.deleteDisk !== false;
-    const writeWiki = req.body?.writeWiki !== false;
+    // Explicit flags only — empty/missing body must not default to disk wipe.
+    const deleteDisk = req.body?.deleteDisk === true;
+    const writeWiki = req.body?.writeWiki === true;
+    if (!deleteDisk && !writeWiki) {
+      res.status(400).json({
+        error:
+          "Nichts zu tun: setze deleteDisk und/oder writeWiki explizit auf true",
+      });
+      return;
+    }
     const result = await closeSession(req.params.id, {
       deleteDisk,
       writeWiki,
@@ -678,7 +944,9 @@ app.post("/api/sessions/:id/close", async (req, res) => {
     const message = err instanceof Error ? err.message : String(err);
     const status = /not found/i.test(message)
       ? 404
-      : /aktive chat-session|invalid session|nichts zu tun/i.test(message)
+      : /aktive chat-session|invalid session|nichts zu tun|refusing to delete/i.test(
+            message,
+          )
         ? 400
         : 500;
     res.status(status).json({ error: message });
@@ -860,8 +1128,8 @@ class GrokBridge {
             session: {},
           },
           clientInfo: {
-            name: "grok-build-terminal",
-            title: "Grok Build Terminal",
+            name: "glyph",
+            title: "Glyph UI",
             version: "0.1.0",
           },
         },
@@ -1151,12 +1419,18 @@ class GrokBridge {
     };
   }
 
-  async chat(text) {
+  /**
+   * @param {string} text
+   * @param {Array<{ id?: string, name?: string, mimeType?: string, size?: number, path?: string, uri?: string }>} [attachments]
+   */
+  async chat(text, attachments = []) {
     if (!this.connected || !this.connection || !this.sessionId) {
       throw new Error("Grok is not connected yet");
     }
     if (this.busy) throw new Error("A turn is already running");
-    if (!text?.trim()) throw new Error("Empty message");
+
+    const normalized = normalizeAttachments(attachments);
+    const prompt = await buildPromptBlocks(text, normalized);
 
     this.busy = true;
     this.cancelling = false;
@@ -1171,7 +1445,7 @@ class GrokBridge {
         acp.methods.agent.session.prompt,
         {
           sessionId: this.sessionId,
-          prompt: [{ type: "text", text: text.trim() }],
+          prompt,
         },
       );
       stopReason = result?.stopReason || "end_turn";
@@ -1203,19 +1477,24 @@ class GrokBridge {
   /**
    * Deep Search — same as TUI `/deep-research <query>`.
    * Starts a background research workflow; results stream back as normal updates.
+   * @param {string} query
+   * @param {Array} [attachments]
    */
-  async deepSearch(query) {
+  async deepSearch(query, attachments = []) {
     const q = String(query || "").trim();
-    if (!q) throw new Error("Deep Search braucht eine Query");
+    const atts = normalizeAttachments(attachments);
+    if (!q && !atts.length) throw new Error("Deep Search braucht eine Query");
     // Avoid double-prefix if user already typed the slash command
-    const prompt = q.startsWith("/deep-research")
-      ? q
-      : `/deep-research ${q}`;
+    const prompt = !q
+      ? ""
+      : q.startsWith("/deep-research")
+        ? q
+        : `/deep-research ${q}`;
     this.broadcast({
       type: "system",
       text: `Deep Search gestartet — wie TUI \`/deep-research\`. Fortschritt über Workflows.`,
     });
-    await this.chat(prompt);
+    await this.chat(prompt, atts);
   }
 
   /**
@@ -1240,7 +1519,7 @@ class GrokBridge {
           _meta: { yoloMode: true },
         },
       );
-    } catch (err) {
+    } catch {
       // Fallback: let the agent shell handle /fork as a slash command
       const d = String(directive || "").trim();
       const slash = d
@@ -1508,9 +1787,12 @@ wss.on("connection", (ws) => {
 
     try {
       if (msg.type === "chat") {
-        await bridge.chat(msg.text || "");
+        await bridge.chat(msg.text || "", normalizeAttachments(msg.attachments));
       } else if (msg.type === "deep_search" || msg.type === "deep-search") {
-        await bridge.deepSearch(msg.text || msg.query || "");
+        await bridge.deepSearch(
+          msg.text || msg.query || "",
+          normalizeAttachments(msg.attachments),
+        );
       } else if (msg.type === "fork") {
         const result = await bridge.forkSession(msg.text || msg.directive || "");
         ws.send(JSON.stringify({ type: "fork_result", ...result }));
@@ -1538,14 +1820,13 @@ wss.on("connection", (ws) => {
   ws.on("close", () => bridge.removeClient(ws));
 });
 
-// Static UI after all API routes (POST /api/* must not be swallowed)
-app.use(express.static(path.join(ROOT, "client/dist")));
+// Static UI after all API routes (POST /api/* must not be swallowed).
+// index: false — SPA HTML goes through sendIndexHtml so the WS token is injected.
+app.use(express.static(path.join(ROOT, "client/dist"), { index: false }));
 // SPA fallback for client-side routes (GET only)
 app.get(/.*/, (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/ws")) return next();
-  res.sendFile(path.join(ROOT, "client/dist", "index.html"), (err) => {
-    if (err) next();
-  });
+  sendIndexHtml(res).catch((err) => next(err));
 });
 
 // Listen first so Dock / health checks work even while the agent is connecting.
@@ -1562,13 +1843,19 @@ httpServer.on("error", (err) => {
 
 httpServer.listen(PORT, HOST, () => {
   console.log(
-    `Grok Build Terminal bridge → http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`,
+    `Glyph bridge → http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`,
   );
   console.log(
     `WebSocket          → ws://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}/ws`,
   );
   console.log(`Working directory  → ${WORK_CWD}`);
+  console.log(`Uploads            → ${UPLOAD_DIR}`);
   console.log(`Grok connected     → ${bridge.connected}`);
+
+  // Ensure upload dir exists so the first attachment does not race mkdir.
+  ensureUploadDir().catch((err) => {
+    console.error("Could not create upload dir:", err);
+  });
 
   // Connect ACP agent after the UI is already reachable.
   bridge.start().catch((err) => {

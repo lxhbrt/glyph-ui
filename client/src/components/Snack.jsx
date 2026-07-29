@@ -396,7 +396,6 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
   const TOTAL = 1 + BODY_N; // head + body
   const BODY_GAP = SNACK_STEP - SNACK_PIXEL; // 2
   const STEP = SNACK_STEP; // 10
-  const SNAKE_H = TOTAL * PIXEL + (TOTAL - 1) * BODY_GAP;
   const BODY_TRAIL = (TOTAL - 1) * STEP; // distance from head to last body slot
   const RAIL_W = PIXEL + 4;
 

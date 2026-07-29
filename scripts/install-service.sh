@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install & load Grok Build Terminal as a macOS LaunchAgent (survives Terminal close / reboot login).
+# Install & load Glyph UI as a macOS LaunchAgent (survives Terminal close / reboot login).
 # Generates a machine-local plist from the current install paths (no hardcoded usernames).
 #
 # Copyright (c) 2026 Alexander Hubert — MIT License
@@ -8,14 +8,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOME_DIR="${HOME:-$(eval echo ~)}"
-LABEL="com.lxndrhbrt.grok-chat-ui"
+LABEL="com.lxndrhbrt.glyph-ui"
+OLD_LABEL="com.lxndrhbrt.grok-chat-ui"
 PLIST_DST="$HOME_DIR/Library/LaunchAgents/${LABEL}.plist"
-LOG_DIR="$HOME_DIR/Library/Logs/grok-chat-ui"
+OLD_PLIST="$HOME_DIR/Library/LaunchAgents/${OLD_LABEL}.plist"
+LOG_DIR="$HOME_DIR/Library/Logs/glyph-ui"
 UID_NUM="$(id -u)"
 DOMAIN="gui/${UID_NUM}"
 PORT="${PORT:-5174}"
 HOST="${HOST:-127.0.0.1}"
-GROK_CHAT_CWD="${GROK_CHAT_CWD:-$HOME_DIR}"
+GLYPH_UI_CWD="${GLYPH_UI_CWD:-$HOME_DIR}"
+GLYPH_UI_STATE_DIR="${GLYPH_UI_STATE_DIR:-$HOME_DIR/.glyph-ui}"
 
 if [[ -n "${GROK_BIN:-}" ]]; then
   GROK_RESOLVED="$GROK_BIN"
@@ -31,25 +34,29 @@ PATH_VALUE="${HOME_DIR}/.local/bin:${HOME_DIR}/.grok/bin:/usr/local/bin:/usr/bin
 echo "Building production client…"
 (cd "$ROOT" && npm run build)
 
+mkdir -p "$HOME_DIR/Library/LaunchAgents" "$LOG_DIR" "$GLYPH_UI_STATE_DIR"
 
-mkdir -p "$HOME_DIR/Library/LaunchAgents" "$LOG_DIR"
+# Free our port only if a leftover Glyph bridge holds it (never kill strangers).
+# shellcheck source=scripts/_release-own-port.sh
+source "$ROOT/scripts/_release-own-port.sh"
+release_own_port "$PORT" "$ROOT"
 
-# Stop anything already listening on the service port.
-if command -v lsof >/dev/null 2>&1; then
-  PIDS="$(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true)"
-  if [[ -n "${PIDS:-}" ]]; then
-    echo "Port $PORT in use (PIDs: $PIDS) — stopping so the service can bind…"
-    # shellcheck disable=SC2086
-    kill $PIDS 2>/dev/null || true
-    sleep 1
-  fi
-fi
-
-# Unload existing agent if present (ignore errors).
+# Unload new label if present
 if launchctl print "${DOMAIN}/${LABEL}" >/dev/null 2>&1; then
   echo "Unloading existing ${LABEL}…"
   launchctl bootout "${DOMAIN}/${LABEL}" 2>/dev/null || true
   sleep 0.5
+fi
+
+# Unload & remove legacy LaunchAgent label
+if launchctl print "${DOMAIN}/${OLD_LABEL}" >/dev/null 2>&1; then
+  echo "Unloading legacy ${OLD_LABEL}…"
+  launchctl bootout "${DOMAIN}/${OLD_LABEL}" 2>/dev/null || true
+  sleep 0.5
+fi
+if [[ -f "$OLD_PLIST" ]]; then
+  rm -f "$OLD_PLIST"
+  echo "Removed legacy plist $OLD_PLIST"
 fi
 
 # Write a portable plist for this machine/user.
@@ -62,7 +69,7 @@ cat > "$PLIST_DST" <<EOF
     <string>${LABEL}</string>
 
     <key>Comment</key>
-    <string>Grok Build Terminal — Node bridge + ACP agent (by Alexander Hubert)</string>
+    <string>Glyph UI — Node bridge + ACP agent (by Alexander Hubert)</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -97,8 +104,10 @@ cat > "$PLIST_DST" <<EOF
       <string>${HOST}</string>
       <key>GROK_BIN</key>
       <string>${GROK_RESOLVED}</string>
-      <key>GROK_CHAT_CWD</key>
-      <string>${GROK_CHAT_CWD}</string>
+      <key>GLYPH_UI_CWD</key>
+      <string>${GLYPH_UI_CWD}</string>
+      <key>GLYPH_UI_STATE_DIR</key>
+      <string>${GLYPH_UI_STATE_DIR}</string>
       <key>NODE_ENV</key>
       <string>production</string>
     </dict>
@@ -116,7 +125,6 @@ chmod 644 "$PLIST_DST"
 echo "Loading ${LABEL}…"
 launchctl bootstrap "$DOMAIN" "$PLIST_DST"
 launchctl enable "${DOMAIN}/${LABEL}" 2>/dev/null || true
-# Kickstart in case RunAtLoad already fired during bootstrap on some macOS versions
 launchctl kickstart -k "${DOMAIN}/${LABEL}" 2>/dev/null || true
 
 sleep 1

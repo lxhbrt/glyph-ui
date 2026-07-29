@@ -5,7 +5,7 @@
 # Pipeline:
 #   1. prepare-mac-icon.py — scale + macOS squircle mask (transparent corners)
 #   2. Build .icns + web favicons from the prepared master
-#   3. Set icon on ~/Applications/Grok Build Terminal.app (or APP_PATH)
+#   3. Set icon on ~/Applications/Glyph UI.app (or APP_PATH)
 #
 # Env:
 #   APP_PATH     override app bundle
@@ -20,7 +20,7 @@ PREPARE="$ROOT/scripts/prepare-mac-icon.py"
 ICONSET="$ROOT/scripts/assets/AppIcon.iconset"
 ICNS="$ROOT/scripts/assets/AppIcon.icns"
 MASTER="$ROOT/scripts/assets/AppIcon-1024.png"
-APP="${APP_PATH:-$HOME/Applications/Grok Build Terminal.app}"
+APP="${APP_PATH:-$HOME/Applications/Glyph UI.app}"
 # Optical inset inside the icon window (plate stays dark to the squircle edge).
 # 0.82 = slightly smaller G-snake; ring filled with plate color (not white).
 ICON_SCALE="${ICON_SCALE:-0.82}"
