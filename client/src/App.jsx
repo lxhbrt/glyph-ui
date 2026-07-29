@@ -24,6 +24,17 @@ import {
   IconRefresh,
 } from "./components/icons.jsx";
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
+import {
+  MAX_ATTACHMENTS_PER_MSG,
+  dataTransferHasFiles,
+  filesFromDataTransfer,
+  formatAttachmentSummary,
+  formatBytes,
+  isImageMime,
+  revokeAttachmentPreviews,
+  toWireAttachments,
+  uploadAttachmentFiles,
+} from "./utils/attachments.js";
 import { invalidateWsToken, wsUrl } from "./utils/format.js";
 import { upsertToolMessage } from "./utils/messages.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
@@ -49,6 +60,12 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
+  /** Ready attachments for the next send (after POST /api/attachments). */
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [attachBusy, setAttachBusy] = useState(false);
+  /** Visual drop target on the message list (drag counter avoids flicker). */
+  const [dropActive, setDropActive] = useState(false);
+  const dropDepthRef = useRef(0);
   /** Composer action: chat | deep-search | fork (TUI-aligned, not thinking toggle). */
   const [sendAction, setSendAction] = useState(() => {
     try {
@@ -224,6 +241,7 @@ export default function App() {
     setSpeakingId(null);
     setTtsBusyId(null);
   }, []);
+
 
   const speakText = useCallback(
     async (id, rawText) => {
@@ -759,6 +777,8 @@ export default function App() {
           return;
         }
 
+
+
         if (msg.type === "turn_done") {
           finalizeStreaming();
           busyRef.current = false;
@@ -793,10 +813,166 @@ export default function App() {
     };
   }, [finalizeStreaming, scheduleDrainQueue, scrollToBottom, upsertStreaming]);
 
+  const clearPendingAttachments = useCallback(() => {
+    setPendingAttachments((prev) => {
+      revokeAttachmentPreviews(prev);
+      return [];
+    });
+  }, []);
+
+  const removePendingAttachment = useCallback((id) => {
+    setPendingAttachments((prev) => {
+      const victim = prev.find((a) => a.id === id);
+      if (victim) revokeAttachmentPreviews([victim]);
+      return prev.filter((a) => a.id !== id);
+    });
+  }, []);
+
+  /** Paste / drop → POST /api/attachments → pending chips. */
+  const addFiles = useCallback(async (fileList) => {
+    const files = Array.isArray(fileList)
+      ? fileList
+      : Array.from(fileList || []).filter(Boolean);
+    if (!files.length) return;
+    if (attachBusy) return;
+
+    setAttachBusy(true);
+    setError("");
+    try {
+      const result = await uploadAttachmentFiles(files, {
+        alreadyCount: pendingAttachments.length,
+        maxCount: MAX_ATTACHMENTS_PER_MSG,
+      });
+      setPendingAttachments((prev) =>
+        [...prev, ...result.attachments].slice(0, MAX_ATTACHMENTS_PER_MSG),
+      );
+      if (result.truncated) {
+        setError(
+          `Maximal ${MAX_ATTACHMENTS_PER_MSG} Anhänge — restliche Dateien ignoriert`,
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAttachBusy(false);
+    }
+  }, [attachBusy, pendingAttachments.length]);
+
+  const onMessagesDragEnter = useCallback((e) => {
+    if (!dataTransferHasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dropDepthRef.current += 1;
+    setDropActive(true);
+  }, []);
+
+  const onMessagesDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropDepthRef.current = Math.max(0, dropDepthRef.current - 1);
+    if (dropDepthRef.current === 0) setDropActive(false);
+  }, []);
+
+  const onMessagesDragOver = useCallback((e) => {
+    if (!dataTransferHasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const onMessagesDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropDepthRef.current = 0;
+      setDropActive(false);
+      const files = filesFromDataTransfer(e.dataTransfer);
+      if (files.length) void addFiles(files);
+    },
+    [addFiles],
+  );
+
+  /** Composer is the intuitive drop zone — same accept path as the transcript. */
+  const onComposerDragOver = useCallback((e) => {
+    if (!dataTransferHasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const onComposerDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropDepthRef.current = 0;
+      setDropActive(false);
+      const files = filesFromDataTransfer(e.dataTransfer);
+      if (files.length) void addFiles(files);
+    },
+    [addFiles],
+  );
+
+  // Keep previews revocable on unmount without re-binding every change
+  const pendingAttachmentsRef = useRef(pendingAttachments);
+  pendingAttachmentsRef.current = pendingAttachments;
+  useEffect(
+    () => () => {
+      revokeAttachmentPreviews(pendingAttachmentsRef.current);
+    },
+    [],
+  );
+
+  /**
+   * Window guard: prevent the browser from navigating to a dropped file
+   * (Safari Web App has no URL bar — a miss outside .messages is fatal).
+   * Real drop targets stopPropagation so they stay the only handlers.
+   */
+  useEffect(() => {
+    const blockNav = (e) => {
+      if (!dataTransferHasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+    };
+    window.addEventListener("dragover", blockNav);
+    window.addEventListener("drop", blockNav);
+    return () => {
+      window.removeEventListener("dragover", blockNav);
+      window.removeEventListener("drop", blockNav);
+    };
+  }, []);
+
+  /**
+   * Document paste: Screenshot → switch to app → ⌘V works even when focus
+   * is on the transcript (not only the composer textarea). Skip other inputs.
+   */
+  useEffect(() => {
+    const onDocPaste = (e) => {
+      const files = filesFromDataTransfer(e.clipboardData);
+      if (!files.length) return;
+
+      const el = e.target;
+      if (el instanceof HTMLElement) {
+        const tag = el.tagName;
+        // Session search, selects, etc. keep native paste
+        if (tag === "INPUT" || tag === "SELECT") return;
+        // Foreign textareas (modals) — only our composer accepts file paste
+        if (tag === "TEXTAREA" && !el.closest(".composer-box")) return;
+        if (el.isContentEditable && !el.closest(".composer-box")) return;
+      }
+
+      e.preventDefault();
+      void addFiles(files);
+    };
+    document.addEventListener("paste", onDocPaste);
+    return () => document.removeEventListener("paste", onDocPaste);
+  }, [addFiles]);
+
   /** Send a prepared payload to the agent (live turn). */
   const dispatchPayload = useCallback(
-    ({ text, action, displayText }) => {
+    ({ text, action, displayText, attachments }) => {
       if (!wsRef.current || wsRef.current.readyState !== 1) return;
+
+      const wire =
+        action === "fork" ? [] : toWireAttachments(attachments || []);
 
       setMessages((prev) => [
         ...prev,
@@ -805,6 +981,7 @@ export default function App() {
           role: "user",
           text: displayText,
           streaming: false,
+          ...(wire.length ? { attachments: wire } : {}),
         },
       ]);
       assistantBuf.current = "";
@@ -818,11 +995,23 @@ export default function App() {
       scrollToBottom({ force: true });
 
       if (action === "deep-search") {
-        wsRef.current.send(JSON.stringify({ type: "deep_search", text }));
+        wsRef.current.send(
+          JSON.stringify({
+            type: "deep_search",
+            text,
+            ...(wire.length ? { attachments: wire } : {}),
+          }),
+        );
       } else if (action === "fork") {
         wsRef.current.send(JSON.stringify({ type: "fork", text }));
       } else {
-        wsRef.current.send(JSON.stringify({ type: "chat", text }));
+        wsRef.current.send(
+          JSON.stringify({
+            type: "chat",
+            text,
+            ...(wire.length ? { attachments: wire } : {}),
+          }),
+        );
       }
     },
     [scrollToBottom],
@@ -831,27 +1020,36 @@ export default function App() {
   const dispatchQueuedRef = useRef(dispatchPayload);
   dispatchQueuedRef.current = dispatchPayload;
 
-  const buildDisplayText = useCallback((action, text) => {
-    if (action === "deep-search") return `🔍 Deep Search: ${text}`;
+  const buildDisplayText = useCallback((action, text, attachments = []) => {
+    const att = formatAttachmentSummary(attachments);
+    if (action === "deep-search") {
+      const body = text || att || "…";
+      return att && text ? `🔍 Deep Search: ${text}\n${att}` : `🔍 Deep Search: ${body}`;
+    }
     if (action === "fork") {
       return text ? `⑂ Fork: ${text}` : "⑂ Fork (Session branchen)";
     }
-    return text;
+    if (text && att) return `${text}\n${att}`;
+    return text || att || "";
   }, []);
 
   const send = useCallback(() => {
     const text = input.trim();
     if (!connected || !wsRef.current) return;
+    if (attachBusy) return;
 
-    // Fork may run without a directive; chat & deep-search need text.
-    if (sendAction !== "fork" && !text) return;
+    // Fork may run without a directive; chat & deep-search need text and/or files.
+    const atts =
+      sendAction === "fork" ? [] : toWireAttachments(pendingAttachments);
+    if (sendAction !== "fork" && !text && !atts.length) return;
 
-    const displayText = buildDisplayText(sendAction, text);
+    const displayText = buildDisplayText(sendAction, text, atts);
     const payload = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       text,
       action: sendAction,
       displayText,
+      ...(atts.length ? { attachments: atts } : {}),
     };
 
     // While Grok is working: park in queue (TUI-style wait area)
@@ -859,17 +1057,22 @@ export default function App() {
       queueRef.current = [...queueRef.current, payload];
       setQueue([...queueRef.current]);
       setInput("");
+      clearPendingAttachments();
       requestAnimationFrame(() => scrollToBottom());
       return;
     }
 
     setInput("");
+    clearPendingAttachments();
     dispatchPayload(payload);
   }, [
+    attachBusy,
     busy,
+    clearPendingAttachments,
     connected,
     input,
     messages,
+    pendingAttachments,
     scrollToBottom,
     sendAction,
     buildDisplayText,
@@ -1176,7 +1379,7 @@ export default function App() {
     if (sendAction === "fork") {
       return "Optional: Directive für den Fork… (leer = nur Session branchen)";
     }
-    return "Nachricht an Grok…";
+    return "Nachricht an Grok… Screenshot paste · Datei droppen";
   }, [connected, isWorking, cancelling, sendAction, workingSeconds]);
 
   // Keep Snack mounted briefly after work ends so ↵←Snack morph can play
@@ -1341,9 +1544,15 @@ export default function App() {
 
         <div className="messages-shell">
           <main
-            className="messages messages--borderless messages--snack-scroll"
+            className={`messages messages--borderless messages--snack-scroll${
+              dropActive ? " is-drop-target" : ""
+            }`}
             ref={listRef}
             tabIndex={-1}
+            onDragEnter={onMessagesDragEnter}
+            onDragLeave={onMessagesDragLeave}
+            onDragOver={onMessagesDragOver}
+            onDrop={onMessagesDrop}
           >
             <div className="messages-content" ref={messagesContentRef}>
               {visibleMessages.length === 0 ? (
@@ -1351,7 +1560,8 @@ export default function App() {
                   Schreib eine Nachricht — Glyph verbindet lokal per ACP mit Grok Build.
                   <br />
                   <span className="empty-soft">
-                    Sessions: <strong>Lupe</strong> · Wiki &amp; Workspace links
+                    Screenshot <strong>einfügen</strong> · Datei hierher{" "}
+                    <strong>ziehen</strong> · Sessions: <strong>Lupe</strong>
                   </span>
                 </div>
               ) : (
@@ -1401,11 +1611,32 @@ export default function App() {
                         </button>
                       ) : null}
                     </div>
-                    <MarkdownBody text={m.text} />
+                    {m.role === "user" && m.attachments?.length ? (
+                      <ul className="msg-attachments" aria-label="Anhänge">
+                        {m.attachments.map((a) => (
+                          <li
+                            key={a.id || a.path || a.name}
+                            className="msg-attach-chip"
+                            title={a.name}
+                          >
+                            <span className="msg-attach-icon" aria-hidden="true">
+                              {isImageMime(a.mimeType) ? "🖼" : "📄"}
+                            </span>
+                            <span className="msg-attach-name">{a.name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {m.text ? <MarkdownBody text={m.text} /> : null}
                   </article>
                 ))
               )}
             </div>
+            {dropActive ? (
+              <div className="messages-drop-hint" aria-hidden="true">
+                Datei hier ablegen
+              </div>
+            ) : null}
           </main>
           <SnackScrollbar
             scrollRef={listRef}
@@ -1469,7 +1700,51 @@ export default function App() {
               </ol>
             </div>
           ) : null}
-          <div className="composer-box">
+          <div
+            className={`composer-box${attachBusy ? " composer-box--attach-busy" : ""}${
+              dropActive ? " is-drop-target" : ""
+            }`}
+            onDragEnter={onMessagesDragEnter}
+            onDragLeave={onMessagesDragLeave}
+            onDragOver={onComposerDragOver}
+            onDrop={onComposerDrop}
+          >
+            {pendingAttachments.length > 0 || attachBusy ? (
+              <div className="attach-strip" aria-label="Anhänge für nächste Nachricht">
+                {pendingAttachments.map((a) => (
+                  <div
+                    key={a.id || a.path}
+                    className="attach-chip"
+                    title={`${a.name} (${formatBytes(a.size)})`}
+                  >
+                    {a.previewUrl ? (
+                      <img
+                        className="attach-chip-thumb"
+                        src={a.previewUrl}
+                        alt=""
+                      />
+                    ) : (
+                      <span className="attach-chip-icon" aria-hidden="true">
+                        {isImageMime(a.mimeType) ? "🖼" : "📄"}
+                      </span>
+                    )}
+                    <span className="attach-chip-name">{a.name}</span>
+                    <button
+                      type="button"
+                      className="attach-chip-remove"
+                      onClick={() => removePendingAttachment(a.id)}
+                      title="Anhang entfernen"
+                      aria-label={`${a.name} entfernen`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {attachBusy ? (
+                  <span className="attach-chip attach-chip--busy">lädt…</span>
+                ) : null}
+              </div>
+            ) : null}
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -1578,9 +1853,13 @@ export default function App() {
                   snackAlive && !isWorking ? " send--morph-out" : ""
                 }`}
                 onClick={() => {
-                  // While working: text → queue; empty → stop (Snack)
+                  // While working: text/attachments → queue; empty → stop (Snack)
+                  const canQueue =
+                    input.trim() ||
+                    sendAction === "fork" ||
+                    (pendingAttachments.length > 0 && sendAction !== "fork");
                   if (isWorking) {
-                    if (input.trim() || sendAction === "fork") {
+                    if (canQueue) {
                       send();
                       return;
                     }
@@ -1592,11 +1871,15 @@ export default function App() {
                 disabled={
                   !connected ||
                   cancelling ||
-                  (sendAction !== "fork" && !input.trim() && !isWorking)
+                  attachBusy ||
+                  (sendAction !== "fork" &&
+                    !input.trim() &&
+                    pendingAttachments.length === 0 &&
+                    !isWorking)
                 }
                 title={
                   isWorking
-                    ? input.trim()
+                    ? input.trim() || pendingAttachments.length
                       ? "In Warteschlange (Enter)"
                       : cancelling
                         ? "Bricht ab…"
@@ -1609,7 +1892,7 @@ export default function App() {
                 }
                 aria-label={
                   isWorking
-                    ? input.trim()
+                    ? input.trim() || pendingAttachments.length
                       ? "In Warteschlange"
                       : "Antwort stoppen"
                     : sendAction === "deep-search"

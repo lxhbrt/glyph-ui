@@ -38,23 +38,43 @@ function loadPersistedQueue() {
     const items = data?.items;
     if (!Array.isArray(items)) return [];
     return items
-      .filter(
-        (q) =>
-          q &&
-          typeof q.id === "string" &&
-          typeof q.text === "string" &&
-          q.text.trim(),
-      )
-      .map((q) => ({
-        id: q.id,
-        text: q.text,
-        action:
-          q.action === "deep-search" || q.action === "fork" ? q.action : "chat",
-        displayText:
-          typeof q.displayText === "string" && q.displayText
-            ? q.displayText
-            : q.text,
-      }))
+      .filter((q) => {
+        if (!q || typeof q.id !== "string") return false;
+        const textOk = typeof q.text === "string" && q.text.trim();
+        const atts = Array.isArray(q.attachments) ? q.attachments : [];
+        const attOk = atts.some((a) => a && a.path);
+        // Chat may be attachment-only (screenshot without caption)
+        return textOk || attOk;
+      })
+      .map((q) => {
+        const attachments = Array.isArray(q.attachments)
+          ? q.attachments
+              .filter((a) => a && a.path)
+              .map((a) => ({
+                id: a.id != null ? String(a.id) : "",
+                name: String(a.name || "file"),
+                mimeType: String(a.mimeType || "application/octet-stream"),
+                size: Number(a.size) || 0,
+                path: String(a.path),
+                ...(a.uri ? { uri: String(a.uri) } : {}),
+              }))
+          : [];
+        const text = typeof q.text === "string" ? q.text : "";
+        return {
+          id: q.id,
+          text,
+          action:
+            q.action === "deep-search" || q.action === "fork" ? q.action : "chat",
+          displayText:
+            typeof q.displayText === "string" && q.displayText
+              ? q.displayText
+              : text ||
+                (attachments.length
+                  ? attachments.map((a) => a.name).join(", ")
+                  : ""),
+          ...(attachments.length ? { attachments } : {}),
+        };
+      })
       .slice(0, QUEUE_MAX);
   } catch {
     return [];
