@@ -1,0 +1,1588 @@
+/**
+ * Minimal Grok Build Terminal bridge:
+ *   Browser  ←WebSocket→  this server  ←ACP stdio→  `grok agent`
+ *
+ * Copyright (c) 2026 Alexander Hubert
+ * SPDX-License-Identifier: MIT
+ *
+ * Browser events (JSON):
+ *   { type: "chat", text: "...", attachments?: AttachmentMeta[] }
+ *   { type: "deep_search", text: "...", attachments?: AttachmentMeta[] }
+ *   { type: "fork", text?: "..." }        // ACP session/fork (+ optional directive)
+ *   { type: "reset" }
+ *   { type: "reconnect" }   // start/restart grok agent process
+ *   { type: "disconnect" }  // quit agent (like /quit) — stay offline until reconnect
+ *
+ * AttachmentMeta (after POST /api/attachments):
+ *   { id, name, mimeType, size, path, uri }
+ *
+ * Server → browser:
+ *   { type: "status", connected, busy, reconnecting?, ... }
+ *   { type: "assistant_chunk", text }
+ *   { type: "thought_chunk", text }
+ *   { type: "tool", title, status, kind? }
+ *   { type: "system", text }            // bridge notices (fork, deep search start, …)
+ *   { type: "turn_done", stopReason? }
+ *   { type: "error", message }
+ */
+
+import express from "express";
+import { createServer } from "node:http";
+import { spawn, execFile } from "node:child_process";
+import { promisify } from "node:util";
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import { pathToFileURL } from "node:url";
+
+const execFileAsync = promisify(execFile);
+import { Readable, Writable } from "node:stream";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { WebSocketServer } from "ws";
+import * as acp from "@agentclientprotocol/sdk";
+import {
+  cleanupEmptySessions,
+  closeSession,
+  getSession,
+  getSessionForOpen,
+  isSessionId,
+  listSessions,
+} from "./sessions.js";
+import { buildActivity } from "./activity.js";
+import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
+import {
+  listVoices,
+  speechToText,
+  textToSpeech,
+  voiceStatus,
+} from "./voice.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, "..");
+const PORT = Number(process.env.PORT || 5174);
+const HOST = process.env.HOST || "127.0.0.1";
+const WORK_CWD = process.env.GROK_CHAT_CWD || process.cwd();
+const GROK_BIN = process.env.GROK_BIN || "grok";
+const STATE_DIR =
+  process.env.GROK_CHAT_STATE_DIR || path.join(os.homedir(), ".grok-chat-ui");
+const UPLOAD_DIR = path.join(STATE_DIR, "uploads");
+const MAX_ATTACHMENT_BYTES = Number(
+  process.env.GROK_CHAT_MAX_ATTACHMENT || 12 * 1024 * 1024,
+);
+const MAX_ATTACHMENTS_PER_MSG = 8;
+
+/** Safe single-segment filename for uploads. */
+function sanitizeFilename(name) {
+  const base = path.basename(String(name || "file")).replace(/[^\w.\- ()[\]]+/g, "_");
+  const trimmed = base.trim() || "file";
+  return trimmed.slice(0, 120);
+}
+
+function isPathInside(parent, child) {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function isImageMime(mime) {
+  return String(mime || "").toLowerCase().startsWith("image/");
+}
+
+function isTextyAttachment(mime, name) {
+  const m = String(mime || "").toLowerCase();
+  const n = String(name || "").toLowerCase();
+  if (m.startsWith("text/")) return true;
+  if (
+    m.includes("json") ||
+    m.includes("xml") ||
+    m.includes("javascript") ||
+    m.includes("typescript") ||
+    m.includes("yaml") ||
+    m.includes("x-sh") ||
+    m === "application/x-ndjson"
+  ) {
+    return true;
+  }
+  return /\.(txt|md|markdown|json|jsonl|csv|tsv|ya?ml|xml|html?|css|js|jsx|ts|tsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|sh|bash|zsh|toml|ini|env|log|sql|graphql|r|lua|vim|diff|patch|dockerfile)$/i.test(
+    n,
+  );
+}
+
+/**
+ * Build ACP ContentBlocks from text + saved attachments.
+ * Images → image blocks; text files → embedded resource; others → resource_link (+ blob).
+ */
+async function buildPromptBlocks(text, attachments = []) {
+  const prompt = [];
+  const t = String(text || "").trim();
+  const list = Array.isArray(attachments) ? attachments.slice(0, MAX_ATTACHMENTS_PER_MSG) : [];
+
+  if (t) {
+    prompt.push({ type: "text", text: t });
+  } else if (list.length) {
+    const names = list.map((a) => a.name || "Datei").join(", ");
+    prompt.push({
+      type: "text",
+      text: `Anhang (${list.length}): ${names}`,
+    });
+  }
+
+  for (const att of list) {
+    const filePath = String(att.path || "");
+    if (!filePath || !isPathInside(UPLOAD_DIR, filePath)) {
+      throw new Error(`Anhang ungültig oder außerhalb Upload-Ordner: ${att.name || "?"}`);
+    }
+    let buf;
+    try {
+      buf = await fs.readFile(filePath);
+    } catch {
+      throw new Error(`Anhang nicht gefunden: ${att.name || filePath}`);
+    }
+    if (!buf.length) continue;
+    if (buf.length > MAX_ATTACHMENT_BYTES) {
+      throw new Error(`Anhang zu groß: ${att.name || "Datei"}`);
+    }
+
+    const mime = String(att.mimeType || "application/octet-stream");
+    const name = String(att.name || path.basename(filePath));
+    const uri = att.uri || pathToFileURL(filePath).href;
+
+    if (isImageMime(mime)) {
+      prompt.push({
+        type: "image",
+        mimeType: mime,
+        data: buf.toString("base64"),
+        uri,
+      });
+      continue;
+    }
+
+    if (isTextyAttachment(mime, name) && buf.length <= 2 * 1024 * 1024) {
+      prompt.push({
+        type: "resource",
+        resource: {
+          uri,
+          mimeType: mime.startsWith("text/") || mime.includes("json")
+            ? mime
+            : "text/plain",
+          text: buf.toString("utf8"),
+        },
+      });
+      // Also link so the agent can re-open from disk if needed
+      prompt.push({
+        type: "resource_link",
+        uri,
+        name,
+        mimeType: mime,
+        size: buf.length,
+        title: name,
+      });
+      continue;
+    }
+
+    // Binary / other: resource_link (baseline) + embedded blob when useful
+    prompt.push({
+      type: "resource_link",
+      uri,
+      name,
+      mimeType: mime,
+      size: buf.length,
+      title: name,
+      description: `Hochgeladen nach ${filePath}`,
+    });
+    if (buf.length <= 4 * 1024 * 1024) {
+      prompt.push({
+        type: "resource",
+        resource: {
+          uri,
+          mimeType: mime,
+          blob: buf.toString("base64"),
+        },
+      });
+    }
+  }
+
+  if (!prompt.length) {
+    throw new Error("Empty message");
+  }
+  return prompt;
+}
+
+const app = express();
+const httpServer = createServer(app);
+const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+
+// Default JSON body limit; large payloads use a route-local parser.
+app.use((req, res, next) => {
+  if (req.path === "/api/stt" || req.path === "/api/attachments") return next();
+  return express.json({ limit: "1mb" })(req, res, next);
+});
+
+/** Normalize client attachment meta; only paths under UPLOAD_DIR are accepted later. */
+function normalizeAttachments(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, MAX_ATTACHMENTS_PER_MSG).map((a) => ({
+    id: a?.id != null ? String(a.id) : "",
+    name: sanitizeFilename(a?.name || "file"),
+    mimeType: String(a?.mimeType || "application/octet-stream"),
+    size: Number(a?.size) || 0,
+    path: a?.path != null ? String(a.path) : "",
+    uri: a?.uri != null ? String(a.uri) : undefined,
+  }));
+}
+
+// API routes are registered below BEFORE static — do not move static above them.
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    connected: Boolean(bridge?.connected),
+    reconnecting: Boolean(bridge?.starting),
+    sessionId: bridge?.sessionId || null,
+    cwd: WORK_CWD,
+    wikiRoot: getWikiRoot(),
+    wikiArchive: path.join(getWikiRoot(), "sources/grok-sessions"),
+  });
+});
+
+/** Open a path (macOS `open` / Windows / xdg). Multiple strategies for robustness. */
+async function openInOs(targetPath, { reveal = false } = {}) {
+  const p = String(targetPath || "");
+  if (!p) throw new Error("Pfad fehlt");
+  if (process.platform === "darwin") {
+    if (reveal) {
+      await execFileAsync("open", ["-R", p]);
+    } else {
+      await execFileAsync("open", [p]);
+    }
+  } else if (process.platform === "win32") {
+    await execFileAsync("explorer", [p]);
+  } else {
+    await execFileAsync("xdg-open", [p]);
+  }
+  return { ok: true, path: p };
+}
+
+/**
+ * Open wiki entry: prefer Obsidian URI → .md file → reveal in Finder.
+ */
+async function openWikiEntry() {
+  const { promises: fs } = await import("node:fs");
+  const wikiRoot = getWikiRoot();
+  const archive = path.join(wikiRoot, "sources/grok-sessions");
+  const candidates = [
+    path.join(archive, "00 Index - Grok Sessions.md"),
+    path.join(wikiRoot, "WIKI.md"),
+    path.join(wikiRoot, "index.md"),
+    archive,
+    wikiRoot,
+  ];
+  let target = wikiRoot;
+  for (const c of candidates) {
+    try {
+      await fs.access(c);
+      target = c;
+      break;
+    } catch {
+      /* try next */
+    }
+  }
+
+  const attempts = [];
+  const vaultName = path.basename(wikiRoot);
+
+  // 1) Obsidian deep-link (best for “Wiki modern”)
+  if (process.platform === "darwin") {
+    try {
+      let rel = path.relative(wikiRoot, target);
+      if (rel && !rel.startsWith("..")) {
+        // Obsidian file param: path without .md, use /
+        rel = rel.split(path.sep).join("/");
+        if (rel.toLowerCase().endsWith(".md")) rel = rel.slice(0, -3);
+        const uri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(rel)}`;
+        await execFileAsync("open", [uri]);
+        return {
+          ok: true,
+          path: target,
+          opened: target,
+          via: "obsidian-uri",
+          uri,
+          wikiRoot,
+          archive,
+        };
+      }
+    } catch (err) {
+      attempts.push(
+        `obsidian: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    // 2) open -a Obsidian with the file/vault
+    try {
+      await execFileAsync("open", ["-a", "Obsidian", target]);
+      return {
+        ok: true,
+        path: target,
+        opened: target,
+        via: "obsidian-app",
+        wikiRoot,
+        archive,
+      };
+    } catch (err) {
+      attempts.push(
+        `obsidian-app: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  // 3) Default handler for .md / folder
+  try {
+    await openInOs(target);
+    return {
+      ok: true,
+      path: target,
+      opened: target,
+      via: "open",
+      wikiRoot,
+      archive,
+    };
+  } catch (err) {
+    attempts.push(`open: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // 4) Reveal in Finder so the user at least sees the file
+  if (process.platform === "darwin") {
+    try {
+      await openInOs(target, { reveal: true });
+      return {
+        ok: true,
+        path: target,
+        opened: target,
+        via: "reveal",
+        wikiRoot,
+        archive,
+        note: "In Finder gezeigt (keine App zum Öffnen gefunden)",
+      };
+    } catch (err) {
+      attempts.push(
+        `reveal: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  throw new Error(
+    `Wiki konnte nicht geöffnet werden (${target}). ${attempts.join(" · ")}`,
+  );
+}
+
+app.post("/api/wiki/open", async (_req, res) => {
+  try {
+    const result = await openWikiEntry();
+    res.json(result);
+  } catch (err) {
+    console.error("[wiki/open]", err);
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+// GET too — easier for debugging / accidental navigation
+app.get("/api/wiki/open", async (_req, res) => {
+  try {
+    const result = await openWikiEntry();
+    res.json(result);
+  } catch (err) {
+    console.error("[wiki/open]", err);
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/workspace/open", async (_req, res) => {
+  try {
+    const result = await openInOs(WORK_CWD);
+    res.json({ ...result, cwd: WORK_CWD });
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/bridge/cancel", async (_req, res) => {
+  try {
+    const result = await bridge.cancelTurn();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Start/restart the local `grok agent` process (no Terminal needed).
+ * Safe to call while offline or already connected (force restart).
+ */
+app.post("/api/bridge/reconnect", async (_req, res) => {
+  try {
+    const result = await bridge.reconnect();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      connected: Boolean(bridge?.connected),
+    });
+  }
+});
+
+/**
+ * Stop the local `grok agent` (equivalent to /quit in the TUI).
+ * Bridge HTTP/WS stays up; agent goes offline until reconnect.
+ */
+app.post("/api/bridge/disconnect", async (_req, res) => {
+  try {
+    const result = await bridge.disconnect();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      connected: Boolean(bridge?.connected),
+    });
+  }
+});
+
+app.get("/api/sessions", async (_req, res) => {
+  try {
+    // Drop empty/setup shells (no real user content) before listing
+    let cleaned = null;
+    try {
+      cleaned = await cleanupEmptySessions({
+        protectId: bridge?.sessionId || null,
+        deleteDisk: true,
+      });
+    } catch {
+      cleaned = null;
+    }
+    const data = await listSessions();
+    res.json({
+      ...data,
+      activeSessionId: bridge?.sessionId || null,
+      wikiRoot: getWikiRoot(),
+      cleaned,
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Explicit empty-session cleanup (no wiki). Same rules as auto-clean on list.
+ */
+app.post("/api/sessions/cleanup-empty", async (_req, res) => {
+  try {
+    const result = await cleanupEmptySessions({
+      protectId: bridge?.sessionId || null,
+      deleteDisk: true,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Activity heatmap (Claude-Code-style calendar) from local session events.
+ * Query: ?weeks=20 (4–52)
+ */
+app.get("/api/activity", async (req, res) => {
+  try {
+    const weeks = Number(req.query.weeks) || 20;
+    const data = await buildActivity({ weeks });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Grok Voice (xAI STT / TTS) — requires XAI_API_KEY (or grok auth fallback).
+ * Docs: https://docs.x.ai/developers/model-capabilities/audio/voice
+ */
+app.get("/api/voice/status", async (_req, res) => {
+  try {
+    res.json(await voiceStatus());
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.get("/api/tts/voices", async (_req, res) => {
+  try {
+    res.json(await listVoices());
+  } catch (err) {
+    const status = err?.status || 500;
+    res.status(status).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/** Speech → text (JSON body with base64 audio — no multer needed). */
+app.post(
+  "/api/stt",
+  express.json({ limit: "30mb" }),
+  async (req, res) => {
+    try {
+      const {
+        audioBase64,
+        mimeType = "audio/webm",
+        language,
+        filename,
+      } = req.body || {};
+      if (!audioBase64 || typeof audioBase64 !== "string") {
+        res.status(400).json({ error: "audioBase64 fehlt" });
+        return;
+      }
+      const buffer = Buffer.from(audioBase64, "base64");
+      if (!buffer.length) {
+        res.status(400).json({ error: "Leeres Audio" });
+        return;
+      }
+      if (buffer.length > 25 * 1024 * 1024) {
+        res.status(413).json({ error: "Audio zu groß (max ~25 MB)" });
+        return;
+      }
+      const result = await speechToText(buffer, {
+        mimeType: String(mimeType || "audio/webm"),
+        language: language ? String(language) : undefined,
+        filename: filename ? String(filename) : undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      const status = err?.status || 500;
+      res.status(status).json({
+        error: err instanceof Error ? err.message : String(err),
+        detail: err?.detail || undefined,
+      });
+    }
+  },
+);
+
+/** Text → speech (returns raw audio/mpeg). */
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text, voice_id, voiceId, language, speed } = req.body || {};
+    const result = await textToSpeech(String(text || ""), {
+      voiceId: voiceId || voice_id,
+      language: language ? String(language) : undefined,
+      speed,
+    });
+    res.setHeader("Content-Type", result.contentType);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(result.buffer);
+  } catch (err) {
+    const status = err?.status || 500;
+    res.status(status).json({
+      error: err instanceof Error ? err.message : String(err),
+      detail: err?.detail || undefined,
+    });
+  }
+});
+
+app.get("/api/sessions/:id", async (req, res) => {
+  try {
+    if (!isSessionId(req.params.id)) {
+      res.status(400).json({ error: "Invalid session id" });
+      return;
+    }
+    const session = await getSession(req.params.id);
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    res.json({ session, activeSessionId: bridge?.sessionId || null });
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Open session in chat: load disk transcript + try ACP session/load so chat continues there.
+ * Body unused; GET would also work, but POST signals "activate".
+ */
+app.post("/api/sessions/:id/open", async (req, res) => {
+  try {
+    if (!isSessionId(req.params.id)) {
+      res.status(400).json({ error: "Invalid session id" });
+      return;
+    }
+    const result = await bridge.openSession(req.params.id);
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = /not found/i.test(message)
+      ? 404
+      : /not connected|busy|invalid/i.test(message)
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+/**
+ * Close session.
+ * Body:
+ *   { deleteDisk?: boolean, writeWiki?: boolean }
+ * Defaults: both true → Wiki-Archiv + Disk löschen.
+ * writeWiki:false + deleteDisk:true → nur löschen.
+ */
+app.post("/api/sessions/:id/close", async (req, res) => {
+  try {
+    if (!isSessionId(req.params.id)) {
+      res.status(400).json({ error: "Invalid session id" });
+      return;
+    }
+    const deleteDisk = req.body?.deleteDisk !== false;
+    const writeWiki = req.body?.writeWiki !== false;
+    const result = await closeSession(req.params.id, {
+      deleteDisk,
+      writeWiki,
+      protectId: bridge?.sessionId || null,
+      wikiWriter: writeWiki
+        ? async (doc, meta) => {
+            const written = await writeSessionArchive(doc, meta);
+            return written.relativePath;
+          }
+        : undefined,
+    });
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = /not found/i.test(message)
+      ? 404
+      : /aktive chat-session|invalid session|nichts zu tun/i.test(message)
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+/** Tool kinds that should finish cleanly rather than hard-abort mid-flight. */
+const CRITICAL_TOOL_KINDS = new Set(["edit", "delete", "move", "execute"]);
+
+class GrokBridge {
+  constructor() {
+    this.connected = false;
+    this.sessionId = null;
+    this.process = null;
+    this.connection = null;
+    this.busy = false;
+    this.starting = false;
+    this.stopping = false;
+    /** Soft-cancel in progress (session/cancel sent, waiting for prompt to return). */
+    this.cancelling = false;
+    /** Active tool calls for the current turn: id → { title, kind, status }. */
+    this.activeTools = new Map();
+    /** Watchdog timer when cancel is slow / tools must finish. */
+    this.cancelWatchdog = null;
+    this.clients = new Set();
+    this.stderrTail = [];
+    this.loadSessionSupported = false;
+    /** While true, ignore session update streams (e.g. during session/load replay). */
+    this.suppressUpdates = false;
+    /** Latest session config options from agent (informational). */
+    this.configOptions = [];
+  }
+
+  statusPayload(extra = {}) {
+    return {
+      type: "status",
+      connected: this.connected,
+      sessionId: this.sessionId,
+      busy: this.busy || this.starting,
+      cancelling: this.cancelling,
+      reconnecting: this.starting,
+      cwd: WORK_CWD,
+      ...extra,
+    };
+  }
+
+  clearCancelWatchdog() {
+    if (this.cancelWatchdog) {
+      clearTimeout(this.cancelWatchdog);
+      this.cancelWatchdog = null;
+    }
+  }
+
+  /** End cancel bookkeeping when the prompt turn actually finishes. */
+  endCancelState(stopReason) {
+    const wasCancelling = this.cancelling;
+    this.clearCancelWatchdog();
+    this.cancelling = false;
+    this.activeTools.clear();
+
+    if (!wasCancelling && stopReason !== "cancelled") return;
+
+    if (stopReason === "cancelled") {
+      this.broadcast({
+        type: "system",
+        text: "Antwort abgebrochen.",
+      });
+    } else if (wasCancelling) {
+      // Agent finished the turn instead of aborting (safer for mid-tool work)
+      this.broadcast({
+        type: "system",
+        text:
+          "Abbruch nicht sofort möglich — Arbeit wurde sicher zu Ende geführt.",
+      });
+    }
+  }
+
+  /** Critical in-flight tools that should not be hard-killed mid-write/exec. */
+  criticalToolsInFlight() {
+    const list = [];
+    for (const t of this.activeTools.values()) {
+      const kind = String(t.kind || "").toLowerCase();
+      const st = String(t.status || "").toLowerCase();
+      if (st === "completed" || st === "failed" || st === "cancelled") continue;
+      if (CRITICAL_TOOL_KINDS.has(kind)) list.push(t);
+    }
+    return list;
+  }
+
+  adoptConfigOptions(options) {
+    if (Array.isArray(options) && options.length) {
+      this.configOptions = options;
+    }
+  }
+
+  broadcast(payload) {
+    const data = JSON.stringify(payload);
+    for (const ws of this.clients) {
+      if (ws.readyState === 1) ws.send(data);
+    }
+  }
+
+  addClient(ws) {
+    this.clients.add(ws);
+    ws.send(JSON.stringify(this.statusPayload()));
+  }
+
+  removeClient(ws) {
+    this.clients.delete(ws);
+  }
+
+  /**
+   * Spawn + initialize `grok agent` via ACP.
+   * Safe to call only when process is cleared (use reconnect() otherwise).
+   */
+  async start() {
+    if (this.connected) return { ok: true, already: true };
+    if (this.process) {
+      throw new Error("Grok process still running — use reconnect()");
+    }
+
+    // Match TUI default: no --reasoning-effort override (model default, usually high).
+    const child = spawn(
+      GROK_BIN,
+      ["agent", "--always-approve", "--no-leader", "stdio"],
+      {
+        env: { ...process.env, NO_COLOR: "1" },
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd: WORK_CWD,
+      },
+    );
+    this.process = child;
+    this.stderrTail = [];
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      this.stderrTail.push(...chunk.split("\n").filter(Boolean));
+      this.stderrTail = this.stderrTail.slice(-30);
+    });
+    child.on("exit", (code, signal) => {
+      this.handleDisconnect(`Grok exited (${signal || code || "unknown"})`);
+    });
+    child.on("error", (err) => {
+      this.handleDisconnect(`Unable to start Grok: ${err.message}`);
+    });
+
+    try {
+      const stream = acp.ndJsonStream(
+        Writable.toWeb(child.stdin),
+        Readable.toWeb(child.stdout),
+      );
+
+      const clientApp = acp
+        .client({ name: "grok-build-terminal" })
+        .onRequest(acp.methods.client.session.requestPermission, async () => {
+          // ACP: after session/cancel, pending permissions MUST be cancelled
+          if (this.cancelling) {
+            return { outcome: { outcome: "cancelled" } };
+          }
+          // always-approve on agent CLI; still answer cleanly if asked
+          return {
+            outcome: { outcome: "selected", optionId: "allow-once" },
+          };
+        })
+        .onNotification(acp.methods.client.session.update, ({ params }) => {
+          this.onSessionUpdate(params);
+        });
+
+      const connection = clientApp.connect(stream);
+      this.connection = connection;
+
+      const initialized = await connection.agent.request(
+        acp.methods.agent.initialize,
+        {
+          protocolVersion: acp.PROTOCOL_VERSION,
+          clientCapabilities: {
+            terminal: false,
+            plan: {},
+            session: {},
+          },
+          clientInfo: {
+            name: "grok-build-terminal",
+            title: "Grok Build Terminal",
+            version: "0.1.0",
+          },
+        },
+      );
+
+      this.loadSessionSupported = Boolean(
+        initialized.agentCapabilities?.loadSession,
+      );
+
+      if (initialized.authMethods?.length) {
+        const preferred =
+          typeof initialized._meta?.defaultAuthMethodId === "string"
+            ? initialized._meta.defaultAuthMethodId
+            : "";
+        const method =
+          initialized.authMethods.find((m) => m.id === preferred) ||
+          initialized.authMethods.find((m) => m.id === "cached_token") ||
+          initialized.authMethods[0];
+        await connection.agent.request(acp.methods.agent.authenticate, {
+          methodId: method.id,
+        });
+      }
+
+      await this.createSession();
+      this.connected = true;
+      this.broadcast(
+        this.statusPayload({
+          busy: false,
+          reconnecting: false,
+          agent:
+            initialized.agentInfo?.title ||
+            initialized.agentInfo?.name ||
+            "Grok",
+        }),
+      );
+
+      void connection.closed.then(() => {
+        this.handleDisconnect("ACP channel closed");
+      });
+
+      return { ok: true, sessionId: this.sessionId };
+    } catch (err) {
+      // Failed mid-start: tear down child without treating as user-facing disconnect spam mid-reconnect
+      await this.stop({ silent: true });
+      throw err;
+    }
+  }
+
+  /**
+   * Kill any running agent and start a fresh one.
+   * Used from UI when status shows offline (connect) or for force restart.
+   */
+  async reconnect() {
+    if (this.starting) {
+      return {
+        ok: false,
+        error: "Reconnect läuft bereits",
+        connected: this.connected,
+      };
+    }
+
+    this.starting = true;
+    this.busy = true;
+    this.broadcast(this.statusPayload({ reconnecting: true }));
+
+    try {
+      await this.stop({ silent: true });
+      // brief settle so OS releases stdio / portless child handles
+      await new Promise((r) => setTimeout(r, 200));
+      const result = await this.start();
+      return {
+        ok: true,
+        connected: this.connected,
+        sessionId: this.sessionId,
+        ...result,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const detail = this.stderrTail.at(-1);
+      const full =
+        detail && !message.includes(detail) ? `${message} — ${detail}` : message;
+      this.broadcast({ type: "error", message: full });
+      this.broadcast(this.statusPayload({ reconnecting: false, busy: false }));
+      throw new Error(full);
+    } finally {
+      this.starting = false;
+      // Reconnect ends any prior turn; busy only for live prompts
+      this.busy = false;
+      this.broadcast(this.statusPayload());
+    }
+  }
+
+  /**
+   * Quit the agent process (like TUI `/quit`). Leaves the UI bridge running offline.
+   */
+  async disconnect() {
+    if (this.starting) {
+      return {
+        ok: false,
+        error: "Verbindung wird gerade aufgebaut — bitte warten",
+        connected: this.connected,
+      };
+    }
+    if (!this.connected && !this.process) {
+      this.broadcast(this.statusPayload());
+      return { ok: true, connected: false, already: true };
+    }
+
+    await this.stop({ silent: false });
+    return { ok: true, connected: false, sessionId: null };
+  }
+
+  async createSession() {
+    const result = await this.connection.agent.request(
+      acp.methods.agent.session.new,
+      {
+        cwd: WORK_CWD,
+        mcpServers: [],
+        _meta: { yoloMode: true },
+      },
+    );
+    this.sessionId = result.sessionId;
+    this.adoptConfigOptions(result.configOptions);
+    return result;
+  }
+
+  onSessionUpdate(params) {
+    if (this.suppressUpdates) return;
+
+    const update = params?.update || params;
+    const kind = update?.sessionUpdate;
+    if (!kind) return;
+
+    if (kind === "config_option_update" || update.configOptions) {
+      this.adoptConfigOptions(update.configOptions);
+      this.broadcast(this.statusPayload());
+      return;
+    }
+
+    if (kind === "agent_message_chunk") {
+      const text = update.content?.text || update.text || "";
+      if (text) this.broadcast({ type: "assistant_chunk", text });
+      return;
+    }
+    if (kind === "agent_thought_chunk") {
+      const text = update.content?.text || update.text || "";
+      if (text) this.broadcast({ type: "thought_chunk", text });
+      return;
+    }
+    if (kind === "tool_call" || kind === "tool_call_update") {
+      const toolCallId = update.toolCallId || "";
+      const status =
+        update.status || (kind === "tool_call" ? "pending" : "in_progress");
+      const title = update.title || toolCallId || "tool";
+      const toolKind = update.kind || "";
+
+      if (toolCallId) {
+        const done =
+          status === "completed" ||
+          status === "failed" ||
+          status === "cancelled";
+        if (done) {
+          this.activeTools.delete(toolCallId);
+        } else {
+          const prev = this.activeTools.get(toolCallId) || {};
+          this.activeTools.set(toolCallId, {
+            title: title || prev.title || toolCallId,
+            kind: toolKind || prev.kind || "",
+            status,
+          });
+        }
+      }
+
+      this.broadcast({
+        type: "tool",
+        title,
+        status,
+        kind: toolKind,
+        toolCallId,
+      });
+    }
+  }
+
+  /**
+   * Open a disk session: always return transcript for UI.
+   * If agent is connected and supports loadSession, resume live context too.
+   */
+  async openSession(sessionId) {
+    if (!isSessionId(sessionId)) {
+      throw new Error("Invalid session id");
+    }
+    if (this.busy || this.starting) {
+      throw new Error("Grok ist gerade beschäftigt — bitte warten");
+    }
+
+    const session = await getSessionForOpen(sessionId);
+    if (!session) {
+      throw new Error("Session not found");
+    }
+
+    const messages = (session.turns || session.transcriptPreview || []).map(
+      (t, i) => ({
+        id: `hist-${sessionId}-${i}`,
+        role: t.role === "user" ? "user" : "assistant",
+        text: t.text,
+        streaming: false,
+      }),
+    );
+
+    let live = false;
+    let liveError = null;
+
+    // Already the active agent session — just show disk history, keep sessionId.
+    if (this.connected && this.sessionId === sessionId) {
+      live = true;
+      this.broadcast(
+        this.statusPayload({
+          openedSessionId: sessionId,
+          opened: true,
+          reset: true,
+        }),
+      );
+      return {
+        ok: true,
+        session: {
+          id: session.id,
+          title: session.title,
+          cwd: session.cwd,
+          model: session.model,
+          truncated: session.truncated,
+        },
+        messages,
+        sessionId: this.sessionId,
+        live,
+        liveError,
+      };
+    }
+
+    if (this.connected && this.connection && this.loadSessionSupported) {
+      this.suppressUpdates = true;
+      try {
+        await this.connection.agent.request(acp.methods.agent.session.load, {
+          sessionId,
+          cwd: session.cwd || WORK_CWD,
+          mcpServers: [],
+          _meta: { yoloMode: true },
+        });
+        this.sessionId = sessionId;
+        live = true;
+      } catch (err) {
+        liveError = err instanceof Error ? err.message : String(err);
+        live = false;
+      } finally {
+        this.suppressUpdates = false;
+      }
+    } else if (this.connected && this.connection && !this.loadSessionSupported) {
+      liveError =
+        "Agent unterstützt session/load nicht — Verlauf geladen, Chat bleibt in der aktuellen Live-Session";
+    } else if (!this.connected) {
+      liveError =
+        "Grok offline — Verlauf geladen; zum Weiterschreiben erst verbinden";
+    }
+
+    this.broadcast(
+      this.statusPayload({
+        openedSessionId: sessionId,
+        opened: true,
+        reset: true,
+        live,
+        liveError,
+      }),
+    );
+
+    return {
+      ok: true,
+      session: {
+        id: session.id,
+        title: session.title,
+        cwd: session.cwd,
+        model: session.model,
+        truncated: session.truncated,
+      },
+      messages,
+      sessionId: live ? this.sessionId : this.sessionId,
+      live,
+      liveError,
+    };
+  }
+
+  async chat(text) {
+    if (!this.connected || !this.connection || !this.sessionId) {
+      throw new Error("Grok is not connected yet");
+    }
+    if (this.busy) throw new Error("A turn is already running");
+    if (!text?.trim()) throw new Error("Empty message");
+
+    this.busy = true;
+    this.cancelling = false;
+    this.clearCancelWatchdog();
+    this.activeTools.clear();
+    this.broadcast(this.statusPayload({ busy: true, cancelling: false }));
+
+    let stopReason = "end_turn";
+    let failed = null;
+    try {
+      const result = await this.connection.agent.request(
+        acp.methods.agent.session.prompt,
+        {
+          sessionId: this.sessionId,
+          prompt: [{ type: "text", text: text.trim() }],
+        },
+      );
+      stopReason = result?.stopReason || "end_turn";
+    } catch (err) {
+      failed = err;
+      // ACP: cancelled prompts sometimes surface as errors from SDK/tools
+      const msg = err instanceof Error ? err.message : String(err);
+      if (this.cancelling || /cancel/i.test(msg)) {
+        stopReason = "cancelled";
+        failed = null; // not a user-facing error
+      } else {
+        stopReason = "error";
+      }
+    } finally {
+      // Always end the turn for the UI so the follow-up queue can drain
+      // (even when the agent request throws). Wait until HERE before idle —
+      // never mark idle just because cancel was requested.
+      this.endCancelState(stopReason);
+      this.busy = false;
+      this.broadcast({
+        type: "turn_done",
+        stopReason,
+      });
+      this.broadcast(this.statusPayload({ busy: false, cancelling: false }));
+    }
+    if (failed) throw failed;
+  }
+
+  /**
+   * Deep Search — same as TUI `/deep-research <query>`.
+   * Starts a background research workflow; results stream back as normal updates.
+   */
+  async deepSearch(query) {
+    const q = String(query || "").trim();
+    if (!q) throw new Error("Deep Search braucht eine Query");
+    // Avoid double-prefix if user already typed the slash command
+    const prompt = q.startsWith("/deep-research")
+      ? q
+      : `/deep-research ${q}`;
+    this.broadcast({
+      type: "system",
+      text: `Deep Search gestartet — wie TUI \`/deep-research\`. Fortschritt über Workflows.`,
+    });
+    await this.chat(prompt);
+  }
+
+  /**
+   * Fork current session (ACP session/fork), like TUI `/fork`.
+   * Optional directive is sent as the first prompt in the new session.
+   */
+  async forkSession(directive = "") {
+    if (!this.connected || !this.connection || !this.sessionId) {
+      throw new Error("Grok is not connected yet");
+    }
+    if (this.busy) throw new Error("A turn is already running");
+
+    const sourceId = this.sessionId;
+    let result;
+    try {
+      result = await this.connection.agent.request(
+        acp.methods.agent.session.fork,
+        {
+          sessionId: sourceId,
+          cwd: WORK_CWD,
+          mcpServers: [],
+          _meta: { yoloMode: true },
+        },
+      );
+    } catch (err) {
+      // Fallback: let the agent shell handle /fork as a slash command
+      const d = String(directive || "").trim();
+      const slash = d
+        ? d.startsWith("/fork")
+          ? d
+          : `/fork --no-worktree ${d}`
+        : "/fork --no-worktree";
+      this.broadcast({
+        type: "system",
+        text: `ACP session/fork nicht verfügbar — sende \`${slash}\` als Prompt.`,
+      });
+      await this.chat(slash);
+      return {
+        ok: true,
+        via: "slash",
+        sourceSessionId: sourceId,
+        sessionId: this.sessionId,
+      };
+    }
+
+    const newId = result?.sessionId;
+    if (!newId) {
+      throw new Error("Fork fehlgeschlagen: keine neue sessionId");
+    }
+
+    this.sessionId = newId;
+    this.adoptConfigOptions(result.configOptions);
+    this.broadcast(
+      this.statusPayload({
+        forked: true,
+        sourceSessionId: sourceId,
+        sessionId: newId,
+      }),
+    );
+    this.broadcast({
+      type: "system",
+      text: `Session geforkt → ${newId.slice(0, 8)}… (Quelle ${sourceId.slice(0, 8)}…)`,
+    });
+
+    const d = String(directive || "").trim();
+    if (d) {
+      await this.chat(d);
+    } else {
+      this.broadcast({ type: "turn_done", stopReason: "fork" });
+    }
+
+    return {
+      ok: true,
+      via: "session/fork",
+      sourceSessionId: sourceId,
+      sessionId: newId,
+    };
+  }
+
+  /**
+   * Cancel the current prompt turn (ACP session/cancel).
+   *
+   * Soft cancel only — never kills the agent process mid-tool (that could
+   * corrupt writes). Critical tools finish; UI stays busy until turn_done.
+   */
+  async cancelTurn() {
+    if (!this.connected || !this.connection || !this.sessionId) {
+      throw new Error("Grok is not connected");
+    }
+    if (!this.busy) {
+      return { ok: true, cancelled: false, reason: "not_busy" };
+    }
+    if (this.cancelling) {
+      return {
+        ok: true,
+        cancelled: true,
+        reason: "already_cancelling",
+        method: "pending",
+      };
+    }
+
+    const sessionId = this.sessionId;
+    const agent = this.connection.agent;
+    let method = "none";
+    const critical = this.criticalToolsInFlight();
+
+    try {
+      // ClientContext.notify → session/cancel (notification, not request)
+      if (agent && typeof agent.notify === "function") {
+        method = "agent.notify";
+        await agent.notify(acp.methods.agent.session.cancel, { sessionId });
+      } else if (agent && typeof agent.cancel === "function") {
+        method = "agent.cancel";
+        await agent.cancel({ sessionId });
+      } else if (typeof this.connection.sendNotification === "function") {
+        method = "connection.sendNotification";
+        await this.connection.sendNotification(
+          acp.methods.agent.session.cancel,
+          { sessionId },
+        );
+      } else {
+        throw new Error("No ACP cancel path on connection");
+      }
+
+      this.cancelling = true;
+
+      if (critical.length > 0) {
+        const names = critical
+          .map((t) => t.title || t.kind || "Werkzeug")
+          .slice(0, 3)
+          .join(", ");
+        this.broadcast({
+          type: "system",
+          text: `Stopp angefordert — laufendes Werkzeug wird sicher zu Ende geführt (${names}), danach Abbruch.`,
+        });
+      } else {
+        this.broadcast({
+          type: "system",
+          text: "Abbruch angefordert…",
+        });
+      }
+
+      this.broadcast(
+        this.statusPayload({
+          busy: true,
+          cancelling: true,
+        }),
+      );
+
+      // If the agent is slow to honour cancel, explain — do NOT fake idle.
+      this.clearCancelWatchdog();
+      this.cancelWatchdog = setTimeout(() => {
+        if (!this.busy || !this.cancelling) return;
+        const stillCritical = this.criticalToolsInFlight();
+        this.broadcast({
+          type: "system",
+          text: stillCritical.length
+            ? "Abbruch wartet noch auf sicheres Tool-Ende — bitte kurz warten."
+            : "Abbruch dauert länger als erwartet — Agent arbeitet noch; UI bleibt gesperrt bis Turn endet.",
+        });
+        this.broadcast(this.statusPayload({ busy: true, cancelling: true }));
+      }, 8000);
+
+      return {
+        ok: true,
+        cancelled: true,
+        method,
+        deferred: critical.length > 0,
+        criticalTools: critical.map((t) => t.title || t.kind),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[cancelTurn]", method, message);
+      this.cancelling = false;
+      this.clearCancelWatchdog();
+      throw new Error(`Cancel failed (${method}): ${message}`);
+    }
+  }
+
+  async reset() {
+    if (!this.connection) throw new Error("Not connected");
+    await this.createSession();
+    this.broadcast({
+      type: "status",
+      connected: true,
+      sessionId: this.sessionId,
+      busy: false,
+      cwd: WORK_CWD,
+      reset: true,
+    });
+  }
+
+  handleDisconnect(message) {
+    // Intentional stop/reconnect: clear quietly (exit event may race)
+    if (this.stopping) {
+      this.connected = false;
+      this.sessionId = null;
+      this.connection = null;
+      this.process = null;
+      this.busy = false;
+      this.cancelling = false;
+      this.clearCancelWatchdog();
+      this.activeTools.clear();
+      return;
+    }
+
+    const detail = this.stderrTail.at(-1);
+    const full =
+      detail && !message.includes(detail) ? `${message} — ${detail}` : message;
+    this.connected = false;
+    this.busy = false;
+    this.cancelling = false;
+    this.clearCancelWatchdog();
+    this.activeTools.clear();
+    this.sessionId = null;
+    this.connection = null;
+    if (
+      this.process &&
+      this.process.exitCode === null &&
+      this.process.signalCode === null
+    ) {
+      try {
+        this.process.kill("SIGTERM");
+      } catch {
+        /* ignore */
+      }
+    }
+    this.process = null;
+    this.broadcast({ type: "error", message: full });
+    this.broadcast(this.statusPayload());
+  }
+
+  async stop({ silent = false } = {}) {
+    this.stopping = true;
+    const child = this.process;
+    this.connection = null;
+    this.connected = false;
+    this.sessionId = null;
+    this.busy = false;
+    this.cancelling = false;
+    this.clearCancelWatchdog();
+    this.activeTools.clear();
+    this.process = null;
+
+    if (child && child.exitCode === null && child.signalCode === null) {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* ignore */
+      }
+      // Wait briefly for clean exit; escalate if needed
+      await new Promise((resolve) => {
+        const t = setTimeout(() => {
+          try {
+            if (child.exitCode === null && child.signalCode === null) {
+              child.kill("SIGKILL");
+            }
+          } catch {
+            /* ignore */
+          }
+          resolve();
+        }, 800);
+        child.once("exit", () => {
+          clearTimeout(t);
+          resolve();
+        });
+      });
+    }
+
+    this.stopping = false;
+    if (!silent) {
+      this.broadcast(this.statusPayload());
+    }
+  }
+}
+
+const bridge = new GrokBridge();
+
+wss.on("connection", (ws) => {
+  bridge.addClient(ws);
+
+  ws.on("message", async (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(String(raw));
+    } catch {
+      ws.send(JSON.stringify({ type: "error", message: "Invalid JSON" }));
+      return;
+    }
+
+    try {
+      if (msg.type === "chat") {
+        await bridge.chat(msg.text || "");
+      } else if (msg.type === "deep_search" || msg.type === "deep-search") {
+        await bridge.deepSearch(msg.text || msg.query || "");
+      } else if (msg.type === "fork") {
+        const result = await bridge.forkSession(msg.text || msg.directive || "");
+        ws.send(JSON.stringify({ type: "fork_result", ...result }));
+      } else if (msg.type === "reset") {
+        await bridge.reset();
+      } else if (msg.type === "cancel" || msg.type === "stop") {
+        await bridge.cancelTurn();
+      } else if (msg.type === "reconnect") {
+        await bridge.reconnect();
+      } else if (msg.type === "disconnect" || msg.type === "quit") {
+        await bridge.disconnect();
+      } else if (msg.type === "ping") {
+        ws.send(JSON.stringify({ type: "pong" }));
+      }
+    } catch (err) {
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  });
+
+  ws.on("close", () => bridge.removeClient(ws));
+});
+
+// Static UI after all API routes (POST /api/* must not be swallowed)
+app.use(express.static(path.join(ROOT, "client/dist")));
+// SPA fallback for client-side routes (GET only)
+app.get(/.*/, (req, res, next) => {
+  if (req.path.startsWith("/api") || req.path.startsWith("/ws")) return next();
+  res.sendFile(path.join(ROOT, "client/dist", "index.html"), (err) => {
+    if (err) next();
+  });
+});
+
+// Listen first so Dock / health checks work even while the agent is connecting.
+httpServer.on("error", (err) => {
+  if (err && err.code === "EADDRINUSE") {
+    console.error(
+      `Port ${HOST}:${PORT} already in use — stop the other process or change PORT.`,
+    );
+    process.exit(1);
+  }
+  console.error("HTTP server error:", err);
+  process.exit(1);
+});
+
+httpServer.listen(PORT, HOST, () => {
+  console.log(
+    `Grok Build Terminal bridge → http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`,
+  );
+  console.log(
+    `WebSocket          → ws://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}/ws`,
+  );
+  console.log(`Working directory  → ${WORK_CWD}`);
+  console.log(`Grok connected     → ${bridge.connected}`);
+
+  // Connect ACP agent after the UI is already reachable.
+  bridge.start().catch((err) => {
+    console.error("Failed to start Grok bridge:", err);
+    console.error(
+      "Is `grok` on PATH and authenticated? Try: grok doctor / grok login",
+    );
+  });
+});
+
+async function shutdown() {
+  await bridge.stop();
+  httpServer.close();
+  process.exit(0);
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template only — do not load this file directly.
+  `npm run service:install` generates a machine-local plist under
+  ~/Library/LaunchAgents/ with your paths substituted.
+
+  Copyright (c) 2026 Alexander Hubert — MIT License
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.lxndrhbrt.grok-chat-ui</string>
+
+    <key>Comment</key>
+    <string>Grok Build Terminal — Node bridge + ACP agent (by Alexander Hubert)</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>__ROOT__/scripts/start-service.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__ROOT__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>__HOME__/.local/bin:__HOME__/.grok/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+      <key>HOME</key>
+      <string>__HOME__</string>
+      <key>PORT</key>
+      <string>5174</string>
+      <key>HOST</key>
+      <string>127.0.0.1</string>
+      <key>GROK_BIN</key>
+      <string>__HOME__/.grok/bin/grok</string>
+      <key>GROK_CHAT_CWD</key>
+      <string>__HOME__</string>
+      <key>NODE_ENV</key>
+      <string>production</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/grok-chat-ui/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/grok-chat-ui/stderr.log</string>
+  </dict>
+</plist>

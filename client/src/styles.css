@@ -1,0 +1,2261 @@
+/* Copyright (c) 2026 Alexander Hubert — MIT License */
+
+/*
+  Palette rule:
+  - One brand gold hex only: --gold
+  - One stop red hex only: --danger
+  - Neutrals for surfaces/text
+  - All other tints = color-mix of those bases with white/black/panel
+    (lighter/darker only — never shift gold→orange or mint/blue side accents)
+*/
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0a0d;
+  --panel: #141218;
+  --border: #2a2630;
+  --text: #f2efe8;
+  --muted: #9a948a;
+
+  /* THE gold (Beta tag, chat accents, snack, connected) */
+  --gold: #d4af37;
+  --accent: var(--gold);
+  --gold-bright: color-mix(in srgb, var(--gold) 68%, #ffffff);
+  --gold-dim: color-mix(in srgb, var(--gold) 72%, #000000);
+  --gold-deep: color-mix(in srgb, var(--gold) 45%, #000000);
+
+  --user: #1c1a18;
+  --assistant: #16141b;
+  --thought: #1a1814;
+  --tool: #181614;
+
+  /* THE stop red (stop rim + snack target only) */
+  --danger: #d94a4a;
+  --danger-bright: color-mix(in srgb, var(--danger) 65%, #ffffff);
+  --danger-dim: color-mix(in srgb, var(--danger) 70%, #000000);
+
+  /* Status “ok/connected” = gold family, not a second hue */
+  --ok: var(--gold-bright);
+
+  --send-fg: color-mix(in srgb, var(--gold) 12%, #000000);
+  --send-idle-bg: color-mix(in srgb, var(--gold) 18%, var(--panel));
+  --send-idle-border: color-mix(in srgb, var(--gold) 40%, var(--border));
+  --send-work-bg: var(--send-idle-bg);
+
+  /* Snack = gold snake + danger stop (same hexes, only mix)
+     Head darker → tail lighter (Enter board + chat scrollbar). */
+  --snack-snake-head: var(--gold);
+  --snack-snake-body: var(--gold-bright);
+  --snack-stop: var(--danger);
+  --snack-stop-inner: var(--danger-bright);
+
+  /* Shared stone size (matches Enter SnackBoard cell 10 / gap 0.14 → 8px) */
+  --snack-pixel: 8px;
+  --snack-pixel-gap: 2px;
+
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f2ec;
+  --panel: #fffdf8;
+  --border: #ddd6c8;
+  --text: #1a1814;
+  --muted: #6f685c;
+
+  /* Same gold hex as dark — only mixes change for contrast on light surfaces */
+  --gold: #d4af37;
+  --accent: var(--gold);
+  --gold-bright: color-mix(in srgb, var(--gold) 55%, #ffffff);
+  --gold-dim: color-mix(in srgb, var(--gold) 78%, #000000);
+  --gold-deep: color-mix(in srgb, var(--gold) 52%, #000000);
+
+  --user: color-mix(in srgb, var(--gold) 8%, #f0ebe3);
+  --assistant: #f7f4ee;
+  --thought: #f0ebe3;
+  --tool: #f2efe9;
+
+  --danger: #d94a4a;
+  --danger-bright: color-mix(in srgb, var(--danger) 55%, #ffffff);
+  --danger-dim: color-mix(in srgb, var(--danger) 75%, #000000);
+
+  --ok: var(--gold-dim);
+
+  --send-fg: color-mix(in srgb, var(--gold) 15%, #000000);
+  --send-idle-bg: color-mix(in srgb, var(--gold) 14%, var(--panel));
+  --send-idle-border: color-mix(in srgb, var(--gold) 36%, var(--border));
+  --send-work-bg: var(--send-idle-bg);
+
+  /* Darker gold head on light surface; body/tail ramp lighter */
+  --snack-snake-head: var(--gold-deep);
+  --snack-snake-body: var(--gold-dim);
+  --snack-stop: var(--danger);
+  --snack-stop-inner: var(--danger-bright);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Prefer dynamic viewport (Safari / Web Apps) so the bar stays on-screen */
+html {
+  height: 100%;
+  height: 100dvh;
+}
+
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+/*
+  Chat shell:
+  left icon rail (flush to viewport edge) | main column.
+*/
+.app {
+  height: 100%;
+  max-height: 100%;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  /* Full width so the rail can sit on the true left edge */
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Vertical icon rail — flush left edge of the window */
+.side-rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  width: 48px;
+  height: 100%;
+  min-height: 0;
+  padding: 12px 0 12px 0;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  box-sizing: border-box;
+}
+
+/* Push book / bottom actions to the foot of the rail */
+.side-rail-spacer {
+  flex: 1 1 auto;
+  min-height: 8px;
+  width: 1px;
+  pointer-events: none;
+}
+
+.side-rail-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.side-rail-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  transform: none;
+}
+
+.side-rail-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+  color: var(--accent);
+}
+
+.side-rail-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.side-rail-btn svg {
+  display: block;
+}
+
+.side-rail-sep {
+  display: block;
+  width: 18px;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.side-rail-btn--danger:not(:disabled) {
+  color: var(--danger);
+}
+
+.side-rail-btn--danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  color: var(--danger);
+}
+
+.app-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  /* Content column centered with max width, padding away from rail */
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.top h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: 0.02em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.55rem;
+}
+
+.version-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--send-fg);
+  background: var(--gold);
+  border-radius: 999px;
+  padding: 0.18em 0.55em;
+  vertical-align: middle;
+}
+
+.sub {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+button.pill-btn {
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+
+button.pill-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button.pill-btn:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+button.pill-btn.ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--border));
+  background: color-mix(in srgb, var(--ok) 10%, var(--panel));
+}
+
+button.pill-btn.ok:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ok) 65%, var(--border));
+}
+
+button.pill-btn.bad {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+}
+
+button.pill-btn.bad:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--border));
+  color: var(--danger-bright);
+}
+
+button.pill-btn.pending {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+/* legacy non-button pills (if any) */
+.pill.ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--border));
+}
+
+.pill.bad {
+  color: var(--danger);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.send {
+  --send-morph: 0.48s cubic-bezier(0.34, 1.25, 0.64, 1);
+  /* Calm idle: soft accent tint, not a solid neon block */
+  background: var(--send-idle-bg);
+  color: var(--text);
+  border: 1px solid var(--send-idle-border);
+  font-weight: 650;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  line-height: 1;
+  letter-spacing: 0;
+  border-radius: 14px;
+  align-self: stretch;
+  position: relative;
+  overflow: hidden;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease;
+}
+
+button.send:hover:not(:disabled):not(.send--working) {
+  background: color-mix(in srgb, var(--gold) 28%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--border));
+}
+
+button.send .send-icon {
+  display: block;
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Stacked faces for ↵ ⇄ Snack morph */
+button.send .send-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity var(--send-morph),
+    transform var(--send-morph),
+    filter var(--send-morph);
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+/* Idle: Enter visible, Snack tucked away */
+button.send .send-face--enter {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  filter: blur(0);
+  z-index: 2;
+}
+
+button.send .send-face--snack {
+  opacity: 0;
+  transform: scale(0.2) rotate(75deg);
+  filter: blur(2px);
+  z-index: 1;
+  padding: 4px;
+}
+
+/* Working: Enter collapses into Snack */
+button.send.send--working .send-face--enter {
+  opacity: 0;
+  transform: scale(0.15) rotate(-100deg);
+  filter: blur(3px);
+  z-index: 1;
+}
+
+button.send.send--working .send-face--snack {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  filter: blur(0);
+  z-index: 2;
+}
+
+/* Work done: Snack morphs back into ↵ */
+button.send.send--morph-out .send-face--enter {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  filter: blur(0);
+  z-index: 2;
+}
+
+button.send.send--morph-out .send-face--snack {
+  opacity: 0;
+  transform: scale(0.2) rotate(-75deg);
+  filter: blur(2px);
+  z-index: 1;
+}
+
+/*
+  Working / Stopp: same fill as idle Enter — only the red rim + snack change.
+  No black/full color takeover.
+*/
+button.send.send--working {
+  background: var(--send-work-bg);
+  color: var(--text);
+  cursor: pointer;
+  opacity: 1;
+  border: 2px solid var(--danger);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 22%, transparent);
+  animation: send-stop-pulse 1s ease-in-out infinite;
+}
+
+button.send.send--working:disabled {
+  opacity: 1;
+  cursor: wait;
+  border: 2px solid var(--danger);
+}
+
+@keyframes send-stop-pulse {
+  0%,
+  100% {
+    border-color: color-mix(in srgb, var(--danger) 70%, var(--border));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 20%, transparent);
+  }
+  50% {
+    border-color: var(--danger);
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--danger) 35%, transparent),
+      0 0 14px color-mix(in srgb, var(--danger) 28%, transparent);
+  }
+}
+
+button.send .send-snack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  overflow: hidden;
+}
+
+/*
+  Canvas size is set in JS to an exact multiple of square cells.
+  Do NOT use max-width/max-height here — that stretched W≠H before.
+*/
+button.send .send-snack .snack-canvas {
+  display: block;
+  flex-shrink: 0;
+  max-width: none !important;
+  max-height: none !important;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.send {
+    --send-morph: 0.01ms;
+  }
+  button.send.send--working {
+    animation: none;
+    border: 2px solid var(--danger);
+  }
+}
+
+.banner {
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--danger) 16%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+  color: color-mix(in srgb, var(--danger-bright) 80%, var(--text));
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.messages-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  position: relative;
+  gap: 0;
+}
+
+/* Floating cue while reading mid-chat and new tool/chunks arrive below */
+.jump-latest {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 5;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--border));
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--gold-bright);
+  background: color-mix(in srgb, var(--panel) 88%, var(--gold));
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--bg) 55%, transparent);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.jump-latest:hover {
+  border-color: var(--gold);
+  color: var(--text);
+}
+
+.messages {
+  flex: 1 1 auto;
+  min-height: 0; /* critical: allow flex child to scroll */
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  padding: 14px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Inner column — height changes observed for stick-to-bottom */
+.messages-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: min-content;
+}
+
+/* Seamless answer area — same surface as the page chrome */
+.messages.messages--borderless {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 2px 14px;
+}
+
+/* Hide native scrollbar — SnackScrollbar is the rail */
+.messages.messages--snack-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  padding-right: 4px;
+}
+
+.messages.messages--snack-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/*
+  Pixel-Snack scrollbar — 8×8 stones only (no stretch).
+  Snake tight & fixed; only apple distance changes with chat length.
+*/
+.snack-scroll {
+  flex: 0 0 auto;
+  align-self: stretch;
+  position: relative;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  /* width set inline — never stretch stones via % sizing */
+  min-width: calc(var(--snack-pixel, 8px) + 4px);
+  overflow: hidden;
+}
+
+.snack-scroll--on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.snack-scroll-canvas {
+  display: block;
+  /* size set in JS (px) — do NOT use width/height 100% (that elongated the apple) */
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  cursor: grab;
+  touch-action: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.snack-scroll-canvas:active {
+  cursor: grabbing;
+}
+
+.empty {
+  color: var(--muted);
+  margin: auto;
+  text-align: center;
+  max-width: 28rem;
+  line-height: 1.5;
+}
+
+.msg {
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    background 0.25s ease;
+}
+
+.msg-highlight {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 20px color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--assistant));
+}
+
+.msg-user {
+  background: var(--user);
+  align-self: flex-end;
+  max-width: 85%;
+}
+
+.msg-assistant {
+  background: var(--assistant);
+}
+
+.msg-thought {
+  background: var(--thought);
+  opacity: 0.85;
+}
+
+.msg-tool {
+  background: var(--tool);
+  font-size: 0.9rem;
+}
+
+.role {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.role-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.msg-speak-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 70%, var(--bg));
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.msg-speak-btn:hover:not(:disabled) {
+  color: var(--gold-bright);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--border));
+  background: color-mix(in srgb, var(--gold) 10%, var(--panel));
+}
+
+.msg-speak-btn.is-speaking {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+}
+
+.msg-speak-btn.is-busy {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.msg-speak-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  line-height: 1.45;
+  font-size: 0.98rem;
+}
+
+/* Rendered Markdown in chat bubbles — no raw **markers** */
+.md-body {
+  margin: 0;
+  word-break: break-word;
+  font-family: inherit;
+  line-height: 1.5;
+  font-size: 0.98rem;
+  color: var(--text);
+}
+
+.md-body--empty {
+  min-height: 0.5em;
+}
+
+.md-body > :first-child {
+  margin-top: 0;
+}
+
+.md-body > :last-child {
+  margin-bottom: 0;
+}
+
+.md-p {
+  margin: 0 0 0.65em;
+}
+
+.md-p:last-child {
+  margin-bottom: 0;
+}
+
+.md-h {
+  margin: 0.85em 0 0.4em;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.md-h--sm {
+  font-size: 1rem;
+}
+
+.md-list {
+  margin: 0.35em 0 0.75em;
+  padding-left: 1.35em;
+}
+
+.md-list--ol {
+  list-style: decimal;
+}
+
+.md-li {
+  margin: 0.2em 0;
+}
+
+.md-li > .md-p {
+  margin: 0;
+}
+
+.md-body strong {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--gold-bright) 35%, var(--text));
+}
+
+.md-body em {
+  font-style: italic;
+}
+
+.md-code-inline {
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.88em;
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--gold) 18%, var(--border));
+  color: var(--text);
+}
+
+.md-pre {
+  margin: 0.5em 0 0.75em;
+  padding: 10px 12px;
+  border-radius: 10px;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
+  border: 1px solid var(--border);
+}
+
+.md-code-block {
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  white-space: pre;
+}
+
+.md-quote {
+  margin: 0.5em 0 0.75em;
+  padding: 0.35em 0 0.35em 0.9em;
+  border-left: 3px solid color-mix(in srgb, var(--gold) 55%, var(--border));
+  color: var(--muted);
+}
+
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 0.5em 0 0.75em;
+}
+
+.md-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.md-table th,
+.md-table td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.md-table th {
+  background: color-mix(in srgb, var(--gold) 10%, var(--panel));
+  font-weight: 650;
+}
+
+.md-body a {
+  color: color-mix(in srgb, var(--gold) 70%, var(--text));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md-body a:hover {
+  color: var(--gold-bright);
+}
+
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.85em 0;
+}
+
+.snack-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.composer {
+  /* Legacy fixed height — overridden by .composer--grok */
+  --composer-h: 96px;
+  --composer-send-w: 2.75rem;
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  z-index: 2;
+}
+
+/* Grok-style: single card with textarea + toolbar (Thoughts / Model / Send) */
+.composer.composer--grok {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Follow-up queue while Grok is working (TUI-style) */
+.msg-queue {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--gold) 8%, var(--panel));
+  padding: 8px 10px;
+}
+
+.msg-queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.msg-queue-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+}
+
+/* Ellipsis as Snack pixel-stones — same size as Enter / side snack */
+.msg-queue-pixels {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--snack-pixel-gap, 2px);
+  flex-shrink: 0;
+}
+
+.msg-queue-pixel {
+  width: var(--snack-pixel, 8px);
+  height: var(--snack-pixel, 8px);
+  flex-shrink: 0;
+  background: var(--snack-snake-body, var(--gold));
+  image-rendering: pixelated;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* Head-ish last stone + dark pupil (looking ahead, like snack head) */
+.msg-queue-pixel:last-child {
+  position: relative;
+  background: var(--snack-snake-head, var(--gold-bright));
+}
+
+.msg-queue-pixel:last-child::after {
+  content: "";
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  /* Dark eye works on gold head in both themes (matches SnackBoard) */
+  background: rgba(0, 0, 0, 0.82);
+  /* Aim right / toward queue count */
+  right: 1px;
+  top: 50%;
+  margin-top: -1px;
+  image-rendering: pixelated;
+}
+
+/* Shared red number tile — list idx + count after WARTE… */
+.msg-queue-idx,
+.msg-queue-count {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px; /* rectangle, not pill */
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #ffffff;
+  background: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, #000000);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger-bright) 35%, transparent);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* List row: full chat size */
+.msg-queue-idx {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 5px;
+  font-size: 0.8rem;
+}
+
+/* Header after … : same design, compact to title scale */
+.msg-queue-count {
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 4px;
+  font-size: 0.68rem;
+  text-transform: none; /* don't inherit title uppercase */
+}
+
+:root[data-theme="light"] .msg-queue-idx,
+:root[data-theme="light"] .msg-queue-count {
+  background: var(--danger-dim);
+  border-color: color-mix(in srgb, var(--danger) 70%, #000000);
+  color: #ffffff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.msg-queue-clear {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.msg-queue-clear:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+}
+
+.msg-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.msg-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.msg-queue-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.86rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.msg-queue-remove {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.msg-queue-remove:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.composer-box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.composer.composer--grok textarea {
+  width: 100%;
+  height: auto;
+  min-height: 72px;
+  max-height: 200px;
+  resize: none;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 14px 14px 8px;
+  font: inherit;
+  line-height: 1.4;
+  overflow-y: auto;
+}
+
+.composer.composer--grok textarea:focus {
+  outline: none;
+}
+
+.composer-box:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.composer-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  cursor: pointer;
+  user-select: none;
+}
+
+.composer-chip input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.composer-chip--on {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.composer-model-fixed {
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 5px 4px;
+  user-select: none;
+}
+
+.composer-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--danger);
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+  cursor: pointer;
+}
+
+.composer-stop:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.composer.composer--grok .send {
+  position: relative;
+  width: 3.25rem;
+  height: 3.25rem;
+  min-height: 3.25rem;
+  flex-shrink: 0;
+  border-radius: 12px;
+}
+
+.composer.composer--grok .send.send--working {
+  width: 3.5rem;
+  height: 3.5rem;
+  min-height: 3.5rem;
+}
+
+.composer.composer--grok .send.send--working .send-face--enter {
+  pointer-events: none;
+}
+
+.composer.composer--grok .send .send-face--snack {
+  padding: 2px;
+  pointer-events: auto; /* whole snack board is the stop hit-target */
+}
+
+.composer.composer--grok .send.send--working .send-face--snack {
+  z-index: 3;
+}
+
+.composer.composer--grok .send .snack-canvas--stop {
+  cursor: pointer;
+}
+
+/* Grok Voice: mic (STT) + voice picker (TTS) */
+.voice-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.voice-mic-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted);
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  cursor: pointer;
+  user-select: none;
+}
+
+.voice-mic-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--border));
+  background: color-mix(in srgb, var(--gold) 10%, var(--panel));
+}
+
+.voice-mic-btn.is-recording {
+  color: #fff;
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  background: color-mix(in srgb, var(--danger) 78%, #000);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+.voice-mic-btn.is-busy {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.voice-mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-mic-label {
+  letter-spacing: 0.02em;
+}
+
+.voice-select-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.voice-select {
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 8px;
+  max-width: 7.5rem;
+  cursor: pointer;
+}
+
+.voice-select:hover:not(:disabled),
+.voice-select:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--border));
+  outline: none;
+}
+
+.voice-select:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+@keyframes voice-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--danger) 0%, transparent);
+  }
+}
+
+/* Action picker: Chat | Deep Search | Fork (TUI-aligned, not thinking toggle) */
+.action-picker {
+  display: inline-flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 35%, var(--panel));
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.action-picker-btn {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 12px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.action-picker-btn:last-child {
+  border-right: 0;
+}
+
+.action-picker-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.action-picker-btn--active {
+  color: var(--send-fg);
+  background: color-mix(in srgb, var(--accent) 48%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.action-picker-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.msg-system {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  border-left: 3px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  opacity: 0.95;
+}
+
+.msg-system .role {
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+}
+
+.composer textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  resize: none;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 12px 14px;
+  font: inherit;
+  line-height: 1.4;
+  overflow-y: auto;
+}
+
+.composer textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 1px;
+}
+
+.empty-soft {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+button.primary {
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text);
+}
+
+button.danger {
+  background: color-mix(in srgb, var(--danger) 22%, var(--panel));
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: color-mix(in srgb, var(--danger-bright) 75%, var(--text));
+}
+
+/* —— Command Overview (minimal) —— */
+.overview-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 40;
+}
+
+.overview-panel {
+  width: min(720px, 100%);
+  max-height: min(88vh, 820px);
+  display: grid;
+  grid-template-rows: auto auto auto auto 1fr;
+  gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.overview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.overview-head h2 {
+  margin: 2px 0 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.overview-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.overview-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.muted-path {
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.overview-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.overview-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.overview-hint code {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.overview-search {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.overview-search:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 1px;
+}
+
+.overview-list {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  min-height: 160px;
+}
+
+.session-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.session-row:last-child {
+  border-bottom: none;
+}
+
+/* Live agent session — soft accent tint, independent of keyboard cursor */
+.session-row.is-active {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/* List cursor (mouse / ↑↓) — clear highlight that MOVES */
+.session-row.is-selected {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border-left-color: var(--accent);
+}
+
+.session-row.is-selected.is-active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+}
+
+.session-row:hover:not(.is-selected) {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.overview-panel:focus {
+  outline: none;
+}
+
+.overview-panel:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.session-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.session-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-title-row strong {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.session-sub {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.session-id {
+  margin-top: 4px;
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--muted) 80%, transparent);
+  word-break: break-all;
+}
+
+.session-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.tag {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+}
+
+.tag.muted {
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.empty-inline {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.ok-banner {
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+  color: color-mix(in srgb, var(--gold-bright) 70%, var(--text));
+}
+
+.ok-banner code {
+  font-size: 0.8rem;
+}
+
+/* —— Chat search panel —— */
+.search-panel {
+  grid-template-rows: auto auto 1fr;
+}
+
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.search-hit:last-child {
+  border-bottom: none;
+}
+
+.search-hit:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.search-hit-role {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.search-hit-snippet {
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--text) 90%, var(--muted));
+  word-break: break-word;
+}
+
+/* —— Activity calendar (Claude-Code style heatmap) —— */
+.cal-panel {
+  grid-template-rows: auto auto 1fr;
+  width: min(760px, 100%);
+}
+
+.cal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cal-chart {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow-x: auto;
+}
+
+.cal-day-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+  padding-top: 0;
+}
+
+.cal-day-label {
+  height: 11px;
+  line-height: 11px;
+  font-size: 0.62rem;
+  color: var(--muted);
+  width: 1.4rem;
+}
+
+.cal-day-label--dim {
+  visibility: hidden;
+}
+
+.cal-grid-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cal-grid {
+  display: flex;
+  gap: 3px;
+  align-items: flex-start;
+}
+
+.cal-week {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cal-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--panel) 80%, var(--bg));
+  padding: 0;
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+button.cal-cell {
+  appearance: none;
+  font: inherit;
+}
+
+.cal-cell--pad {
+  visibility: hidden;
+  pointer-events: none;
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+
+/* Gold intensity: brighter = less, darker = more */
+.cal-cell--l0 {
+  background: color-mix(in srgb, var(--border) 35%, var(--panel));
+  border-color: color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.cal-cell--l1 {
+  background: color-mix(in srgb, var(--gold) 28%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 30%, var(--border));
+}
+
+.cal-cell--l2 {
+  background: color-mix(in srgb, var(--gold) 48%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--border));
+}
+
+.cal-cell--l3 {
+  background: color-mix(in srgb, var(--gold) 72%, var(--gold-dim));
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--border));
+}
+
+.cal-cell--l4 {
+  background: var(--gold-deep);
+  border-color: color-mix(in srgb, var(--gold) 40%, #000);
+}
+
+/* Peak = darkest gold + snack-style eye */
+.cal-cell--peak::after {
+  content: "";
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.82);
+  right: 1px;
+  top: 50%;
+  margin-top: -1.5px;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.cal-cell--selected {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+.cal-cell:hover:not(.cal-cell--pad) {
+  outline: 1px solid color-mix(in srgb, var(--gold) 60%, var(--border));
+  outline-offset: 0;
+}
+
+.cal-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  padding: 0 4px;
+}
+
+.cal-legend .cal-cell {
+  cursor: default;
+  pointer-events: none;
+}
+
+.cal-legend-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin: 0 4px;
+}
+
+.cal-detail {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--gold) 5%, var(--panel));
+  padding: 12px 14px;
+  min-height: 100px;
+}
+
+.cal-detail-title {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cal-peak-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--gold-deep);
+  border-radius: 3px;
+  padding: 2px 6px;
+  position: relative;
+}
+
+.cal-peak-badge::after {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.85);
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.cal-detail-meta {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.cal-detail-empty {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.cal-session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cal-session-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 35%, var(--panel));
+}
+
+.cal-session-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cal-session-title {
+  font-size: 0.86rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-session-count {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: var(--danger);
+  border-radius: 3px;
+  min-width: 1.2rem;
+  padding: 1px 5px;
+  text-align: center;
+}
+
+.cal-session-open {
+  flex-shrink: 0;
+  font-size: 0.78rem !important;
+  padding: 4px 10px !important;
+}
+
+/* —— Command legend / Kurzhandbuch —— */
+.legend-panel {
+  grid-template-rows: auto auto auto auto 1fr;
+}
+
+.handbook-panel {
+  width: min(560px, 100%);
+}
+
+.help-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 14px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.help-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.help-tab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.help-tab--active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.handbook-list {
+  padding: 0;
+}
+
+.handbook-section {
+  padding: 12px 14px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.handbook-section:last-child {
+  border-bottom: none;
+}
+
+.handbook-section-title {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+  padding: 2px 0 4px;
+}
+
+.handbook-line {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--text) 90%, var(--muted));
+}
+
+.handbook-line:last-child {
+  margin-bottom: 0;
+}
+
+.handbook-line strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.handbook-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.handbook-row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 7.5rem) 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.handbook-key {
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 6px;
+  padding: 2px 7px;
+  width: fit-content;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.handbook-val {
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  padding-top: 2px;
+}
+
+.legend-list {
+  padding: 0;
+}
+
+.legend-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.legend-group:last-child {
+  border-bottom: none;
+}
+
+.legend-group-title {
+  margin: 0;
+  padding: 10px 12px 4px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+
+.legend-row {
+  padding: 8px 12px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.legend-cmd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.legend-cmd code {
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+  font-size: 0.86rem;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+.legend-need {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.legend-need--ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--border));
+}
+
+.legend-need--soft {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.legend-need--muted {
+  color: var(--muted);
+}
+
+.legend-desc {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+}
+
+@media (max-width: 640px) {
+  .app {
+    flex-direction: column;
+  }
+
+  .side-rail {
+    flex-direction: row;
+    width: 100%;
+    height: auto;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    order: -1;
+  }
+
+  .side-rail-spacer {
+    display: none;
+  }
+
+  .side-rail-btn {
+    flex: 0 0 auto;
+  }
+
+  .app-main {
+    padding: 10px;
+    max-width: none;
+  }
+
+  .top {
+    flex-direction: column;
+  }
+
+  .msg-user {
+    max-width: 100%;
+  }
+
+  .session-row {
+    flex-direction: column;
+  }
+
+  .session-actions {
+    flex-direction: row;
+    width: 100%;
+  }
+
+  .session-actions button {
+    flex: 1;
+  }
+}

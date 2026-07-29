@@ -1,0 +1,13 @@
+Grok Build Terminal (grok-chat-ui)
+Copyright (c) 2026 Alexander Hubert
+
+This product is the original work of Alexander Hubert.
+Repository identity and package metadata name the author as creator.
+
+Third-party dependencies remain under their respective licenses
+(see package.json / package-lock.json).
+
+"Grok" and "Grok Build" are trademarks of their respective owners
+(xAI / SpaceXAI). This project is an independent browser UI that
+integrates with the local Grok Build CLI; it is not affiliated with
+or endorsed by xAI unless stated otherwise.
