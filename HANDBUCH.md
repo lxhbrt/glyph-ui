@@ -28,15 +28,19 @@ npm run dev
 
 | Was | Adresse |
 |-----|---------|
-| UI | http://localhost:5173 |
-| Bridge / API | http://localhost:5174/api/health |
+| UI (nur Dev) | http://localhost:5173 |
+| Bridge / API / Prod-UI | http://127.0.0.1:5174 |
+
+**Port-Modell:** Produktion immer **5174** (UI + API + WebSocket). Port **5173** nur Vite-Dev-UI (proxy zu 5174).
 
 ### Dauerbetrieb (macOS LaunchAgent)
 
 ```bash
-npm run service:install   # einmalig: Start bei Login
+npm run service:install   # baut UI neu + Start bei Login
 npm run service:status
 npm run service:uninstall # wieder entfernen
+npm run open              # oder Doppelklick: scripts/Open Grok Build Terminal.command
+npm test                  # Smoke: Health + WS + Sessions
 ```
 
 Produktion ohne Service:
@@ -312,7 +316,7 @@ In der App: Symbol **Befehle** (filterbare Legende).
 
 | Variable | Default | Bedeutung |
 |----------|---------|-----------|
-| `PORT` | `5174` (Prod) / Vite-Client `5173` (Dev) | Server-Port |
+| `PORT` | `5174` | Prod + Dev-Bridge (Vite-UI separat auf 5173) |
 | `HOST` | `127.0.0.1` | Nur lokal |
 | `GROK_CHAT_CWD` | Startverzeichnis | Workspace für neue Sessions |
 | `GROK_BIN` | `grok` | Pfad zur CLI |

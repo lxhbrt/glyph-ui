@@ -27,10 +27,10 @@ fi
 
 PATH_VALUE="${HOME_DIR}/.local/bin:${HOME_DIR}/.grok/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin"
 
-if [[ ! -d "$ROOT/client/dist" ]]; then
-  echo "Building production client (client/dist missing)…"
-  (cd "$ROOT" && npm run build)
-fi
+# Always rebuild so UI changes are not served from a stale client/dist.
+echo "Building production client…"
+(cd "$ROOT" && npm run build)
+
 
 mkdir -p "$HOME_DIR/Library/LaunchAgents" "$LOG_DIR"
 

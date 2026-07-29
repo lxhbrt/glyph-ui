@@ -1,5 +1,6 @@
 #!/bin/bash
 # Show LaunchAgent + HTTP health for Grok Build Terminal.
+# Prod port model: always 5174 (unless overridden in the installed plist).
 
 set -euo pipefail
 
@@ -8,10 +9,11 @@ PLIST_DST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 LOG_DIR="$HOME/Library/Logs/grok-chat-ui"
 UID_NUM="$(id -u)"
 DOMAIN="gui/${UID_NUM}"
-PORT=5173
+# Production default — matches server/index.js and start-service.sh
+PORT="${PORT:-5174}"
 
 if [[ -f "$PLIST_DST" ]]; then
-  PORT="$(/usr/libexec/PlistBuddy -c 'Print :EnvironmentVariables:PORT' "$PLIST_DST" 2>/dev/null || echo 5173)"
+  PORT="$(/usr/libexec/PlistBuddy -c 'Print :EnvironmentVariables:PORT' "$PLIST_DST" 2>/dev/null || echo 5174)"
 fi
 
 echo "=== LaunchAgent ==="
@@ -35,7 +37,7 @@ else
 fi
 
 echo
-echo "=== Port ${PORT} ==="
+echo "=== Port ${PORT} (prod) ==="
 if command -v lsof >/dev/null 2>&1; then
   lsof -nP -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || echo "nothing listening on $PORT"
 else
