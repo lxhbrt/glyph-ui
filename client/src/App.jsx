@@ -24,7 +24,7 @@ import {
   IconRefresh,
 } from "./components/icons.jsx";
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
-import { wsUrl } from "./utils/format.js";
+import { invalidateWsToken, wsUrl } from "./utils/format.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
 
@@ -658,6 +658,9 @@ export default function App() {
         busyRef.current = false;
         setBusy(false);
         setReconnecting(false);
+        // Token rotates every server process start; drop the injected/cached
+        // value so the next connect reloads /api/ws-token instead of looping 401s.
+        invalidateWsToken();
         if (!closed) {
           retryTimer = setTimeout(() => {
             void connect();

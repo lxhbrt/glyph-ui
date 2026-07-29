@@ -343,8 +343,10 @@ app.use((req, res, next) => {
 });
 
 /**
- * Mutating API must come from loopback. Prevents drive-by CSRF / remote abuse
- * if the process is ever reachable beyond localhost.
+ * Mutating API must come from loopback *and* an allowed Origin when present.
+ * Loopback alone is not enough: a browser tab on this machine still has a
+ * loopback source IP, so cross-site POSTs (CSRF) would otherwise succeed.
+ * Same Origin allow-list as the WebSocket handshake / /api/ws-token.
  */
 app.use((req, res, next) => {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
@@ -357,6 +359,13 @@ app.use((req, res, next) => {
     res.status(403).json({
       error: "Forbidden: mutating API is loopback-only (set GLYPH_ALLOW_REMOTE=1 to override)",
     });
+    return;
+  }
+  // Browsers always send Origin on cross-origin POSTs; reject foreign sites.
+  // Same-origin may omit Origin (e.g. some non-CORS paths) — allow those.
+  const origin = req.get("origin") || "";
+  if (origin && !isAllowedWsOrigin(origin)) {
+    res.status(403).json({ error: "Forbidden: disallowed Origin" });
     return;
   }
   next();
