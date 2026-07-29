@@ -75,8 +75,8 @@ npm start                 # UI + Bridge auf Port 5174
 
 | Symbol | Name | Funktion |
 |--------|------|----------|
-| **Lupe** | Sessions | Suche, öffnen, schließen (+ Wiki-Archiv) |
-| **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (wie TUI `/new`) |
+| **Lupe** | Sessions | Suche, öffnen; Schließen: Ja + Wiki · Löschen (`/delete`) |
+| **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
 | **Buch** (unten) | Handbuch | Kurzhandbuch ganz unten in der Leiste |
 | **4 Kästchen** | Kalender | Aktivitäts-Heatmap (wann / woran gearbeitet) |
@@ -209,15 +209,15 @@ Sessions sind gespeicherte **Chats** unter `~/.grok/sessions`.
 
 ### Schließen einer Session
 
-Aktive Chat-Session ist **geschützt** (nicht schließbar).
+Aktive Chat-Session ist **geschützt** (nicht schließbar) — zuerst **Stift** (TUI `/new`), dann die alte Session schließen. Entspricht dem TUI-Muster: aktuelle Session nicht aus dem Picker löschen, solange sie live ist.
 
-| Option | Wirkung |
-|--------|---------|
-| **Ja + Wiki** | Transcript-Auszug → Wiki, dann Session-Ordner löschen |
-| **Löschen** | Nur Disk löschen, kein Wiki |
-| **Abbrechen** | Nichts |
+| Option | Wirkung | TUI-Äquivalent |
+|--------|---------|----------------|
+| **Ja + Wiki** | Transcript-Auszug → Wiki, dann Session-Ordner löschen | (UI-Erweiterung) |
+| **Löschen** | Session-Historie endgültig von Disk entfernen, ohne Wiki | **`/delete`** (bzw. `/resume` → `d` → `y`) |
+| **Abbrechen** | Nichts | — |
 
-**Wichtig:** Nur „archiviert“ markieren spart **keinen** Speicher. Erst das **Löschen des Session-Ordners** entlastet die Disk (Sessions können hunderte MB sein).
+**Wichtig:** Nur „archiviert“ markieren spart **keinen** Speicher. Erst das **Löschen des Session-Ordners** entlastet die Disk (Sessions können hunderte MB sein). **Stift** (`/new`) leert nur den Chat — die alte Session bleibt auf Disk, bis du sie in der Lupe schließt.
 
 ### Wiki-Ziel
 
@@ -288,7 +288,8 @@ Viele `/Befehle` sind **TUI-Builtins**. Im Browser reichen oft **Freitext** + di
 
 | Befehl | Nutzen |
 |--------|--------|
-| `/new` · `/clear` | Neue Session (UI: Stift) |
+| `/new` · `/clear` | Neue Session (UI: Stift; Disk bleibt) |
+| `/delete` | Session-Historie löschen (UI: Lupe → Schließen → **Löschen**) |
 | `/resume` · `/dashboard` | Sessions (UI: Lupe) |
 | `/fork` | Session branchen (UI: Fork) |
 | `/compact [notiz]` | Kontext komprimieren |
@@ -369,7 +370,7 @@ GROK_CHAT_CWD="$HOME/mein-projekt" npm run dev
 | **offline** bleibt | Status klicken; `grok` im PATH? `grok login`? Bridge-Log / `npm run service:status` |
 | Eingabe grau | Erst verbinden |
 | Agent „hängt“ | Leerer Snack-Klick = Stop; sonst Refresh + neu verbinden |
-| Disk voll | Sessions schließen mit Löschen/Wiki; große Ordner unter `~/.grok/sessions` |
+| Disk voll | Lupe → Schließen → Ja + Wiki oder Löschen (`/delete`); große Ordner unter `~/.grok/sessions` |
 | UI wirkt veraltet | **Refresh** in der Leiste |
 | Slash tut „nichts“ | Viele Befehle sind TUI-only — Freitext formulieren oder Deep Search/Fork/Lupe nutzen |
 

@@ -215,8 +215,8 @@ function CommandOverview({ open, onClose, onOpenSession }) {
         <p className="overview-hint">
           <strong>Auswählen:</strong> Klick oder ↑↓ — Markierung (nicht „aktiv“).{" "}
           <strong>Laden:</strong> Enter oder Doppelklick (Verlauf öffnen).{" "}
-          <strong>Schließen:</strong> Ja + Wiki / Löschen / Abbrechen. Disk:{" "}
-          <code>~/.grok/sessions</code>.
+          <strong>Schließen:</strong> Ja + Wiki · Löschen (/delete) · Abbrechen.
+          Disk: <code>~/.grok/sessions</code>.
         </p>
 
         <input
@@ -238,9 +238,9 @@ function CommandOverview({ open, onClose, onOpenSession }) {
         {lastResult ? (
           <div className="banner ok-banner">
             {lastResult.wikiWritten
-              ? "Wiki + gelöscht: "
+              ? "Ja + Wiki: "
               : lastResult.diskDeleted
-                ? "Gelöscht: "
+                ? "Gelöscht (/delete): "
                 : "Geschlossen: "}
             {lastResult.session?.title || lastResult.session?.id}
             {lastResult.freedLabel ? ` · freigegeben ${lastResult.freedLabel}` : ""}
@@ -326,7 +326,7 @@ function CommandOverview({ open, onClose, onOpenSession }) {
                           type="button"
                           className="primary"
                           disabled={closingId === s.id || isActive || opening}
-                          title="Zusammenfassen → Wiki → Disk löschen"
+                          title="Zusammenfassen → Wiki → dann Session-Ordner löschen"
                           onClick={() =>
                             void closeSession(s.id, {
                               writeWiki: true,
@@ -340,7 +340,7 @@ function CommandOverview({ open, onClose, onOpenSession }) {
                           type="button"
                           className="danger"
                           disabled={closingId === s.id || isActive || opening}
-                          title="Nur löschen, ohne Wiki-Archiv"
+                          title="TUI /delete — Session-Historie endgültig löschen (ohne Wiki)"
                           onClick={() =>
                             void closeSession(s.id, {
                               writeWiki: false,
@@ -378,8 +378,8 @@ function CommandOverview({ open, onClose, onOpenSession }) {
                           disabled={closingId === s.id || isActive || opening}
                           title={
                             isActive
-                              ? "Aktive Chat-Session geschützt"
-                              : "Ja + Wiki · Löschen · Abbrechen"
+                              ? "Aktive Chat-Session geschützt — zuerst Stift (Neuer Chat /new)"
+                              : "Ja + Wiki · Löschen (/delete) · Abbrechen"
                           }
                           onClick={() => setConfirmId(s.id)}
                         >

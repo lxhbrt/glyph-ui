@@ -11,12 +11,12 @@ const COMMAND_LEGEND = [
       {
         cmd: "Lupe",
         need: "empfohlen",
-        desc: "Sessions suchen/filtern, öffnen, schließen (+ Wiki-Archiv).",
+        desc: "Sessions suchen/öffnen; Schließen: Ja + Wiki oder Löschen (/delete).",
       },
       {
         cmd: "Stift · Neuer Chat",
         need: "optional",
-        desc: "Neue ACP-Session, Chat leeren. Entspricht TUI /new.",
+        desc: "Neue ACP-Session, Chat leeren. Entspricht TUI /new (Disk bleibt).",
       },
       {
         cmd: "Befehle",
@@ -136,7 +136,12 @@ const COMMAND_LEGEND = [
       {
         cmd: "/new · /clear",
         need: "optional",
-        desc: "Neue Session. Hier: Stift / Neuer Chat.",
+        desc: "Neue Session (Disk bleibt). Hier: Stift / Neuer Chat.",
+      },
+      {
+        cmd: "/delete",
+        need: "optional",
+        desc: "Session-Historie endgültig löschen. Hier: Lupe → Schließen → Löschen.",
       },
       {
         cmd: "/resume · /dashboard",
@@ -296,8 +301,8 @@ const SHORT_HANDBOOK = [
     id: "rail",
     title: "Linke Leiste",
     rows: [
-      ["Lupe", "Sessions suchen, öffnen, schließen (+ Wiki-Archiv)"],
-      ["Stift", "Neuer Chat (frische Session, wie TUI /new)"],
+      ["Lupe", "Sessions suchen/öffnen; Ja + Wiki · Löschen (/delete)"],
+      ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
       ["Befehle", "Filterbare Legende (Mitte der Leiste)"],
       ["Buch", "Kurzhandbuch — ganz unten in der Leiste"],
       ["Kalender", "Aktivitäts-Heatmap — Klick → Sessions des Tages"],
@@ -345,8 +350,8 @@ const SHORT_HANDBOOK = [
     title: "Sessions & Wiki",
     body: [
       "Sessions liegen unter `~/.grok/sessions`. Lupe → suchen → Öffnen.",
-      "Schließen: **Ja + Wiki** (Archiv + löschen) · **Löschen** · Abbrechen.",
-      "Aktive Chat-Session ist geschützt. Speicher freigeben = Ordner löschen.",
+      "Schließen: **Ja + Wiki** (Archiv + löschen) · **Löschen** (TUI `/delete`) · Abbrechen.",
+      "Aktive Chat-Session ist geschützt (zuerst Stift = `/new`). Speicher freigeben = Ordner löschen.",
       "Wiki-Ziel: `…/OpenClaw memory-wiki/sources/grok-sessions/`.",
     ],
   },
@@ -367,9 +372,9 @@ const SHORT_HANDBOOK = [
     body: [
       "**Schnell:** verbunden → Aufgabe → Enter → optional Queue.",
       "**Fortsetzen:** Lupe → Session öffnen → weiterchatten.",
-      "**Aufräumen:** Session schließen → Ja + Wiki.",
+      "**Aufräumen:** Lupe → Schließen → Ja + Wiki, oder **Löschen** (/delete).",
       "**Aktivität:** Kalender → Tag → Sessions.",
-      "**Neues Thema:** Stift (clean) oder Fork (Abzweig mit Verlauf).",
+      "**Neues Thema:** Stift (/new, Disk bleibt) oder Fork (Abzweig mit Verlauf).",
     ],
   },
   {
@@ -379,7 +384,7 @@ const SHORT_HANDBOOK = [
       ["offline", "Pill klicken · `grok` im PATH? · `grok login`?"],
       ["Eingabe grau", "Erst verbinden"],
       ["hängt", "Leerer Snack-Klick = Stop · sonst Refresh + reconnect"],
-      ["Disk voll", "Sessions schließen mit Löschen/Wiki"],
+      ["Disk voll", "Lupe → Schließen → Ja + Wiki oder Löschen (/delete)"],
       ["UI veraltet", "Refresh in der Leiste"],
       ["Slash „tut nichts“", "Viele /Befehle sind TUI-only — Freitext oder Tabs"],
     ],

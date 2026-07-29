@@ -648,11 +648,11 @@ app.post("/api/sessions/:id/open", async (req, res) => {
 });
 
 /**
- * Close session.
+ * Close session (UI: Lupe → Schließen).
  * Body:
  *   { deleteDisk?: boolean, writeWiki?: boolean }
- * Defaults: both true → Wiki-Archiv + Disk löschen.
- * writeWiki:false + deleteDisk:true → nur löschen.
+ * Defaults: both true → Wiki-Archiv + Disk löschen (Ja + Wiki).
+ * writeWiki:false + deleteDisk:true → TUI /delete (nur Disk).
  */
 app.post("/api/sessions/:id/close", async (req, res) => {
   try {

@@ -489,8 +489,8 @@ export async function getSessionForOpen(sessionId) {
 /**
  * Close session: optional wiki summary → optional disk delete.
  * Modes:
- *   writeWiki + deleteDisk  → archive then remove folder (default)
- *   !writeWiki + deleteDisk → delete only (no wiki)
+ *   writeWiki + deleteDisk  → Ja + Wiki (archive then remove folder)
+ *   !writeWiki + deleteDisk → TUI /delete (disk only, no wiki)
  * Does NOT delete if sessionId === protectId (active chat session).
  */
 export async function closeSession(sessionId, {
