@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   QUEUE_STORAGE_KEY,
   QUEUE_MAX,
+  QUEUE_MAX_AGE_MS,
   loadPersistedQueue,
   persistQueue,
 } from "../../client/src/utils/queue.js";
@@ -57,6 +58,7 @@ describe("queue persistence", () => {
       QUEUE_STORAGE_KEY,
       JSON.stringify({
         v: 1,
+        savedAt: Date.now(),
         items: [
           { id: "a", text: "x", action: "deep-search" },
           { id: "b", text: "y", action: "weird" },
@@ -73,6 +75,7 @@ describe("queue persistence", () => {
     localStorage.setItem(
       QUEUE_STORAGE_KEY,
       JSON.stringify({
+        savedAt: Date.now(),
         items: [
           { id: "ok", text: "hi" },
           { id: "blank", text: "   " },
@@ -84,6 +87,42 @@ describe("queue persistence", () => {
     const loaded = loadPersistedQueue();
     assert.equal(loaded.length, 1);
     assert.equal(loaded[0].id, "ok");
+  });
+
+  it("expires queue when savedAt is older than QUEUE_MAX_AGE_MS", () => {
+    localStorage.setItem(
+      QUEUE_STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        savedAt: Date.now() - QUEUE_MAX_AGE_MS - 1,
+        items: [{ id: "old", text: "stale", action: "chat" }],
+      }),
+    );
+    assert.deepEqual(loadPersistedQueue(), []);
+    assert.equal(localStorage.getItem(QUEUE_STORAGE_KEY), null);
+  });
+
+  it("drops legacy bare arrays (no savedAt)", () => {
+    localStorage.setItem(
+      QUEUE_STORAGE_KEY,
+      JSON.stringify([{ id: "legacy", text: "x", action: "chat" }]),
+    );
+    assert.deepEqual(loadPersistedQueue(), []);
+    assert.equal(localStorage.getItem(QUEUE_STORAGE_KEY), null);
+  });
+
+  it("keeps queue when savedAt is fresh", () => {
+    localStorage.setItem(
+      QUEUE_STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        savedAt: Date.now() - 1000,
+        items: [{ id: "fresh", text: "ok", action: "chat" }],
+      }),
+    );
+    const loaded = loadPersistedQueue();
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].id, "fresh");
   });
 
   it("clears storage when queue emptied", () => {

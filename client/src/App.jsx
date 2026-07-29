@@ -1077,29 +1077,51 @@ export default function App() {
 
   /**
    * After Overview confirm (Enter / double-click / Öffnen):
-   * show disk transcript; adopt sessionId when live resume worked.
+   * show disk transcript; adopt sessionId only when live resume worked.
+   *
+   * Wrong-session trap: if session/load fails while we are still connected,
+   * the agent stays on the old live sessionId. Replacing the transcript with
+   * another session’s history would make the next send hit the wrong chat —
+   * so on liveError while connected we only surface the banner.
+   * Offline browse still shows disk history (read-only until reconnect).
    */
-  const handleOpenSession = useCallback((payload) => {
-    const list = Array.isArray(payload?.messages) ? payload.messages : [];
-    setMessages(
-      list.map((m, i) => ({
-        id: m.id || `hist-${i}`,
-        role: m.role === "user" ? "user" : "assistant",
-        text: m.text || "",
-        streaming: false,
-      })),
-    );
-    assistantBuf.current = "";
-    thoughtBuf.current = "";
-    if (payload?.sessionId) setSessionId(payload.sessionId);
-    if (payload?.session?.cwd) setCwd(payload.session.cwd);
-    if (payload?.liveError) {
-      setError(payload.liveError);
-    } else {
-      setError("");
-    }
-    scrollToBottom({ force: true });
-  }, [scrollToBottom]);
+  const handleOpenSession = useCallback(
+    (payload) => {
+      if (payload?.liveError) {
+        setError(payload.liveError);
+      } else {
+        setError("");
+      }
+
+      const liveOk = Boolean(payload?.live);
+      if (!liveOk && connected) {
+        // Keep current transcript + live sessionId; do not pretend we switched.
+        return;
+      }
+
+      const list = Array.isArray(payload?.messages) ? payload.messages : [];
+      setMessages(
+        list.map((m, i) => ({
+          id: m.id || `hist-${i}`,
+          role: m.role === "user" ? "user" : "assistant",
+          text: m.text || "",
+          streaming: false,
+        })),
+      );
+      assistantBuf.current = "";
+      thoughtBuf.current = "";
+      // Pin live id only after a successful session/load (or already-active open).
+      if (liveOk && payload?.sessionId) {
+        setSessionId(payload.sessionId);
+      } else if (!liveOk && payload?.session?.id) {
+        // Offline archive view — show which disk session is on screen.
+        setSessionId(payload.session.id);
+      }
+      if (payload?.session?.cwd) setCwd(payload.session.cwd);
+      scrollToBottom({ force: true });
+    },
+    [scrollToBottom, connected],
+  );
 
   const visibleMessages = messages;
 
@@ -1259,7 +1281,10 @@ export default function App() {
         <header className="top">
           <div>
             <h1>Glyph</h1>
-            <p className="sub">Build Term for Grok · ACP</p>
+            <p className="sub" title={sessionId || undefined}>
+              Build Term for Grok · ACP
+              {sessionId ? ` · ${sessionId.slice(0, 8)}` : ""}
+            </p>
           </div>
           <div className="top-actions">
             <button

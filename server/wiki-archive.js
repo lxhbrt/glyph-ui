@@ -99,13 +99,14 @@ async function upsertIndexLink(indexPath, { title, fileName, sessionId, closedAt
     ["<!-- glyph-ui:session-index:start -->", "<!-- glyph-ui:session-index:end -->"],
     ["<!-- grok-chat-ui:session-index:start -->", "<!-- grok-chat-ui:session-index:end -->"],
   ];
-  let start, end, i0 = -1, i1 = -1;
+  let start;
+  let i0 = -1;
+  let i1 = -1;
   for (const [s, e] of markers) {
     i0 = content.indexOf(s);
     i1 = content.indexOf(e);
     if (i0 !== -1 && i1 !== -1 && i1 >= i0) {
       start = s;
-      end = e;
       break;
     }
   }

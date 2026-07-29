@@ -71,6 +71,10 @@ const MAX_ATTACHMENT_BYTES = Number(
   process.env.GLYPH_UI_MAX_ATTACHMENT || 12 * 1024 * 1024,
 );
 const MAX_ATTACHMENTS_PER_MSG = 8;
+/** Drop files in uploads/ older than this (default 24h). */
+const UPLOAD_MAX_AGE_MS = Number(
+  process.env.GLYPH_UPLOAD_MAX_AGE_MS || 24 * 60 * 60 * 1000,
+);
 const ALLOW_REMOTE =
   process.env.GLYPH_ALLOW_REMOTE === "1";
 /** Vite dev UI port (proxies /api and /ws → bridge). */
@@ -386,6 +390,40 @@ function normalizeAttachments(raw) {
 
 async function ensureUploadDir() {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
+}
+
+/**
+ * Delete stale attachment files under UPLOAD_DIR (mtime older than maxAgeMs).
+ * Safe: only unlinks regular files directly inside UPLOAD_DIR.
+ * @param {{ maxAgeMs?: number }} [opts]
+ * @returns {Promise<{ removed: number, freedBytes: number }>}
+ */
+async function cleanupUploads({ maxAgeMs = UPLOAD_MAX_AGE_MS } = {}) {
+  let removed = 0;
+  let freedBytes = 0;
+  let entries;
+  try {
+    entries = await fs.readdir(UPLOAD_DIR, { withFileTypes: true });
+  } catch {
+    return { removed: 0, freedBytes: 0 };
+  }
+  const age = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : UPLOAD_MAX_AGE_MS;
+  const cutoff = Date.now() - age;
+  for (const ent of entries) {
+    if (!ent.isFile() || ent.name.startsWith(".")) continue;
+    const full = path.join(UPLOAD_DIR, ent.name);
+    if (!isPathInside(UPLOAD_DIR, full)) continue;
+    try {
+      const st = await fs.stat(full);
+      if (st.mtimeMs > cutoff) continue;
+      await fs.unlink(full);
+      removed += 1;
+      freedBytes += st.size;
+    } catch {
+      /* race / permission — skip */
+    }
+  }
+  return { removed, freedBytes };
 }
 
 /**
@@ -1422,7 +1460,9 @@ class GrokBridge {
         truncated: session.truncated,
       },
       messages,
-      sessionId: live ? this.sessionId : this.sessionId,
+      // Always the agent’s live id (unchanged when load fails). Client must not
+      // treat a failed open as a session switch — see handleOpenSession.
+      sessionId: this.sessionId,
       live,
       liveError,
     };
@@ -1862,9 +1902,18 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`Grok connected     → ${bridge.connected}`);
 
   // Ensure upload dir exists so the first attachment does not race mkdir.
-  ensureUploadDir().catch((err) => {
-    console.error("Could not create upload dir:", err);
-  });
+  ensureUploadDir()
+    .then(() => cleanupUploads())
+    .then((r) => {
+      if (r.removed > 0) {
+        console.log(
+          `Uploads cleanup     → removed ${r.removed} file(s), freed ${r.freedBytes} B`,
+        );
+      }
+    })
+    .catch((err) => {
+      console.error("Could not create/cleanup upload dir:", err);
+    });
 
   // Connect ACP agent after the UI is already reachable.
   bridge.start().catch((err) => {
