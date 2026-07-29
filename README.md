@@ -2,7 +2,7 @@
 
 Browser-UI für **Grok Build** (Terminal/Agent) über ACP (Agent Client Protocol).
 
-**Erstellt von [Alexander Hubert](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
+**Erstellt von [Lx Hbrt](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
 
 **Anwendungshandbuch (DE):** [HANDBUCH.md](./HANDBUCH.md)
 
@@ -97,7 +97,7 @@ Nur auf **localhost** laufen lassen. Die Bridge startet Grok mit `--always-appro
 
 ## Urheberrecht & Marken
 
-- **Software:** Copyright © 2026 [Alexander Hubert](https://github.com/lxhbrt). Lizenziert unter [MIT](./LICENSE).
+- **Software:** Copyright © 2026 [Lx Hbrt](https://github.com/lxhbrt) (Alexander Hubert). Lizenziert unter [MIT](./LICENSE).
 - **Autorenliste:** [AUTHORS](./AUTHORS) · [NOTICE](./NOTICE)
 - „Grok“ / „Grok Build“ sind Marken der jeweiligen Rechteinhaber (xAI / SpaceXAI). Dieses Projekt ist eine unabhängige Browser-Oberfläche für die lokale CLI und steht in keiner offiziellen Partnerschaft, sofern nicht anders angegeben.
 
@@ -107,4 +107,4 @@ Issues und Pull Requests willkommen. Bitte den Copyright-Hinweis und die MIT-Liz
 
 ## Lizenz
 
-[MIT](./LICENSE) © 2026 Alexander Hubert
+[MIT](./LICENSE) © 2026 Lx Hbrt (Alexander Hubert)

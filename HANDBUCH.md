@@ -3,7 +3,7 @@
 Browser-Oberfläche für **Grok Build** (lokaler Coding-Agent).  
 Du schreibst im Browser; im Hintergrund läuft der echte Grok-Agent auf deinem Mac.
 
-**Erstellt von Alexander Hubert** · Copyright © 2026 · MIT License
+**Erstellt von Lx Hbrt** · Copyright © 2026 · MIT License
 
 ```
 Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►  grok agent

@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
-  "description": "Grok Build Terminal — browser UI for Grok Build via ACP",
+  "description": "Grok Build Terminal \u2014 browser UI for Grok Build via ACP. By Lx Hbrt.",
   "author": {
-    "name": "Alexander Hubert",
+    "name": "Lx Hbrt",
     "url": "https://github.com/lxhbrt"
   },
   "contributors": [
     {
-      "name": "Alexander Hubert",
+      "name": "Lx Hbrt",
       "url": "https://github.com/lxhbrt"
     }
   ],
