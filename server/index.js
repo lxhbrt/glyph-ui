@@ -20,7 +20,8 @@
  *   { type: "status", connected, busy, reconnecting?, ... }
  *   { type: "assistant_chunk", text }
  *   { type: "thought_chunk", text }
- *   { type: "tool", title, status, kind? }
+ *   { type: "tool", title, status, kind?, toolCallId? }
+ *   { type: "plan", entries: PlanEntry[], planId? }  // ACP agent plan (full replace)
  *   { type: "system", text }            // bridge notices (fork, deep search start, …)
  *   { type: "turn_done", stopReason? }
  *   { type: "error", message }
@@ -41,6 +42,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import * as acp from "@agentclientprotocol/sdk";
+import {
+  planBroadcastPayload,
+  planUpdateFromSession,
+} from "./plan.js";
 import {
   cleanupEmptySessions,
   closeSession,
@@ -1028,6 +1033,12 @@ class GrokBridge {
     this.suppressUpdates = false;
     /** Latest session config options from agent (informational). */
     this.configOptions = [];
+    /**
+     * Current ACP execution plan (clientCapabilities.plan).
+     * Full-replace on each plan / plan_update; null when none.
+     * @type {{ planId: string | null, entries: Array<{ content: string, status: string, priority: string }> } | null}
+     */
+    this.plan = null;
   }
 
   statusPayload(extra = {}) {
@@ -1041,6 +1052,31 @@ class GrokBridge {
       cwd: WORK_CWD,
       ...extra,
     };
+  }
+
+
+  /** Apply plan state and fan out to browsers. */
+  setPlan(entries, planId = null) {
+    const list = Array.isArray(entries) ? entries : [];
+    if (!list.length) {
+      this.plan = null;
+      this.broadcast(planBroadcastPayload([]));
+      return;
+    }
+    this.plan = {
+      planId: planId != null ? String(planId) : this.plan?.planId || null,
+      entries: list,
+    };
+    this.broadcast(
+      planBroadcastPayload(this.plan.entries, this.plan.planId),
+    );
+  }
+
+  clearPlan({ broadcast = true } = {}) {
+    this.plan = null;
+    if (broadcast) {
+      this.broadcast(planBroadcastPayload([]));
+    }
   }
 
   clearCancelWatchdog() {
@@ -1102,6 +1138,14 @@ class GrokBridge {
   addClient(ws) {
     this.clients.add(ws);
     ws.send(JSON.stringify(this.statusPayload()));
+    // Catch up late joiners with the live plan (if any)
+    if (this.plan?.entries?.length) {
+      ws.send(
+        JSON.stringify(
+          planBroadcastPayload(this.plan.entries, this.plan.planId),
+        ),
+      );
+    }
   }
 
   removeClient(ws) {
@@ -1303,6 +1347,8 @@ class GrokBridge {
     );
     this.sessionId = result.sessionId;
     this.adoptConfigOptions(result.configOptions);
+    // New ACP session → drop prior plan (not part of the new turn)
+    this.clearPlan({ broadcast: true });
     return result;
   }
 
@@ -1360,6 +1406,24 @@ class GrokBridge {
         kind: toolKind,
         toolCallId,
       });
+      return;
+    }
+
+    // ACP agent plan — declared in clientCapabilities.plan; must not be dropped
+    if (kind === "plan" || kind === "plan_update" || kind === "plan_removed") {
+      const parsed = planUpdateFromSession(update);
+      if (!parsed) return;
+      if (parsed.remove) {
+        if (
+          !parsed.planId ||
+          !this.plan?.planId ||
+          parsed.planId === this.plan.planId
+        ) {
+          this.clearPlan();
+        }
+        return;
+      }
+      this.setPlan(parsed.entries, parsed.planId);
     }
   }
 
@@ -1599,6 +1663,7 @@ class GrokBridge {
 
     this.sessionId = newId;
     this.adoptConfigOptions(result.configOptions);
+    this.clearPlan({ broadcast: true });
     this.broadcast(
       this.statusPayload({
         forked: true,
@@ -1729,6 +1794,7 @@ class GrokBridge {
   async reset() {
     if (!this.connection) throw new Error("Not connected");
     await this.createSession();
+    this.clearPlan({ broadcast: true });
     this.broadcast({
       type: "status",
       connected: true,
@@ -1750,6 +1816,7 @@ class GrokBridge {
       this.cancelling = false;
       this.clearCancelWatchdog();
       this.activeTools.clear();
+      this.clearPlan({ broadcast: false });
       return;
     }
 
@@ -1761,6 +1828,7 @@ class GrokBridge {
     this.cancelling = false;
     this.clearCancelWatchdog();
     this.activeTools.clear();
+    this.clearPlan({ broadcast: true });
     this.sessionId = null;
     this.connection = null;
     if (

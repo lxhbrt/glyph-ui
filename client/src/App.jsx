@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkdownBody } from "./components/MarkdownBody.jsx";
+import { PlanBar } from "./components/PlanBar.jsx";
 import { SnackBoard, SnackScrollbar } from "./components/Snack.jsx";
 import { CommandLegend } from "./components/CommandLegend.jsx";
 import { CommandOverview } from "./components/CommandOverview.jsx";
@@ -37,6 +38,7 @@ import {
 } from "./utils/attachments.js";
 import { invalidateWsToken, wsUrl } from "./utils/format.js";
 import { upsertToolMessage } from "./utils/messages.js";
+import { normalizeClientPlanEntries } from "./utils/plan.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
 
@@ -66,6 +68,9 @@ export default function App() {
   /** Visual drop target on the message list (drag counter avoids flicker). */
   const [dropActive, setDropActive] = useState(false);
   const dropDepthRef = useRef(0);
+  /** ACP execution plan (agent todo list) — slim bar above composer. */
+  const [planEntries, setPlanEntries] = useState([]);
+  const [planCollapsed, setPlanCollapsed] = useState(false);
   /** Composer action: chat | deep-search | fork (TUI-aligned, not thinking toggle). */
   const [sendAction, setSendAction] = useState(() => {
     try {
@@ -713,16 +718,20 @@ export default function App() {
           if (msg.connected) setError("");
           // "opened" reset is handled by onOpenSession with transcript;
           // only clear on plain Neue-Session reset.
-          if (msg.reset && !msg.opened) {
-            setMessages([]);
-            assistantBuf.current = "";
-            thoughtBuf.current = "";
-            busyRef.current = false;
-            setBusy(false);
-            setCancelling(false);
-            queueRef.current = [];
-            setQueue([]);
-            return;
+          if (msg.reset) {
+            if (!msg.opened) {
+              setMessages([]);
+              assistantBuf.current = "";
+              thoughtBuf.current = "";
+              busyRef.current = false;
+              setBusy(false);
+              setCancelling(false);
+              queueRef.current = [];
+              setQueue([]);
+            }
+            // New session or opened history: plan is turn-scoped
+            setPlanEntries([]);
+            if (!msg.opened) return;
           }
           // Server became idle without turn_done (or after it) → drain queue
           // Never drain while cancelling is still true (busy should stay true).
@@ -777,7 +786,11 @@ export default function App() {
           return;
         }
 
-
+        if (msg.type === "plan") {
+          // Full-replace ACP plan (classic plan + plan_update items)
+          setPlanEntries(normalizeClientPlanEntries(msg.entries));
+          return;
+        }
 
         if (msg.type === "turn_done") {
           finalizeStreaming();
@@ -1656,6 +1669,11 @@ export default function App() {
         </div>
 
         <footer className="composer composer--grok">
+          <PlanBar
+            entries={planEntries}
+            collapsed={planCollapsed}
+            onToggle={() => setPlanCollapsed((c) => !c)}
+          />
           {queue.length > 0 ? (
             <div className="msg-queue" role="list" aria-label="Warteschlange">
               <div className="msg-queue-head">
