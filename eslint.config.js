@@ -60,6 +60,9 @@ export default [
       },
       globals: {
         ...globals.browser,
+        // Vite define from package.json + git (client/vite.config.js)
+        __GLYPH_VERSION__: "readonly",
+        __GLYPH_BUILD__: "readonly",
       },
     },
     settings: {

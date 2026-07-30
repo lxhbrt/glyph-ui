@@ -262,16 +262,29 @@ body,
   gap: 0.4rem 0.55rem;
 }
 
-.version-tag {
+/* Build mark next to “Glyph” — product identity (#17), not semver noise */
+.app-build {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--send-fg);
-  background: var(--gold);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--gold) 72%, var(--muted));
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--border));
   border-radius: 999px;
-  padding: 0.18em 0.55em;
+  padding: 0.12em 0.55em;
+  line-height: 1.2;
+  user-select: text;
+  white-space: nowrap;
   vertical-align: middle;
+}
+
+/* UI build ≠ bridge build — same mark, louder */
+.app-build--drift {
+  color: color-mix(in srgb, var(--gold) 55%, var(--text));
+  background: color-mix(in srgb, var(--gold) 22%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--border));
 }
 
 .sub {
@@ -562,6 +575,21 @@ button.send .send-snack .snack-canvas {
   padding: 10px 12px;
   border-radius: 10px;
   font-size: 0.9rem;
+}
+
+/* Stale UI vs bridge build — visible only when numbers diverge */
+.banner--warn {
+  background: color-mix(in srgb, var(--gold) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--gold) 42%, var(--border));
+  color: color-mix(in srgb, var(--gold) 70%, var(--text));
+}
+
+.banner--warn code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
 }
 
 .messages-shell {

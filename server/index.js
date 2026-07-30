@@ -67,9 +67,17 @@ import {
   textToSpeech,
   voiceStatus,
 } from "./voice.js";
+import {
+  getGlyphRoot,
+  readGlyphBuild,
+  readGlyphVersion,
+} from "../shared/meta.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, "..");
+const ROOT = getGlyphRoot();
+/** package.json version + git commit count (same sources as the Vite UI bake). */
+const GLYPH_VERSION = readGlyphVersion();
+const GLYPH_BUILD = readGlyphBuild();
 const PORT = Number(process.env.PORT || 5174);
 const WORK_CWD = process.env.GLYPH_UI_CWD || process.cwd();
 const GROK_BIN = process.env.GROK_BIN || "grok";
@@ -494,6 +502,11 @@ async function saveAttachmentFile({ name, mimeType, dataBase64 }) {
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
+    version: GLYPH_VERSION,
+    build: GLYPH_BUILD,
+    host: HOST,
+    port: PORT,
+    root: ROOT,
     connected: Boolean(bridge?.connected),
     reconnecting: Boolean(bridge?.starting),
     sessionId: bridge?.sessionId || null,
@@ -1252,7 +1265,7 @@ class GrokBridge {
           clientInfo: {
             name: "glyph",
             title: "Glyph UI",
-            version: "0.1.0",
+            version: GLYPH_VERSION,
           },
         },
       );
@@ -2006,6 +2019,7 @@ httpServer.listen(PORT, HOST, () => {
   console.log(
     `Glyph bridge → http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`,
   );
+  console.log(`Build              → #${GLYPH_BUILD} · v${GLYPH_VERSION}`);
   console.log(
     `WebSocket          → ws://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}/ws`,
   );

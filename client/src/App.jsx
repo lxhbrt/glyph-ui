@@ -43,6 +43,7 @@ import { upsertToolMessage } from "./utils/messages.js";
 import { normalizeClientPlanEntries } from "./utils/plan.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
+import { GLYPH_BUILD, GLYPH_VERSION } from "./version.js";
 
 export default function App() {
   const [connected, setConnected] = useState(false);
@@ -96,6 +97,8 @@ export default function App() {
     }
   });
   const [wikiRoot, setWikiRoot] = useState("");
+  /** Bridge meta from /api/health (version, build, host, port, root). */
+  const [bridgeMeta, setBridgeMeta] = useState(null);
   const [showOverview, setShowOverview] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [legendTab, setLegendTab] = useState("handbook");
@@ -166,13 +169,29 @@ export default function App() {
   }, [queue]);
 
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.wikiRoot) setWikiRoot(j.wikiRoot);
-        if (j.cwd) setCwd(j.cwd);
-      })
-      .catch(() => {});
+    const loadHealth = () => {
+      fetch("/api/health")
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.wikiRoot) setWikiRoot(j.wikiRoot);
+          if (j.cwd) setCwd(j.cwd);
+          setBridgeMeta({
+            version: j.version != null ? String(j.version) : "?",
+            build: Number(j.build) || 0,
+            host: j.host || "127.0.0.1",
+            port: Number(j.port) || 5174,
+            root: j.root ? String(j.root) : "",
+          });
+        })
+        .catch(() => {});
+    };
+    loadHealth();
+    // Re-check when returning to the tab (e.g. after service:install).
+    const onVis = () => {
+      if (document.visibilityState === "visible") loadHealth();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
   useEffect(() => {
@@ -1429,6 +1448,31 @@ export default function App() {
     return `…/${parts.slice(-2).join("/")}`;
   }, [cwd]);
 
+  /** Session, paths, and build — only in the subtitle tooltip (quiet by default). */
+  const headerTooltip = useMemo(() => {
+    const lines = [];
+    if (sessionId) lines.push(`Session ${sessionId}`);
+    if (cwd) lines.push(cwd);
+    // Build # is the product mark; semver stays secondary (package.json).
+    lines.push(`UI #${GLYPH_BUILD} · v${GLYPH_VERSION}`);
+    if (bridgeMeta) {
+      lines.push(
+        `Bridge #${bridgeMeta.build} · v${bridgeMeta.version}`,
+      );
+      lines.push(`${bridgeMeta.host}:${bridgeMeta.port}`);
+      if (bridgeMeta.root) lines.push(bridgeMeta.root);
+    }
+    return lines.length ? lines.join("\n") : undefined;
+  }, [sessionId, cwd, bridgeMeta]);
+
+  /** Stale UI vs running bridge — only then surface a banner. */
+  const buildMismatch = Boolean(
+    bridgeMeta &&
+      GLYPH_BUILD > 0 &&
+      bridgeMeta.build > 0 &&
+      GLYPH_BUILD !== bridgeMeta.build,
+  );
+
   const composerPlaceholder = useMemo(() => {
     if (!connected) return "Warte auf Grok-Verbindung…";
     if (cancelling) {
@@ -1565,13 +1609,19 @@ export default function App() {
       <div className="app-main">
         <header className="top">
           <div>
-            <h1>Glyph</h1>
-            <p
-              className="sub"
-              title={[sessionId, cwd].filter(Boolean).join("\n") || undefined}
-            >
+            <h1>
+              Glyph
+              {GLYPH_BUILD > 0 ? (
+                <span
+                  className={`app-build${buildMismatch ? " app-build--drift" : ""}`}
+                  title={headerTooltip}
+                >
+                  #{GLYPH_BUILD}
+                </span>
+              ) : null}
+            </h1>
+            <p className="sub" title={headerTooltip}>
               Build Term for Grok · ACP
-              {sessionId ? ` · ${sessionId.slice(0, 8)}` : ""}
               {cwdLabel ? ` · ${cwdLabel}` : ""}
             </p>
           </div>
@@ -1604,6 +1654,15 @@ export default function App() {
           </div>
         </header>
 
+        {buildMismatch ? (
+          <div className="banner banner--warn" role="status">
+            ⚠ UI <code>#{GLYPH_BUILD}</code>
+            {" · "}
+            Bridge <code>#{bridgeMeta.build}</code>
+            {" — "}
+            <code>npm run service:install</code>
+          </div>
+        ) : null}
         {error ? <div className="banner">{error}</div> : null}
 
         <div className="messages-shell">
