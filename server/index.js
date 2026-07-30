@@ -1049,8 +1049,6 @@ class GrokBridge {
     this.loadSessionSupported = false;
     /** While true, ignore session update streams (e.g. during session/load replay). */
     this.suppressUpdates = false;
-    /** Latest session config options from agent (informational). */
-    this.configOptions = [];
     /**
      * Current ACP execution plan (clientCapabilities.plan).
      * Full-replace on each plan / plan_update; null when none.
@@ -1156,12 +1154,6 @@ class GrokBridge {
       if (CRITICAL_TOOL_KINDS.has(kind)) list.push(t);
     }
     return list;
-  }
-
-  adoptConfigOptions(options) {
-    if (Array.isArray(options) && options.length) {
-      this.configOptions = options;
-    }
   }
 
   broadcast(payload) {
@@ -1387,7 +1379,6 @@ class GrokBridge {
       },
     );
     this.sessionId = result.sessionId;
-    this.adoptConfigOptions(result.configOptions);
     // New ACP session → drop prior plan (not part of the new turn)
     this.clearPlan({ broadcast: true });
     return result;
@@ -1399,12 +1390,6 @@ class GrokBridge {
     const update = params?.update || params;
     const kind = update?.sessionUpdate;
     if (!kind) return;
-
-    if (kind === "config_option_update" || update.configOptions) {
-      this.adoptConfigOptions(update.configOptions);
-      this.broadcast(this.statusPayload());
-      return;
-    }
 
     if (kind === "agent_message_chunk") {
       const text = update.content?.text || update.text || "";
@@ -1710,7 +1695,6 @@ class GrokBridge {
     }
 
     this.sessionId = newId;
-    this.adoptConfigOptions(result.configOptions);
     this.clearPlan({ broadcast: true });
     this.clearAvailableCommands({ broadcast: true });
     this.broadcast(
