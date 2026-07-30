@@ -903,34 +903,102 @@ button.send .send-snack .snack-canvas {
   line-height: 1.45;
 }
 
-/* Answers sit directly on the black chat surface */
+/*
+  Grok answers = primary reading track.
+  Full body contrast: dark theme → light text, light theme → dark text
+  (same as --text, forced so nothing inherits muted chrome).
+*/
 .msg-assistant {
   background: transparent;
   align-self: stretch;
   max-width: min(100%, 48rem);
   padding: 4px 6px 12px 2px;
+  opacity: 1;
+  color: var(--text);
 }
 
-.msg-thought {
+.msg-assistant .role {
+  margin-bottom: 4px;
+  color: var(--text);
+  opacity: 0.82;
+  font-weight: 650;
+}
+
+.msg-assistant .body,
+.msg-assistant .md-body,
+.msg-assistant .md-body .md-p,
+.msg-assistant .md-body .md-li,
+.msg-assistant .md-body .md-h {
+  font-style: normal;
+  opacity: 1;
+  color: var(--text);
+}
+
+.msg-assistant .md-body {
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+/* Dark: keep Grok as light as the app text (or a touch brighter) */
+:root[data-theme="dark"] .msg-assistant,
+:root[data-theme="dark"] .msg-assistant .md-body,
+:root[data-theme="dark"] .msg-assistant .md-body .md-p,
+:root[data-theme="dark"] .msg-assistant .md-body .md-li {
+  color: var(--text);
+}
+
+/* Light: keep Grok as dark as the app text */
+:root[data-theme="light"] .msg-assistant,
+:root[data-theme="light"] .msg-assistant .md-body,
+:root[data-theme="light"] .msg-assistant .md-body .md-p,
+:root[data-theme="light"] .msg-assistant .md-body .md-li {
+  color: var(--text);
+}
+
+/*
+  Tool + Thinking: secondary “nice to know” chrome.
+  Pale + italic so Grok replies scan as the main column.
+*/
+.msg-thought,
+.msg-tool {
   background: transparent;
-  opacity: 0.78;
   max-width: min(100%, 48rem);
-  padding: 2px 6px 8px 2px;
+  padding: 1px 6px 6px 2px;
+  opacity: 0.52;
+  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+}
+
+.msg-thought .body,
+.msg-thought .md-body,
+.msg-tool .body,
+.msg-tool .md-body {
+  font-size: 0.84rem;
+  line-height: 1.4;
+  font-style: italic;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--muted) 75%, var(--text));
+}
+
+.msg-thought .role,
+.msg-tool .role {
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  opacity: 0.75;
+  margin-bottom: 3px;
+  color: var(--muted);
 }
 
 .msg-tool {
-  background: transparent;
-  font-size: 0.9rem;
-  max-width: min(100%, 48rem);
-  padding: 2px 6px 8px 2px;
-  opacity: 0.92;
+  font-size: 0.84rem;
 }
 
+/* Slightly quieter than tools/thinking, still secondary */
 .msg-system {
   background: transparent;
   max-width: min(100%, 48rem);
   padding: 2px 6px 8px 2px;
-  opacity: 0.9;
+  opacity: 0.72;
 }
 
 .role {
@@ -939,11 +1007,6 @@ button.send .send-snack .snack-canvas {
   letter-spacing: 0.08em;
   color: var(--muted);
   margin-bottom: 6px;
-}
-
-.msg-assistant .role {
-  margin-bottom: 4px;
-  opacity: 0.9;
 }
 
 .role-row {
