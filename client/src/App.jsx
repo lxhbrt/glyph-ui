@@ -1,5 +1,5 @@
 /**
- * Glyph UI — Build Term for Grok (ACP browser UI)
+ * Glyph UI — ACP browser UI (Grok, Claude)
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
@@ -1627,7 +1627,7 @@ export default function App() {
   );
 
   const composerPlaceholder = useMemo(() => {
-    if (!connected) return "Warte auf Grok-Verbindung…";
+    if (!connected) return `Warte auf ${agentLabel}-Verbindung…`;
     if (cancelling) {
       return `Abbruch… ${workingSeconds}s — warte auf sicheres Turn-Ende`;
     }
@@ -1637,7 +1637,7 @@ export default function App() {
         : `Glyph got lost… in space · ${workingSeconds}s still — tippen = Stopp · dann neu`;
     }
     if (isWorking) {
-      return `Grok arbeitet… ${workingSeconds}s — Enter → Warteschlange · Snack = Stopp`;
+      return `${agentLabel} arbeitet… ${workingSeconds}s — Enter → Warteschlange · Snack = Stopp`;
     }
     if (sendAction === "deep-search") {
       return "Deep Search Query… z. B. Compare Postgres 17 vs MySQL 9";
@@ -1645,7 +1645,7 @@ export default function App() {
     if (sendAction === "fork") {
       return "Optional: Directive für den Fork… (leer = nur Session branchen)";
     }
-    return "Nachricht an Grok… Screenshot paste · Datei droppen";
+    return `Nachricht an ${agentLabel}… Screenshot paste · Datei droppen`;
   }, [
     connected,
     isWorking,
@@ -1654,6 +1654,7 @@ export default function App() {
     cancelling,
     sendAction,
     workingSeconds,
+    agentLabel,
   ]);
 
   // Keep Snack mounted briefly after work ends so ↵←Snack morph can play
@@ -1797,7 +1798,7 @@ export default function App() {
               ) : null}
             </h1>
             <p className="sub" title={headerTooltip}>
-              Build Term for Grok · ACP
+              Build Term for {agentLabel} · ACP
               {cwdLabel ? ` · ${cwdLabel}` : ""}
             </p>
           </div>
@@ -1829,11 +1830,11 @@ export default function App() {
               title={
                 reconnecting
                   ? connected
-                    ? "Grok-Agent wird beendet…"
-                    : "Grok-Agent wird gestartet…"
+                    ? "${agentLabel}-Agent wird beendet…"
+                    : "${agentLabel}-Agent wird gestartet…"
                   : connected
-                    ? "Grok läuft — klicken zum Beenden (/quit)"
-                    : "Grok offline — klicken zum Verbinden"
+                    ? "${agentLabel} läuft — klicken zum Beenden (/quit)"
+                    : "${agentLabel} offline — klicken zum Verbinden"
               }
               onClick={() => void toggleGrokConnection()}
             >
@@ -1912,7 +1913,7 @@ export default function App() {
             <div className="messages-content" ref={messagesContentRef}>
               {visibleMessages.length === 0 ? (
                 <div className="empty">
-                  Schreib eine Nachricht — Glyph verbindet lokal per ACP mit Grok Build.
+                  Schreib eine Nachricht — Glyph verbindet lokal per ACP mit {agentLabel}.
                   <br />
                   <span className="empty-soft">
                     Screenshot <strong>einfügen</strong> · Datei hierher{" "}
@@ -2160,7 +2161,7 @@ export default function App() {
                     {
                       id: "chat",
                       label: "Chat",
-                      title: "Normale Nachricht an Grok",
+                      title: `Normale Nachricht an ${agentLabel}`,
                     },
                     {
                       id: "deep-search",
