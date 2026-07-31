@@ -65,6 +65,13 @@ export default function App() {
   const [reconnecting, setReconnecting] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [cwd, setCwd] = useState("");
+  /**
+   * Active ACP agent + the catalog to switch between. Capabilities decide
+   * which grok-only controls stay usable (Deep Search, sessions, calendar).
+   */
+  const [agent, setAgent] = useState(null);
+  const [agents, setAgents] = useState([]);
+  const [agentSwitching, setAgentSwitching] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
@@ -184,6 +191,8 @@ export default function App() {
         .then((j) => {
           if (j.wikiRoot) setWikiRoot(j.wikiRoot);
           if (j.cwd) setCwd(j.cwd);
+          if (j.agent) setAgent(j.agent);
+          if (Array.isArray(j.agents)) setAgents(j.agents);
           setBridgeMeta({
             version: j.version != null ? String(j.version) : "?",
             build: Number(j.build) || 0,
@@ -776,6 +785,7 @@ export default function App() {
           }
           setReconnecting(Boolean(msg.reconnecting));
           setSessionId(msg.sessionId || null);
+          if (msg.agent) setAgent(msg.agent);
           if (msg.cwd) setCwd(msg.cwd);
           if (msg.connected) setError("");
           // "opened" reset is handled by onOpenSession with transcript;
@@ -1386,6 +1396,43 @@ export default function App() {
     }
   }, [connected, reconnecting]);
 
+  /**
+   * Switch the ACP agent (Grok ↔ Claude). The bridge restarts into the other
+   * binary, so this always yields a fresh session — the transcript is dropped
+   * for the same reason reconnect drops it.
+   */
+  const switchAgent = useCallback(
+    async (id) => {
+      if (!id || agentSwitching || id === agent?.id) return;
+      setAgentSwitching(true);
+      setError("");
+      try {
+        const res = await fetch("/api/bridge/agent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || json.ok === false) {
+          throw new Error(json.error || "Agentwechsel fehlgeschlagen");
+        }
+        if (json.agent) setAgent(json.agent);
+        if (!json.already) {
+          setMessages([]);
+          assistantBuf.current = "";
+          thoughtBuf.current = "";
+          queueRef.current = [];
+          setQueue([]);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setAgentSwitching(false);
+      }
+    },
+    [agent, agentSwitching],
+  );
+
   /** Offline → connect; verbunden → /quit (offline). */
   const toggleGrokConnection = useCallback(() => {
     if (connected) return disconnectGrok();
@@ -1442,6 +1489,46 @@ export default function App() {
   );
 
   const visibleMessages = messages;
+
+  /**
+   * Grok-only features. Sessions and the calendar read ~/.grok/sessions from
+   * disk; Deep Search sends the /deep-research slash command. Neither exists
+   * for other agents, so the controls stay visible but disabled — a greyed
+   * button with a reason beats a button that silently does nothing.
+   */
+  const caps = agent?.capabilities;
+  const canDeepSearch = caps ? Boolean(caps.deepSearch) : true;
+  const canBrowseSessions = caps ? Boolean(caps.sessions) : true;
+  const canSeeActivity = caps ? Boolean(caps.activity) : true;
+  const agentLabel = agent?.label || "Agent";
+  const unavailableFor = useCallback(
+    (what) => `${what} ist nur mit Grok verfügbar (aktiv: ${agentLabel})`,
+    [agentLabel],
+  );
+
+  /** Tooltip for the agent picker: command + why some controls are greyed. */
+  const agentPickTitle = useMemo(() => {
+    if (!agent) return "Agent wählen";
+    const lines = [`Agent: ${agent.label}`];
+    if (agent.command) lines.push(agent.command);
+    if (agent.hint) lines.push(agent.hint);
+    if (agentSwitching) lines.push("Wechsel läuft…");
+    return lines.join("\n");
+  }, [agent, agentSwitching]);
+
+  // A persisted "deep-search" choice must not survive a switch to an agent
+  // that cannot run it — fall back to plain chat.
+  useEffect(() => {
+    if (!canDeepSearch && sendAction === "deep-search") {
+      setSendAction("chat");
+    }
+  }, [canDeepSearch, sendAction]);
+
+  // Same for panels that are open when the agent changes under them.
+  useEffect(() => {
+    if (!canBrowseSessions) setShowOverview(false);
+    if (!canSeeActivity) setShowCalendar(false);
+  }, [canBrowseSessions, canSeeActivity]);
 
   /**
    * Instant KO-Snack preview (no 2 min wait):
@@ -1588,7 +1675,12 @@ export default function App() {
           type="button"
           className="side-rail-btn"
           onClick={() => setShowOverview(true)}
-          title="Suche & Sessions"
+          disabled={!canBrowseSessions}
+          title={
+            canBrowseSessions
+              ? "Suche & Sessions"
+              : unavailableFor("Die Sessions-Übersicht")
+          }
           aria-label="Suche und Sessions"
         >
           <IconSearch />
@@ -1619,7 +1711,12 @@ export default function App() {
           type="button"
           className="side-rail-btn"
           onClick={() => setShowCalendar(true)}
-          title="Aktivitäts-Kalender"
+          disabled={!canSeeActivity}
+          title={
+            canSeeActivity
+              ? "Aktivitäts-Kalender"
+              : unavailableFor("Der Aktivitäts-Kalender")
+          }
           aria-label="Kalender"
         >
           <IconCalendar />
@@ -1705,6 +1802,24 @@ export default function App() {
             </p>
           </div>
           <div className="top-actions">
+            {agents.length > 1 ? (
+              <label className="agent-pick" title={agentPickTitle}>
+                <span className="sr-only">Agent</span>
+                <select
+                  className="agent-pick-select"
+                  value={agent?.id || ""}
+                  disabled={agentSwitching || reconnecting || isWorking}
+                  onChange={(e) => void switchAgent(e.target.value)}
+                  aria-label="Agent wählen"
+                >
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <button
               type="button"
               className={`pill pill-btn ${
@@ -2059,22 +2174,27 @@ export default function App() {
                       title:
                         "Session branchen (TUI /fork). Text = optionale Directive",
                     },
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={sendAction === opt.id}
-                      className={`action-picker-btn${
-                        sendAction === opt.id ? " action-picker-btn--active" : ""
-                      }`}
-                      title={opt.title}
-                      disabled={!connected}
-                      onClick={() => setSendAction(opt.id)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                  ].map((opt) => {
+                    const blocked = opt.id === "deep-search" && !canDeepSearch;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={sendAction === opt.id}
+                        className={`action-picker-btn${
+                          sendAction === opt.id
+                            ? " action-picker-btn--active"
+                            : ""
+                        }${blocked ? " action-picker-btn--blocked" : ""}`}
+                        title={blocked ? unavailableFor("Deep Search") : opt.title}
+                        disabled={!connected || blocked}
+                        onClick={() => setSendAction(opt.id)}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="voice-controls" aria-label="Sprache">
                   <button

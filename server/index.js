@@ -44,6 +44,12 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import * as acp from "@agentclientprotocol/sdk";
 import {
+  buildAgentProfiles,
+  publicAgent,
+  publicAgents,
+  resolveAgent,
+} from "./agents.js";
+import {
   commandsBroadcastPayload,
   normalizeAvailableCommands,
 } from "./commands.js";
@@ -80,7 +86,8 @@ const GLYPH_VERSION = readGlyphVersion();
 const GLYPH_BUILD = readGlyphBuild();
 const PORT = Number(process.env.PORT || 5174);
 const WORK_CWD = process.env.GLYPH_UI_CWD || process.cwd();
-const GROK_BIN = process.env.GROK_BIN || "grok";
+/** Available ACP agents; the active one decides which binary gets spawned. */
+const AGENT_PROFILES = buildAgentProfiles();
 const STATE_DIR =
   process.env.GLYPH_UI_STATE_DIR ||
   path.join(os.homedir(), ".glyph-ui");
@@ -511,6 +518,8 @@ app.get("/api/health", (_req, res) => {
     reconnecting: Boolean(bridge?.starting),
     sessionId: bridge?.sessionId || null,
     cwd: WORK_CWD,
+    agent: publicAgent(bridge?.agentProfile?.() || null),
+    agents: publicAgents(AGENT_PROFILES),
     wikiRoot: getWikiRoot(),
     wikiArchive: path.join(getWikiRoot(), "sources/grok-sessions"),
     uploads: UPLOAD_DIR,
@@ -759,6 +768,30 @@ app.post("/api/bridge/cancel", async (_req, res) => {
  * Start/restart the local `grok agent` process (no Terminal needed).
  * Safe to call while offline or already connected (force restart).
  */
+/**
+ * Switch the active ACP agent (grok | claude) and restart into it.
+ * Body: { id: "claude" }
+ */
+app.post("/api/bridge/agent", async (req, res) => {
+  try {
+    const result = await bridge.switchAgent(req.body?.id);
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = /unbekannter agent/i.test(message)
+      ? 400
+      : /wartet|warten|arbeitet/i.test(message)
+        ? 409
+        : 500;
+    res.status(status).json({
+      ok: false,
+      error: message,
+      agent: publicAgent(bridge?.agentProfile?.() || null),
+      connected: Boolean(bridge?.connected),
+    });
+  }
+});
+
 app.post("/api/bridge/reconnect", async (_req, res) => {
   try {
     const result = await bridge.reconnect();
@@ -1033,6 +1066,11 @@ class GrokBridge {
   constructor() {
     this.connected = false;
     this.sessionId = null;
+    /**
+     * Active ACP agent profile id. Switching spawns a different binary —
+     * Glyph never talks to a model API, so this is the only "provider" knob.
+     */
+    this.agentId = resolveAgent(AGENT_PROFILES, process.env.GLYPH_AGENT).id;
     this.process = null;
     this.connection = null;
     this.busy = false;
@@ -1062,6 +1100,11 @@ class GrokBridge {
     this.availableCommands = [];
   }
 
+  /** Currently selected agent profile (never null — resolveAgent falls back). */
+  agentProfile() {
+    return resolveAgent(AGENT_PROFILES, this.agentId);
+  }
+
   statusPayload(extra = {}) {
     return {
       type: "status",
@@ -1071,6 +1114,7 @@ class GrokBridge {
       cancelling: this.cancelling,
       reconnecting: this.starting,
       cwd: WORK_CWD,
+      agent: publicAgent(this.agentProfile()),
       ...extra,
     };
   }
@@ -1195,16 +1239,13 @@ class GrokBridge {
       throw new Error("Grok process still running — use reconnect()");
     }
 
-    // Match TUI default: no --reasoning-effort override (model default, usually high).
-    const child = spawn(
-      GROK_BIN,
-      ["agent", "--always-approve", "--no-leader", "stdio"],
-      {
-        env: { ...process.env, NO_COLOR: "1" },
-        stdio: ["pipe", "pipe", "pipe"],
-        cwd: WORK_CWD,
-      },
-    );
+    // Binary + args come from the active profile (see server/agents.js).
+    const profile = this.agentProfile();
+    const child = spawn(profile.bin, profile.args, {
+      env: { ...process.env, NO_COLOR: "1" },
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: WORK_CWD,
+    });
     this.process = child;
     this.stderrTail = [];
 
@@ -1214,10 +1255,15 @@ class GrokBridge {
       this.stderrTail = this.stderrTail.slice(-30);
     });
     child.on("exit", (code, signal) => {
-      this.handleDisconnect(`Grok exited (${signal || code || "unknown"})`);
+      this.handleDisconnect(
+        `${profile.label} exited (${signal || code || "unknown"})`,
+      );
     });
     child.on("error", (err) => {
-      this.handleDisconnect(`Unable to start Grok: ${err.message}`);
+      // ENOENT here usually means the agent binary is missing — name it.
+      this.handleDisconnect(
+        `${profile.label} konnte nicht gestartet werden (${profile.bin}): ${err.message}`,
+      );
     });
 
     try {
@@ -1309,6 +1355,47 @@ class GrokBridge {
    * Kill any running agent and start a fresh one.
    * Used from UI when status shows offline (connect) or for force restart.
    */
+  /**
+   * Switch the active ACP agent and restart into it.
+   *
+   * A switch is a full restart: different binary, different session store.
+   * The new session id differs, so the UI drops the old transcript on its
+   * own (same invariant as any reconnect).
+   *
+   * @param {string} id
+   */
+  async switchAgent(id) {
+    const next = resolveAgent(AGENT_PROFILES, id);
+    if (!next || next.id !== String(id)) {
+      throw new Error(`Unbekannter Agent: ${id}`);
+    }
+    if (this.starting) {
+      throw new Error("Verbindung wird gerade aufgebaut — bitte warten");
+    }
+    if (next.id === this.agentId) {
+      return {
+        ok: true,
+        already: true,
+        agent: publicAgent(next),
+        connected: this.connected,
+      };
+    }
+    if (this.busy) {
+      throw new Error("Agent arbeitet noch — erst abbrechen oder warten");
+    }
+
+    this.agentId = next.id;
+    this.clearPlan({ broadcast: true });
+    this.setAvailableCommands([]);
+    this.broadcast({
+      type: "system",
+      text: `Agent gewechselt → ${next.label}. Neue Session, kein gemeinsamer Verlauf.`,
+    });
+
+    const result = await this.reconnect();
+    return { ...result, agent: publicAgent(this.agentProfile()) };
+  }
+
   async reconnect() {
     if (this.starting) {
       return {

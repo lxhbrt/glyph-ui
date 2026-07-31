@@ -308,6 +308,47 @@ body,
   flex-wrap: wrap;
 }
 
+/* Agent picker (Grok ↔ Claude) — sits left of the connection pill. */
+.agent-pick {
+  display: inline-flex;
+  align-items: center;
+}
+
+.agent-pick-select {
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 24px 3px 10px;
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 13px) calc(50% + 1px),
+    calc(100% - 9px) calc(50% + 1px);
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.agent-pick-select:hover:not(:disabled),
+.agent-pick-select:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.agent-pick-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .pill {
   font-size: 0.75rem;
   padding: 4px 10px;
@@ -1219,7 +1260,16 @@ button.send.send--stuffed .send-snack {
 
 .md-body strong {
   font-weight: 700;
+  /* Light: soft gold on dark body text — already pops well */
   color: color-mix(in srgb, var(--gold-bright) 35%, var(--text));
+}
+
+/*
+  Dark: was gold-bright@35% + near-white --text → pale yellow ≈ body.
+  Shift hard toward brand --gold so bold reads as gold, not off-white.
+*/
+:root[data-theme="dark"] .md-body strong {
+  color: color-mix(in srgb, var(--gold) 82%, var(--text));
 }
 
 .md-body em {
@@ -1920,6 +1970,15 @@ button.send.send--stuffed .send-snack {
 
 .action-picker-btn:last-child {
   border-right: 0;
+}
+
+/* Unavailable for the active agent (e.g. Deep Search under Claude):
+   still visible so the absence is explained, not just missing. */
+.action-picker-btn--blocked {
+  opacity: 0.4;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  cursor: not-allowed;
 }
 
 .action-picker-btn:hover:not(:disabled) {
