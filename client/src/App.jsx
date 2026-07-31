@@ -1927,7 +1927,7 @@ export default function App() {
                         {m.role === "user"
                           ? "Du"
                           : m.role === "assistant"
-                            ? "Grok"
+                            ? agentLabel
                             : m.role === "thought"
                               ? "Thinking"
                               : m.role === "system"
