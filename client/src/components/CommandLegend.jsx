@@ -283,6 +283,7 @@ const SHORT_HANDBOOK = [
     rows: [
       ["Idle", "Button zeigt ↵ → senden"],
       ["Arbeitet", "Runder Snack (Schlange jagt roten Stopp-Punkt)"],
+      ["Überfressen", "Snack dick + X-Augen + Banner — Hänger, manuell neu starten"],
       ["Text + Enter", "Follow-up → Warteschlange (WARTE)"],
       ["Leer / Snack", "Soft-Stop (ACP-Cancel) im Kreis-Button"],
       ["× / Leeren", "Queue-Eintrag bzw. ganze Queue löschen"],
@@ -327,7 +328,10 @@ const SHORT_HANDBOOK = [
     rows: [
       ["offline", "Pill klicken · `grok` im PATH? · `grok login`?"],
       ["Eingabe grau", "Erst verbinden"],
-      ["hängt", "Leerer Snack-Klick = Stop · sonst Refresh + reconnect"],
+      [
+        "hängt",
+        "Snack mit X_X = überfressen (2+ Min still) · tippen = Stop · UI neu laden · sonst npm run service:install",
+      ],
       ["Disk voll", "Lupe → Schließen → Ja + Wiki oder Löschen (/delete)"],
       ["UI veraltet", "Refresh in der Leiste"],
       ["Slash „tut nichts“", "Viele /Befehle sind TUI-only — Freitext oder Tabs"],

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glyph Snack KO — Preview</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #0b0a0d;
+        color: #f2ead8;
+        font: 15px/1.45 system-ui, sans-serif;
+        display: grid;
+        place-items: center;
+      }
+      .wrap {
+        text-align: center;
+        padding: 2rem;
+      }
+      h1 {
+        font-size: 1.1rem;
+        font-weight: 650;
+        margin: 0 0 0.35rem;
+      }
+      p {
+        opacity: 0.75;
+        margin: 0 0 1.25rem;
+        max-width: 28rem;
+      }
+      .stage {
+        width: 220px;
+        height: 220px;
+        margin: 0 auto 1rem;
+        border-radius: 999px;
+        background: #16131a;
+        border: 3px solid #d94a4a;
+        box-shadow: 0 0 0 6px rgba(217, 74, 74, 0.2);
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+      canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      code {
+        background: #1e1a24;
+        padding: 0.15em 0.4em;
+        border-radius: 6px;
+        font-size: 0.9em;
+      }
+      a {
+        color: #e8c86a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Snack hat sich überfressen (X_X)</h1>
+      <p>
+        Vergrößerte Vorschau: X-Augen, Zunge raus, Äpfel fallen auf den Kopf.
+        In Glyph live:
+        <a href="http://127.0.0.1:5174/?snack=stuffed"
+          >http://127.0.0.1:5174/?snack=stuffed</a
+        >
+      </p>
+      <div class="stage" aria-label="KO Snack Animation">
+        <canvas id="c" width="160" height="160"></canvas>
+      </div>
+      <p><code>scripts/snack-ko-preview.html</code> · nur Demo, kein Server nötig</p>
+    </div>
+    <script>
+      const canvas = document.getElementById("c");
+      const ctx = canvas.getContext("2d");
+      const W = 160;
+      const H = 160;
+      const cols = 4;
+      const rows = 4;
+      const cell = W / cols;
+      const palette = {
+        head: "#c9a227",
+        body: "#a88b2a",
+        tailLite: "#ffffff",
+        stop: "#d94a4a",
+        stopInner: "#e07070",
+        eye: "rgba(0,0,0,0.82)",
+        tongue: "#e85a7a",
+        tongueTip: "#ff8aa0",
+        leaf: "#5a9e4a",
+      };
+
+      function mix(a, b, t) {
+        const p = (hex) => {
+          const h = hex.replace("#", "");
+          return [
+            parseInt(h.slice(0, 2), 16),
+            parseInt(h.slice(2, 4), 16),
+            parseInt(h.slice(4, 6), 16),
+          ];
+        };
+        const A = p(a);
+        const B = p(b.length === 7 ? b : "#ffffff");
+        const r = Math.round(A[0] + (B[0] - A[0]) * t);
+        const g = Math.round(A[1] + (B[1] - A[1]) * t);
+        const bl = Math.round(A[2] + (B[2] - A[2]) * t);
+        return `rgb(${r},${g},${bl})`;
+      }
+
+      // Same pose + physics as client/src/components/Snack.jsx (stuffed)
+      const APPLE_CELLS_PER_SEC = 2.8;
+      const BONK_HOLD_MS = 280;
+      const snake = [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+        { x: 2, y: 2 },
+        { x: 1, y: 2 },
+        { x: 0, y: 2 },
+      ];
+
+      function drawCell(x, y, fill) {
+        const gap = Math.max(1, Math.floor(cell * 0.14));
+        const s = cell - gap * 2;
+        const px = x * cell + gap;
+        const py = y * cell + gap;
+        ctx.fillStyle = fill;
+        ctx.fillRect(px, py, s, s);
+        return { px, py, size: s };
+      }
+
+      // Same mass as snake head / normal snack hunt apple
+      function drawPixelApple(x, y, size) {
+        const s = Math.max(8, Math.round(size));
+        const ix = Math.round(x);
+        const iy = Math.round(y);
+        ctx.fillStyle = palette.stop;
+        ctx.fillRect(ix, iy, s, s);
+        const pad = Math.max(2, Math.floor(s * 0.22));
+        const inner = Math.max(4, s - pad * 2);
+        ctx.fillStyle = palette.stopInner;
+        ctx.fillRect(ix + pad, iy + pad, inner, inner);
+        ctx.fillStyle = palette.leaf;
+        const leaf = Math.max(3, Math.floor(s * 0.28));
+        ctx.fillRect(ix + s - leaf, iy - 2, leaf, 3);
+      }
+
+      function drawKOFace(stone, bonk) {
+        const { px, py, size: sz } = stone;
+        const squash = bonk > 0 ? 2 : 0;
+        const top = py + squash;
+        const faceH = sz - squash;
+        const t = 2;
+        const eyeW = Math.max(4, Math.floor(sz * 0.32));
+        const eyeH = Math.max(4, Math.floor(sz * 0.32));
+        const eyeY = top + Math.max(0, Math.floor(faceH * 0.12));
+        const leftX = px + Math.max(0, Math.floor(sz * 0.08));
+        const rightX = px + sz - eyeW - Math.max(0, Math.floor(sz * 0.08));
+        ctx.fillStyle = palette.eye;
+        const paintX = (ox, oy) => {
+          const last = Math.max(1, eyeW - 1);
+          for (let i = 0; i < eyeW; i++) {
+            const j = Math.round((i / last) * (eyeH - 1));
+            ctx.fillRect(ox + i, oy + j, t, t);
+            ctx.fillRect(ox + i, oy + (eyeH - 1 - j), t, t);
+          }
+        };
+        paintX(leftX, eyeY);
+        paintX(rightX, eyeY);
+
+        const mouthW = Math.max(4, Math.floor(sz * 0.36));
+        const mouthH = Math.max(2, Math.floor(sz * 0.14));
+        const mouthX = px + Math.floor((sz - mouthW) / 2);
+        const mouthY = top + Math.floor(faceH * 0.58);
+        ctx.fillStyle = "rgba(0,0,0,0.72)";
+        ctx.fillRect(mouthX, mouthY, mouthW, mouthH);
+
+        const tongW = Math.max(3, Math.floor(sz * 0.28));
+        const tongH = Math.max(4, Math.floor(sz * 0.42));
+        const tongX = px + Math.floor((sz - tongW) / 2);
+        const tongY = mouthY + mouthH;
+        ctx.fillStyle = palette.tongue;
+        ctx.fillRect(tongX, tongY, tongW, tongH);
+        ctx.fillStyle = palette.tongueTip;
+        ctx.fillRect(tongX, tongY + tongH - 2, tongW, 2);
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.fillRect(tongX + Math.floor(tongW / 2), tongY + 1, 1, tongH - 1);
+      }
+
+      function spawn(headStone) {
+        const apple = headStone.size;
+        const headCx = headStone.px + headStone.size / 2;
+        const jitter = (Math.random() - 0.5) * cell * 0.35;
+        const speed =
+          cell * APPLE_CELLS_PER_SEC * (0.92 + Math.random() * 0.16);
+        return {
+          x: headCx - apple / 2 + jitter,
+          y: -apple,
+          size: apple,
+          vy: speed, // px / second (same as Snack.jsx)
+        };
+      }
+
+      const gap0 = Math.max(1, Math.floor(cell * 0.14));
+      const size0 = cell - gap0 * 2;
+      let headStone = {
+        px: 1 * cell + gap0,
+        py: 1 * cell + gap0,
+        size: size0,
+      };
+      let falling = [spawn(headStone)];
+      let bonkMs = 0;
+      let lastTs = performance.now();
+
+      function frame(ts) {
+        const dt = Math.min(0.05, Math.max(0, (ts - lastTs) / 1000));
+        lastTs = ts;
+        ctx.clearRect(0, 0, W, H);
+
+        const n = snake.length;
+        snake.forEach((seg, i) => {
+          const t = n <= 1 ? 0 : i / (n - 1);
+          const fill =
+            i === 0
+              ? palette.head
+              : mix(palette.body, "#ffffff", 0.12 + t * 0.55);
+          const stone = drawCell(seg.x, seg.y, fill);
+          if (i === 0) {
+            headStone = stone;
+            drawKOFace(stone, bonkMs > 0 ? 1 : 0);
+          }
+        });
+
+        const skullTop = headStone.py;
+        const skullLeft = headStone.px - 4;
+        const skullRight = headStone.px + headStone.size + 4;
+
+        if (falling.length === 0) falling = [spawn(headStone)];
+        const a = falling[0];
+        if (a.stuck) {
+          bonkMs = Math.max(0, bonkMs - dt * 1000);
+          if (bonkMs <= 0) falling = [spawn(headStone)];
+        } else {
+          const next = { ...a, y: a.y + a.vy * dt };
+          const hits =
+            next.y + next.size >= skullTop &&
+            next.y < skullTop + headStone.size * 0.55 &&
+            next.x + next.size > skullLeft &&
+            next.x < skullRight;
+          if (hits) {
+            bonkMs = BONK_HOLD_MS;
+            falling = [
+              {
+                ...next,
+                y: skullTop - next.size * 0.72,
+                x: headStone.px + Math.floor((headStone.size - next.size) / 2),
+                vy: 0,
+                stuck: true,
+              },
+            ];
+          } else if (next.y > H + a.size) {
+            falling = [spawn(headStone)];
+          } else {
+            falling = [next];
+          }
+        }
+
+        drawPixelApple(falling[0].x, falling[0].y, falling[0].size);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>

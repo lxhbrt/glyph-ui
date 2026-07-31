@@ -49,6 +49,10 @@
   --snack-snake-body: var(--gold-bright);
   --snack-stop: var(--danger);
   --snack-stop-inner: var(--danger-bright);
+  /* KO face when hang / overate (pixel tongue + leaf) */
+  --snack-tongue: #e85a7a;
+  --snack-tongue-tip: #ff8aa0;
+  --snack-leaf: #5a9e4a;
 
   /* Shared stone size (matches Enter SnackBoard cell 10 / gap 0.14 → 8px) */
   --snack-pixel: 8px;
@@ -94,6 +98,10 @@
   --snack-snake-body: var(--gold-dim);
   --snack-stop: var(--danger);
   --snack-stop-inner: var(--danger-bright);
+  /* KO face when hang / overate (pixel tongue + leaf) */
+  --snack-tongue: #e85a7a;
+  --snack-tongue-tip: #ff8aa0;
+  --snack-leaf: #5a9e4a;
 }
 
 * {
@@ -590,6 +598,64 @@ button.send .send-snack .snack-canvas {
   padding: 0.05em 0.3em;
   border-radius: 4px;
   background: color-mix(in srgb, var(--gold) 12%, transparent);
+}
+
+/* Snack overate / hang — X_X stuffed state (manual restart) */
+.banner--stuffed {
+  background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: color-mix(in srgb, var(--danger-bright) 75%, var(--text));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.banner--stuffed strong {
+  font-weight: 650;
+}
+
+.banner-stuffed-steps {
+  flex: 1 1 100%;
+  font-size: 0.86rem;
+  opacity: 0.95;
+}
+
+.banner-stuffed-steps code,
+.banner--stuffed code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.banner-stuffed-reload {
+  margin-left: auto;
+  flex: 0 0 auto;
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, var(--border));
+  background: color-mix(in srgb, var(--danger) 18%, var(--panel));
+  color: inherit;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.banner-stuffed-reload:hover {
+  background: color-mix(in srgb, var(--danger) 28%, var(--panel));
+}
+
+button.send.send--stuffed {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+button.send.send--stuffed .send-snack {
+  filter: saturate(0.85) contrast(1.05);
 }
 
 .messages-shell {

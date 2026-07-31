@@ -45,6 +45,9 @@ import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
 import { GLYPH_BUILD, GLYPH_VERSION } from "./version.js";
 
+/** Busy + no thought/answer/tool for this long → snack “overate” (X_X). */
+const SNACK_STALE_MS = 120_000;
+
 export default function App() {
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -104,6 +107,12 @@ export default function App() {
   const [legendTab, setLegendTab] = useState("handbook");
   const [showCalendar, setShowCalendar] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  /**
+   * Hang signal: busy but no thought/answer/tool chunks for a while.
+   * Snack goes "stuffed" (X eyes) — user restarts; we don't auto-kill.
+   */
+  const lastActivityRef = useRef(Date.now());
+  const [snackStuffed, setSnackStuffed] = useState(false);
 
   // —— Grok Voice (xAI STT / TTS) ——
   const [voiceAvailable, setVoiceAvailable] = useState(false);
@@ -802,6 +811,8 @@ export default function App() {
           busyRef.current = true;
           streamingRef.current = true;
           setBusy(true);
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
           assistantBuf.current += msg.text || "";
           upsertStreaming("assistant", assistantBuf.current, {
             replaceLast: true,
@@ -813,12 +824,16 @@ export default function App() {
           busyRef.current = true;
           streamingRef.current = true;
           setBusy(true);
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
           thoughtBuf.current += msg.text || "";
           upsertStreaming("thought", thoughtBuf.current, { replaceLast: true });
           return;
         }
 
         if (msg.type === "system") {
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
           setMessages((prev) => [
             ...prev,
             {
@@ -837,6 +852,8 @@ export default function App() {
           // (same pattern as upsertStreaming) instead of appending duplicates.
           busyRef.current = true;
           setBusy(true);
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
           setMessages((prev) => upsertToolMessage(prev, msg));
           scrollToBottom();
           return;
@@ -844,6 +861,8 @@ export default function App() {
 
         if (msg.type === "plan") {
           // Full-replace ACP plan (classic plan + plan_update items)
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
           setPlanEntries(normalizeClientPlanEntries(msg.entries));
           return;
         }
@@ -867,6 +886,8 @@ export default function App() {
           busyRef.current = false;
           setBusy(false);
           setCancelling(false);
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
           // Auto-send next parked follow-up only after the turn truly ended
           scheduleDrainQueue();
           return;
@@ -878,6 +899,8 @@ export default function App() {
           busyRef.current = false;
           setBusy(false);
           setCancelling(false);
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
           // Still drain so the queue does not stall after a failed turn
           scheduleDrainQueue();
         }
@@ -1070,6 +1093,8 @@ export default function App() {
       assistantBuf.current = "";
       thoughtBuf.current = "";
       setError("");
+      lastActivityRef.current = Date.now();
+      setSnackStuffed(false);
       busyRef.current = true;
       streamingRef.current = false;
       setBusy(true);
@@ -1418,16 +1443,57 @@ export default function App() {
 
   const visibleMessages = messages;
 
+  /**
+   * Instant KO-Snack preview (no 2 min wait):
+   *   http://127.0.0.1:5174/?snack=stuffed
+   * Leave with ?snack=off or drop the param + reload.
+   */
+  const snackDemo = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const v = new URLSearchParams(window.location.search).get("snack");
+      return v === "stuffed" || v === "ko" || v === "1";
+    } catch {
+      return false;
+    }
+  }, []);
+
   // Working UI: server busy OR any in-flight stream (thought / answer / tools)
   const isWorking = useMemo(
     () => busy || messages.some((m) => m.streaming),
     [busy, messages],
   );
+  /** Demo forces the working send face so the stuffed board is visible. */
+  const showWorking = isWorking || snackDemo;
+  const showStuffed = snackStuffed || snackDemo;
 
   // Keep streaming mirror in sync (e.g. after history load / finalize)
   useEffect(() => {
     streamingRef.current = messages.some((m) => m.streaming);
   }, [messages]);
+
+  // Reset activity clock when a turn starts so we don't flash stuffed immediately
+  useEffect(() => {
+    if (snackDemo) return undefined;
+    if (isWorking) {
+      lastActivityRef.current = Date.now();
+      setSnackStuffed(false);
+    } else {
+      setSnackStuffed(false);
+    }
+    return undefined;
+  }, [isWorking, snackDemo]);
+
+  // Poll: busy + silent too long → stuffed snack (X_X overate)
+  useEffect(() => {
+    if (snackDemo || !isWorking) return undefined;
+    const id = window.setInterval(() => {
+      if (Date.now() - lastActivityRef.current >= SNACK_STALE_MS) {
+        setSnackStuffed(true);
+      }
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [isWorking, snackDemo]);
 
   // Safety net: if idle with parked items, drain (covers missed turn_done)
   useEffect(() => {
@@ -1435,7 +1501,7 @@ export default function App() {
       scheduleDrainQueue();
     }
   }, [isWorking, queue.length, connected, scheduleDrainQueue]);
-  const workingSeconds = useWorkingSeconds(isWorking);
+  const workingSeconds = useWorkingSeconds(showWorking);
 
   /** Short path for the header (home → ~). Full path stays in title tooltip. */
   const cwdLabel = useMemo(() => {
@@ -1478,6 +1544,11 @@ export default function App() {
     if (cancelling) {
       return `Abbruch… ${workingSeconds}s — warte auf sicheres Turn-Ende`;
     }
+    if (showStuffed) {
+      return snackDemo
+        ? `DEMO: Glyph got lost… in space — ?snack=stuffed · weg: URL ohne param`
+        : `Glyph got lost… in space · ${workingSeconds}s still — tippen = Stopp · dann neu`;
+    }
     if (isWorking) {
       return `Grok arbeitet… ${workingSeconds}s — Enter → Warteschlange · Snack = Stopp`;
     }
@@ -1488,19 +1559,27 @@ export default function App() {
       return "Optional: Directive für den Fork… (leer = nur Session branchen)";
     }
     return "Nachricht an Grok… Screenshot paste · Datei droppen";
-  }, [connected, isWorking, cancelling, sendAction, workingSeconds]);
+  }, [
+    connected,
+    isWorking,
+    showStuffed,
+    snackDemo,
+    cancelling,
+    sendAction,
+    workingSeconds,
+  ]);
 
   // Keep Snack mounted briefly after work ends so ↵←Snack morph can play
   const [snackAlive, setSnackAlive] = useState(false);
   useEffect(() => {
-    if (isWorking) {
+    if (showWorking) {
       setSnackAlive(true);
       return undefined;
     }
     if (!snackAlive) return undefined;
     const t = setTimeout(() => setSnackAlive(false), 520);
     return () => clearTimeout(t);
-  }, [isWorking, snackAlive]);
+  }, [showWorking, snackAlive]);
 
   return (
     <div className="app">
@@ -1661,6 +1740,44 @@ export default function App() {
             Bridge <code>#{bridgeMeta.build}</code>
             {" — "}
             <code>npm run service:install</code>
+          </div>
+        ) : null}
+        {showStuffed ? (
+          <div className="banner banner--stuffed" role="status">
+            <strong>
+              {snackDemo ? "DEMO — " : ""}
+              Glyph got lost… in space.
+            </strong>
+            {snackDemo ? (
+              <>
+                {" "}
+                Vorschau ohne echten Hänger. Weg: URL ohne{" "}
+                <code>?snack=stuffed</code>.
+              </>
+            ) : null}
+            <br />
+            <span className="banner-stuffed-steps">
+              {snackDemo ? (
+                <>
+                  Runder Button: X-Augen, Zunge, Apfel auf den Kopf. Schließen:{" "}
+                  <a href="/">ohne Demo-Param</a>
+                </>
+              ) : (
+                <>
+                  1. Snack tippen = Stopp · 2. Nachricht nochmal senden · 3. Wenn
+                  weiter tot: <code>npm run service:install</code>
+                </>
+              )}
+            </span>
+            {!snackDemo ? (
+              <button
+                type="button"
+                className="banner-stuffed-reload"
+                onClick={() => window.location.reload()}
+              >
+                UI neu laden
+              </button>
+            ) : null}
           </div>
         ) : null}
         {error ? <div className="banner">{error}</div> : null}
@@ -2008,9 +2125,9 @@ export default function App() {
               </div>
               <button
                 type="button"
-                className={`send${isWorking ? " send--working" : " send--idle"}${
-                  snackAlive && !isWorking ? " send--morph-out" : ""
-                }`}
+                className={`send${showWorking ? " send--working" : " send--idle"}${
+                  snackAlive && !showWorking ? " send--morph-out" : ""
+                }${showStuffed ? " send--stuffed" : ""}`}
                 onClick={() => {
                   // While working: text/attachments → queue; empty → stop (Snack)
                   const canQueue =
@@ -2025,52 +2142,63 @@ export default function App() {
                     if (!cancelling) void cancelTurn();
                     return;
                   }
+                  if (snackDemo) return; // preview only
                   send();
                 }}
                 disabled={
-                  !connected ||
-                  cancelling ||
-                  attachBusy ||
-                  (sendAction !== "fork" &&
-                    !input.trim() &&
-                    pendingAttachments.length === 0 &&
-                    !isWorking)
+                  snackDemo
+                    ? false
+                    : !connected ||
+                      cancelling ||
+                      attachBusy ||
+                      (sendAction !== "fork" &&
+                        !input.trim() &&
+                        pendingAttachments.length === 0 &&
+                        !isWorking)
                 }
                 title={
-                  isWorking
-                    ? input.trim() || pendingAttachments.length
-                      ? "In Warteschlange (Enter)"
-                      : cancelling
-                        ? "Bricht ab…"
-                        : "Stopp: Snack / leerer Klick — Abbrechen"
-                    : sendAction === "deep-search"
-                      ? "Deep Search starten (Enter)"
-                      : sendAction === "fork"
-                        ? "Session forken (Enter)"
-                        : "Senden (Enter)"
+                  showStuffed
+                    ? snackDemo
+                      ? "DEMO: Glyph got lost… in space"
+                      : "Glyph got lost… in space — tippen = Stopp · dann neu"
+                    : isWorking
+                      ? input.trim() || pendingAttachments.length
+                        ? "In Warteschlange (Enter)"
+                        : cancelling
+                          ? "Bricht ab…"
+                          : "Stopp: Snack / leerer Klick — Abbrechen"
+                      : sendAction === "deep-search"
+                        ? "Deep Search starten (Enter)"
+                        : sendAction === "fork"
+                          ? "Session forken (Enter)"
+                          : "Senden (Enter)"
                 }
                 aria-label={
-                  isWorking
-                    ? input.trim() || pendingAttachments.length
-                      ? "In Warteschlange"
-                      : "Antwort stoppen"
-                    : sendAction === "deep-search"
-                      ? "Deep Search starten"
-                      : sendAction === "fork"
-                        ? "Fork starten"
-                        : "Senden"
+                  showStuffed
+                    ? "Glyph got lost… in space — Antwort stoppen"
+                    : isWorking
+                      ? input.trim() || pendingAttachments.length
+                        ? "In Warteschlange"
+                        : "Antwort stoppen"
+                      : sendAction === "deep-search"
+                        ? "Deep Search starten"
+                        : sendAction === "fork"
+                          ? "Fork starten"
+                          : "Senden"
                 }
-                aria-live={isWorking ? "polite" : undefined}
+                aria-live={showWorking ? "polite" : undefined}
               >
                 <span className="send-face send-face--enter" aria-hidden="true">
                   <span className="send-icon">↵</span>
                 </span>
                 <span className="send-face send-face--snack" aria-hidden="true">
-                  {(isWorking || snackAlive) && (
+                  {(showWorking || snackAlive) && (
                     <span className="send-snack">
                       <SnackBoard
-                        running={isWorking || snackAlive}
+                        running={showWorking || snackAlive}
+                        stuffed={showStuffed}
                         onStopClick={() => {
+                          if (snackDemo) return;
                           if (!cancelling) void cancelTurn();
                         }}
                       />
