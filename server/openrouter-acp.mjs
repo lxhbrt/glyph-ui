@@ -22,7 +22,7 @@ import { Readable, Writable } from "node:stream";
 const OPENROUTER_URL = process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1";
 // Standard-Modell: DeepSeek V3 (gut im Preis-Leistungs-Verhältnis, offen).
 // Überschreibbar z.B. mit "anthropic/claude-3.5-sonnet" oder "meta-llama/llama-3.3-70b-instruct".
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-chat";
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-5.6-luna-pro";
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const PROTOCOL_VERSION = acp.PROTOCOL_VERSION;
 
