@@ -1498,7 +1498,8 @@ export default function App() {
    */
   const caps = agent?.capabilities;
   const canDeepSearch = caps ? Boolean(caps.deepSearch) : true;
-  const canBrowseSessions = caps ? Boolean(caps.sessions) : true;
+  // Session-Lupe (persistent) nur bei sessionList:true (Grok); Aktivität nur bei activity:true.
+  const canBrowseSessions = caps ? Boolean(caps.sessionList) : true;
   const canSeeActivity = caps ? Boolean(caps.activity) : true;
   const agentLabel = agent?.label || "Agent";
   const unavailableFor = useCallback(

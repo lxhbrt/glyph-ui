@@ -89,6 +89,17 @@ app.onRequest(acp.methods.agent.session.list, async () => ({
   })),
 }));
 
+// --- session/history (custom): aktiver In-Memory-Verlauf für Summarize ---
+app.onRequest("session.history", async ({ params }) => {
+  const store = sessions.get(params.sessionId);
+  if (!store) {
+    const err = new Error(`Unbekannte oder beendete Session: ${params.sessionId}`);
+    err.code = -32602;
+    throw err;
+  }
+  return { sessionId: params.sessionId, messages: store.messages || [] };
+});
+
 app.onRequest(acp.methods.agent.session.close, async ({ params }) => {
   sessions.delete(params.sessionId);
   return {};

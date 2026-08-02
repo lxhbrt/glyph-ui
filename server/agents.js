@@ -100,7 +100,12 @@ export function resolveClaudeCommand(env = process.env) {
  * @property {string[]} args
  * @property {string} [via]
  * @property {string} [hint]
- * @property {{ deepSearch: boolean, sessions: boolean, activity: boolean }} capabilities
+ * @property {{ deepSearch: boolean, activity: boolean, sessionList: boolean, sessionHistory: boolean, summarize: boolean }} capabilities
+ *   - deepSearch     : Grok-only Multi-Quellen-Recherche
+ *   - activity       : Aktivitäts-Kalender (liest ~/.grok/events.jsonl)
+ *   - sessionList    : persistente Session-Liste (nur grok, ~/.grok/sessions)
+ *   - sessionHistory : aktiver In-Memory-Verlauf der aktuellen Session (über ACP session/history)
+ *   - summarize      : Session-Zusammenfassung möglich (braucht sessionHistory)
  */
 
 /**
@@ -119,7 +124,7 @@ export function buildAgentProfiles(env = process.env) {
       // Match TUI default: no --reasoning-effort override (model default).
       args: ["agent", "--always-approve", "--no-leader", "stdio"],
       via: "bin",
-      capabilities: { deepSearch: true, sessions: true, activity: true },
+      capabilities: { deepSearch: true, activity: true, sessionList: true, sessionHistory: true, summarize: true },
     },
     {
       id: "claude",
@@ -130,7 +135,7 @@ export function buildAgentProfiles(env = process.env) {
       // Sessions/activity read ~/.grok/sessions directly; Claude keeps its
       // own store under ~/.claude/projects, so those views stay grok-only.
       hint: "Sitzungen liegen unter ~/.claude/projects — in Glyph nicht gelistet",
-      capabilities: { deepSearch: false, sessions: false, activity: false },
+      capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: false, summarize: false },
     },
     {
       id: "glyph-agent",
@@ -139,7 +144,8 @@ export function buildAgentProfiles(env = process.env) {
       args: [GLYPH_AGENT_ACP_FILE], // dünne Brücke zu glyph-agent (Tools: Vault, Recherche)
       via: "bin",
       hint: "Lokaler Agent (glyph-agent): Vault-Suche, Notizen lesen/bearbeiten (Diff+Backup), Web-Recherche. Braucht den lokalen Dienst (server.py) auf 127.0.0.1:18899.",
-      capabilities: { deepSearch: false, sessions: false, activity: false },
+      // Kein persistentes Session-Listing, aber aktiver In-Memory-Verlauf (session/history) → summarize.
+      capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
     {
       id: "openrouter",
@@ -150,7 +156,8 @@ export function buildAgentProfiles(env = process.env) {
       // API-Key immer (auch leer) über die Prozess-Umgebung an den Adapter durchreichen.
       env: { OPENROUTER_API_KEY: openrouterKey },
       hint: "Cloud-Modelle via OpenRouter (Fallback für Grok/Claude-Kontingent). Chat nur.",
-      capabilities: { deepSearch: false, sessions: false, activity: false },
+      // Kein persistentes Session-Listing, aber aktiver In-Memory-Verlauf (session/history) → summarize.
+      capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
   ];
 }

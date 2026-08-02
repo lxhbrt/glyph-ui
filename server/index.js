@@ -1235,6 +1235,31 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
   }
 });
 
+/**
+ * Aktiven In-Memory-Verlauf einer Session abrufen (Option A: ACP session/history).
+ * Kein serverseitiger Puffer; der Adapter liefert store.messages. Klare Antwort,
+ * wenn die Session beendet/nicht vorhanden oder der Adapter kein history unterstützt.
+ */
+app.get("/api/sessions/:id/history", async (req, res) => {
+  try {
+    if (!isSessionId(req.params.id)) {
+      res.status(400).json({ error: "Ungültige Session-ID" });
+      return;
+    }
+    if (!bridge || !bridge.connected) {
+      res.status(503).json({ error: "Kein aktiver Agent verbunden" });
+      return;
+    }
+    const result = await bridge.getSessionHistory(req.params.id);
+    const messages = Array.isArray(result?.messages) ? result.messages : [];
+    res.json({ ok: true, sessionId: req.params.id, messages });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const status = /unbekannte|beendet|nicht.*support|unknown/i.test(msg) ? 404 : 500;
+    res.status(status).json({ error: msg });
+  }
+});
+
 /** Tool kinds that should finish cleanly rather than hard-abort mid-flight. */
 const CRITICAL_TOOL_KINDS = new Set(["edit", "delete", "move", "execute"]);
 class GrokBridge {
@@ -1650,6 +1675,20 @@ class GrokBridge {
     this.sessionId = result.sessionId;
     // New ACP session → drop prior plan (not part of the new turn)
     this.clearPlan({ broadcast: true });
+    return result;
+  }
+
+  /**
+   * Aktiven In-Memory-Verlauf einer Session über die custom ACP-Methode
+   * session/history abrufen (kein serverseitiger Puffer; der Adapter besitzt
+   * den Verlauf). Liefert { messages: [...] } oder wirft bei unbekannter Session.
+   */
+  async getSessionHistory(sessionId) {
+    if (!this.connection) throw new Error("Keine Adapter-Verbindung.");
+    const result = await this.connection.agent.request(
+      "session.history",
+      { sessionId },
+    );
     return result;
   }
 
