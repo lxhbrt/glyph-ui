@@ -72,7 +72,6 @@ import {
   getWikiRoot as getSummaryWikiRoot,
   renderSummaryDocument,
   resolveTargetPath,
-  resolveSummariesDir,
   writeSummaryAtomically,
 } from "./summaries.js";
 import {
@@ -1745,6 +1744,15 @@ class GrokBridge {
     if (kind === "agent_message_chunk") {
       const text = update.content?.text || update.text || "";
       if (text) this.broadcast({ type: "assistant_chunk", text });
+      return;
+    }
+    // agent_message_complete: effektiven Trace (falls vom glyph-agent-Adapter geliefert)
+    // an die UI senden, damit Provider/Modell/Tool-Status aus dem ECHTEN Server stammen.
+    if (kind === "agent_message_complete") {
+      const metaTrace = update.message?.metadata?.trace;
+      if (metaTrace && typeof metaTrace === "object") {
+        this.broadcast({ type: "assistant_meta", trace: metaTrace });
+      }
       return;
     }
     if (kind === "agent_thought_chunk") {

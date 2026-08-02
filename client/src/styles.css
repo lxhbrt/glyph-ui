@@ -2942,3 +2942,51 @@ button.cal-cell {
   font-size: 11px;
   opacity: 0.8;
 }
+
+/* ---------- AssistantMeta (kompakte Modell-/Provider-Statuszeile) ---------- */
+.assistant-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+.assistant-meta-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg, #131316);
+  border: 1px solid var(--line, #333);
+  border-radius: 8px;
+  padding: 4px 8px;
+  color: var(--fg, #eee);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.assistant-meta-line:hover { border-color: var(--accent, #3d7fff); }
+.assistant-meta-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent, #3d7fff);
+  display: inline-block;
+}
+.assistant-meta-toggle { opacity: 0.6; margin-left: 4px; }
+.assistant-meta-details {
+  margin-top: 6px;
+  background: var(--bg, #0f0f0f);
+  border: 1px solid var(--line, #333);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.assistant-meta-details summary {
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.assistant-meta-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+.assistant-meta-list li { margin: 1px 0; }
+.assistant-meta-list ul { padding-left: 14px; }

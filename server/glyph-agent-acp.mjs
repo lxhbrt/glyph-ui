@@ -156,13 +156,23 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     // Antwort als Chunks nach Glyph streamen
     await streamChunks(answer, client, sessionId);
 
-    // Abschluss als finales Ergebnis signalisieren
+    // Abschluss als finales Ergebnis signalisieren (inkl. effektivem Server-Trace als
+    // Metadaten, damit die UI Provider/Modell/Tool-Status aus dem ECHTEN Server anzeigt,
+    // nicht aus der UI-Konfiguration).
     try {
+      const meta = {};
+      if (data && typeof data.trace === "object" && data.trace !== null) {
+        meta.trace = data.trace;
+      }
       await client.notify(acp.methods.client.session.update, {
         sessionId,
         update: {
           sessionUpdate: "agent_message_complete",
-          message: { role: "assistant", content: [{ type: "text", text: answer }] },
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: answer }],
+            ...(Object.keys(meta).length ? { metadata: meta } : {}),
+          },
         },
       });
     } catch (e) {

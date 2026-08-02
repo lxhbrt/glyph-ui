@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkdownBody } from "./components/MarkdownBody.jsx";
+import { AssistantMeta } from "./components/AssistantMeta.jsx";
 import { PlanBar } from "./components/PlanBar.jsx";
 import { SnackBoard, SnackScrollbar } from "./components/Snack.jsx";
 import { CommandLegend } from "./components/CommandLegend.jsx";
@@ -62,6 +63,8 @@ export default function App() {
   const busyRef = useRef(false);
   const streamingRef = useRef(false);
   const drainTimerRef = useRef(null);
+  /** Effektiver Server-Trace für die letzte Antwort (Provider/Modell/Tool-Status). */
+  const traceRef = useRef(null);
   const drainingRef = useRef(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -669,10 +672,15 @@ export default function App() {
   const finalizeStreaming = useCallback(() => {
     streamingRef.current = false;
     setMessages((prev) =>
-      prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)),
+      prev.map((m) =>
+        m.streaming
+          ? { ...m, streaming: false, ...(traceRef.current ? { trace: traceRef.current } : {}) }
+          : m,
+      ),
     );
     assistantBuf.current = "";
     thoughtBuf.current = "";
+    traceRef.current = null; // Trace nur an die letzte Message anhängen
   }, []);
 
   /**
@@ -816,6 +824,14 @@ export default function App() {
           if (wasBusy && !nextBusy && !msg.cancelling) {
             setCancelling(false);
             scheduleDrainQueue();
+          }
+          return;
+        }
+
+        if (msg.type === "assistant_meta") {
+          // Effektiver Server-Trace (Provider/Modell/Tool-Status) für die letzte Antwort.
+          if (msg.trace && typeof msg.trace === "object") {
+            traceRef.current = msg.trace;
           }
           return;
         }
@@ -2032,6 +2048,7 @@ export default function App() {
                       </ul>
                     ) : null}
                     {m.text ? <MarkdownBody text={m.text} /> : null}
+                    {m.trace ? <AssistantMeta trace={m.trace} /> : null}
                   </article>
                 ))
               )}
