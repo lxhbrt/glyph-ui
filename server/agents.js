@@ -213,3 +213,24 @@ export function publicAgents(profiles) {
   if (!Array.isArray(profiles)) return [];
   return profiles.map((p) => publicAgent(p)).filter(Boolean);
 }
+
+/**
+ * Kanonische Einstiegs-Ableitung für Summarize (ein zentraler Ort, von App.jsx/
+ * CommandOverview genutzt und hier unit-getestet).
+ *
+ * @param {{id:string, capabilities?:object} | null | undefined} profile
+ * @returns {{ lupeSummarize: boolean, activeSession: boolean }}
+ */
+export function summarizeCapabilities(profile) {
+  const c = profile?.capabilities || {};
+  const sessionHistory = Boolean(c.sessionHistory);
+  const summarize = Boolean(c.summarize);
+  const sessionList = Boolean(c.sessionList);
+  return {
+    // Lupe (persistente Session-Liste) braucht List + History + Summarize → nur Grok.
+    lupeSummarize: sessionList && sessionHistory && summarize,
+    // Aktiver In-Memory-Chat (openrouter/glyph-agent): History + Summarize, ohne List.
+    activeSession: sessionHistory && summarize,
+  };
+}
+
