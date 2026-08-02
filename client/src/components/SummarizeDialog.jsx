@@ -8,7 +8,7 @@
  *
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const PROFILES = [
   { id: "glyph-agent", label: "Glyph-Agent (lokal)" },

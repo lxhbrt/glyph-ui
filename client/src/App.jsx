@@ -2342,6 +2342,7 @@ export default function App() {
         open={showOverview}
         onClose={() => setShowOverview(false)}
         onOpenSession={handleOpenSession}
+        canSummarize={canBrowseSessions}
       />
       <ActivityCalendar
         open={showCalendar}

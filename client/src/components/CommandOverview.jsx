@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatWhen } from "../utils/format.js";
 import { SummarizeDialog } from "./SummarizeDialog.jsx";
 
-function CommandOverview({ open, onClose, onOpenSession }) {
+function CommandOverview({ open, onClose, onOpenSession, canSummarize = false }) {
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
@@ -376,20 +376,22 @@ function CommandOverview({ open, onClose, onOpenSession }) {
                         >
                           Öffnen
                         </button>
-                        <button
-                          type="button"
-                          disabled={opening || isActive || s.empty || !s.chatMessages}
-                          title={
-                            s.empty || !s.chatMessages
-                              ? "Session ohne Nachrichten — Zusammenfassung nicht möglich"
-                              : isActive
-                                ? "Aktive Session geschützt — erst Stift (Neuer Chat)"
-                                : "Session zusammenfassen (Vorschau → Bestätigen)"
-                          }
-                          onClick={() => setSummaryTarget({ id: s.id, title: s.title || "Session" })}
-                        >
-                          Zusammenfassen
-                        </button>
+                        {canSummarize && (
+                          <button
+                            type="button"
+                            disabled={opening || isActive || s.empty || !s.chatMessages}
+                            title={
+                              s.empty || !s.chatMessages
+                                ? "Session ohne Nachrichten — Zusammenfassung nicht möglich"
+                                : isActive
+                                  ? "Aktive Session geschützt — erst Stift (Neuer Chat)"
+                                  : "Session zusammenfassen (Vorschau → Bestätigen)"
+                            }
+                            onClick={() => setSummaryTarget({ id: s.id, title: s.title || "Session" })}
+                          >
+                            Zusammenfassen
+                          </button>
+                        )}
                         <button
                           type="button"
                           disabled={closingId === s.id || isActive || opening}
