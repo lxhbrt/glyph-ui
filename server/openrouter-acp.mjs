@@ -17,6 +17,7 @@
  */
 import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
+import { buildPromptWithAttachments } from "../shared/attachments.mjs";
 
 // --- Konfiguration (per Env überschreibbar) ---
 const OPENROUTER_URL = process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1";
@@ -42,18 +43,6 @@ function toOpenAIRole(acpRole) {
   return "user";
 }
 
-// Hilfer: ContentBlocks einer ACP-Prompt-Anfrage -> Text sammeln
-function blocksToText(contentBlocks, role) {
-  if (!Array.isArray(contentBlocks)) return "";
-  const parts = [];
-  for (const block of contentBlocks) {
-    if (block && block.type === "text" && typeof block.text === "string") {
-      parts.push(block.text);
-    }
-  }
-  return parts.join("\n").trim();
-}
-
 // --- Agent-App aufbauen ---
 const app = acp.agent({ name: "openrouter" });
 
@@ -61,14 +50,17 @@ app.onRequest(acp.methods.agent.initialize, async () => {
   return {
     protocolVersion: PROTOCOL_VERSION,
     agentCapabilities: {
-      // Nur Chat (session/prompt). Kein loadSession/Attachments/Plans.
+      // Reiner Chat; Textanhänge (Stufe 1) werden vom Adapter verarbeitet.
       loadSession: false,
-      promptCapabilities: {},
+      promptCapabilities: {
+        attachments: true,
+        text: true,
+      },
       sessionCapabilities: {},
     },
     agentInfo: {
       name: "openrouter",
-      version: "0.1.0",
+      version: "0.2.0",
     },
   };
 });
@@ -141,8 +133,10 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     throw err;
   }
 
-  // Nutzer-Text aus ContentBlocks extrahieren (ACP-Protokoll-Feld: prompt)
-  const userText = blocksToText(params.prompt, "user");
+  // Nutzer-Text + Textanhänge aus ContentBlocks extrahieren (Stufe 1).
+  // Anhänge werden deutlich gekennzeichnet in message eingebettet.
+  const built = await buildPromptWithAttachments(params.prompt);
+  const userText = built.message;
 
   // Neue Nutzer-Nachricht anhängen
   store.messages.push({ role: "user", content: userText });

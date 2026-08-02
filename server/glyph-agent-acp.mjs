@@ -15,6 +15,7 @@
  */
 import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
+import { buildPromptWithAttachments } from "../shared/attachments.mjs";
 
 // glyph-agent HTTP-Dienst (Standard wie in server.py)
 const AGENT_URL = process.env.GLYPH_AGENT_URL || "http://127.0.0.1:18899";
@@ -25,17 +26,6 @@ const PROTOCOL_VERSION = acp.PROTOCOL_VERSION;
 const sessions = new Map();
 let sessionCounter = 0;
 const newSessionId = () => `glyph-agent-${++sessionCounter}`;
-
-function blocksToText(contentBlocks) {
-  if (!Array.isArray(contentBlocks)) return "";
-  const parts = [];
-  for (const block of contentBlocks) {
-    if (block && block.type === "text" && typeof block.text === "string") {
-      parts.push(block.text);
-    }
-  }
-  return parts.join("\n").trim();
-}
 
 function streamChunks(text, client, sessionId, chunkSize = 400) {
   // Zerlegt die Antwort in Chunks und sendet sie als agent_message_chunk,
@@ -69,10 +59,15 @@ app.onRequest(acp.methods.agent.initialize, async () => ({
   protocolVersion: PROTOCOL_VERSION,
   agentCapabilities: {
     loadSession: false,
-    promptCapabilities: {},
+    promptCapabilities: {
+      // Stufe 1: Textanhänge werden vom Adapter verarbeitet (embedded_resource,
+      // resource_link). Bilder folgen als multimodale Stufe 2.
+      attachments: true,
+      text: true,
+    },
     sessionCapabilities: {},
   },
-  agentInfo: { name: "glyph-agent", version: "0.2.0" },
+  agentInfo: { name: "glyph-agent", version: "0.2.1" },
 }));
 
 app.onRequest(acp.methods.agent.authenticate, async () => ({}));
@@ -115,8 +110,10 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     throw err;
   }
 
-  const userText = blocksToText(params.prompt);
-  store.messages.push({ role: "user", content: userText });
+  // Text + Textanhänge aus ACP-Blöcken extrahieren (Stufe 1).
+  // Bilder/Binär => Hinweis im skips (keine stille Verwerfung).
+  const built = await buildPromptWithAttachments(params.prompt || []);
+  store.messages.push({ role: "user", content: built.message });
 
   const abortController = new AbortController();
   const onAbort = () => abortController.abort();
@@ -126,7 +123,10 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     const resp = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: userText }),
+      body: JSON.stringify({
+        message: built.message,
+        attachments: built.attachments,
+      }),
       signal: abortController.signal,
     });
     if (!resp.ok) {
