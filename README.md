@@ -1,6 +1,6 @@
 # Glyph
 
-**Build Term for Grok** — unabhängige Browser-UI für die lokale **Grok Build**-CLI über ACP (Agent Client Protocol).
+**Build Term for Grok** — unabhängige Browser-UI für lokale Agenten über ACP (Agent Client Protocol).
 
 **Erstellt von [Lx Hbrt](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
 
@@ -9,13 +9,15 @@
 **Anwendungshandbuch (DE):** [HANDBUCH.md](./HANDBUCH.md)
 
 ```
-Browser (React)  --WebSocket-->  Node Bridge  --stdio ACP-->  grok agent
+Browser (React)  --WebSocket-->  Node Bridge  --stdio ACP-->  Agent-Profil
+                                                               (grok | claude | openrouter | glyph-agent)
 ```
 
 ## Voraussetzungen
 
 - Node.js 22+
-- [`grok`](https://x.ai) im PATH und eingeloggt (`grok login` / vorhandenes `~/.grok/auth.json`)
+- [`grok`](https://x.ai) im PATH und eingeloggt (`grok login` / vorhandenes `~/.grok/auth.json`) — nur für das **grok**-Profil
+- Andere Profile nach Bedarf (siehe [Agent-Profile](#agent-profile--glyph-agent))
 
 ## Installation
 
@@ -89,6 +91,30 @@ Auf `main` und bei Pull Requests läuft dasselbe über GitHub Actions (Node 22 �
 
 Details: [HANDBUCH.md](./HANDBUCH.md)
 
+## Agent-Profile & glyph-agent
+
+Glyph ist ein **ACP-Client** (kein Modell-Client): Das aktive Profil spawnet ein anderes
+Binary/adapter, statt auf eine andere API zu zeigen. Profile in `server/agents.js`,
+Auswahl in der UI (Header), Start-Profil via `GLYPH_AGENT` (Default `grok`).
+
+| Profil | Spawnt | Hinweis |
+|--------|--------|---------|
+| **grok** (Default) | `grok agent --always-approve --no-leader stdio` | Volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
+| **claude** | `claude-agent-acp` (od. `npx …`) | Sessions unter `~/.claude/projects` (nicht in Glyph gelistet) |
+| **openrouter** | `node server/openrouter-acp.mjs` | `OPENROUTER_API_KEY`; Cloud-Modelle zum Testen/Anbinden |
+| **glyph-agent** | `node server/glyph-agent-acp.mjs` | Dünne Brücke zum lokalen glyph-agent-Dienst |
+
+**glyph-agent** (separate Codebasis `~/glyph-agent/`) ist die lokale Tool-/Recherche-Schicht:
+HTTP-Dienst (`server.py`, localhost**:18899**) mit kontrolliertem Tool-Loop, lokalem Modell-
+Adapter (Qwen, austauschbar) und Vault-/Recherche-Tools. Die Brücke `server/glyph-agent-acp.mjs`
+übersetzt ACP ↔ HTTP und streamt die Antwort als Chunks zurück.
+
+- **Vault intern:** Lesen (`VaultSearch`, `ReadNote`) · Schreiben (`CreateNote`, `ProposeEdit`/Diff, `ApplyEdit`) nur mit Bestätigung
+- **Recherche extern:** `WebSearch` (Exa) — getrennt von internen Daten
+
+Voraussetzung: lokalen Dienst starten → `cd ~/glyph-agent && python server.py`, prüfen mit
+`curl http://127.0.0.1:18899/health` (→ `ok`).
+
 ## UI-Design (Grok Chat Stil)
 
 | Element | Look |
@@ -112,6 +138,9 @@ Wichtige Variablen:
 | `HOST` | `127.0.0.1` | Bind-Adresse |
 | `GLYPH_UI_CWD` | Home-Verzeichnis | Workspace für `session/new` |
 | `GROK_BIN` | `grok` | Pfad zur Grok-CLI |
+| `GLYPH_AGENT` | `grok` | Agent-Profil beim Start (grok \| claude \| openrouter \| glyph-agent) |
+| `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil glyph-agent) |
+| `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für glyph-agent-Antwort |
 | `XAI_API_KEY` | — | Voice (STT/TTS) — [console.x.ai](https://console.x.ai) |
 
 Beispiel:
@@ -124,7 +153,8 @@ GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 
 | Pfad | Rolle |
 |------|--------|
-| `server/` | Express + WebSocket-Bridge, spawnt `grok agent` (ACP stdio) |
+| `server/` | Express + WebSocket-Bridge, spawnt das aktive Agent-Profil (ACP stdio) |
+| `server/agents.js` | Agent-Profile (grok, claude, openrouter, glyph-agent) + Auflösung |
 | `client/` | Vite + React Chat-UI |
 | `scripts/` | macOS LaunchAgent, Dock-Icon |
 | `assets/` | App-Icons |

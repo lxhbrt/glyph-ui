@@ -7,7 +7,8 @@ Du schreibst im Browser; im Hintergrund läuft der echte Grok-Agent auf deinem M
 *Inoffiziell / unabhängig — nicht von xAI unterstützt oder freigegeben.*
 
 ```
-Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►  grok agent
+Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►  Agent-Profil
+                                                              (grok | claude | openrouter | glyph-agent)
 ```
 
 ---
@@ -342,6 +343,9 @@ In der App: Symbol **Befehle** (filterbare Legende).
 | `GLYPH_UI_CWD` | Startverzeichnis | Workspace für neue Sessions |
 | `GROK_BIN` | `grok` | Pfad zur CLI |
 | `GROK_HOME` | `~/.grok` | Sessions & Auth |
+| `GLYPH_AGENT` | `grok` | Agent-Profil beim Start (grok \| claude \| openrouter \| glyph-agent) |
+| `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil glyph-agent) |
+| `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für glyph-agent-Antwort |
 | `OPENCLAW_WIKI_PATH` | `~/.glyph-ui/wiki` | Wiki-Archiv (optional Obsidian-Vault o. Ä.) |
 | `GLYPH_UI_STATE_DIR` | `~/.glyph-ui` | UI-State (z. B. Closed-Log) |
 
@@ -403,10 +407,68 @@ Diagnose im TUI: **`/doctor`**.
 | Teil | Rolle |
 |------|--------|
 | `client/` | React-UI (Vite) |
-| `server/index.js` | Express + WebSocket, spawnt `grok agent … stdio`, ACP-Bridge |
+| `server/index.js` | Express + WebSocket, spawnt das aktive Agent-Profil … stdio, ACP-Bridge |
+| `server/agents.js` | Agent-Profile (grok, claude, openrouter, glyph-agent) + Auflösung |
 | `server/sessions.js` | Session-Liste, Close, Transcript |
 | `server/activity.js` | Heatmap aus `events.jsonl` |
 | `server/wiki-archive.js` | Wiki-Seiten beim Schließen |
+
+Glyph ist ein **ACP-Client**, kein Modell-Client: Ein Profil zu wechseln bedeutet, ein anderes
+Binary/den anderen Adapter zu spawnen (nicht auf eine andere API zu zeigen). Alles, was über ACP
+fließt (Chat, Thoughts, Tools, Pläne, Anhänge, Fork), funktioniert profilunabhängig; Grok-spezifische
+Extras (Sessions, Deep Search) sind pro Profil deklariert, damit die UI sie ausgraut statt zur
+Laufzeit zu scheitern.
+
+---
+
+## 15b. Agent-Profile & glyph-agent
+
+Glyph kennt mehrere **Agent-Profile** (Auswahl üblicherweise oben in der Status-/Header-Zeile).
+Aktives Profil wird beim Start aus `GLYPH_AGENT` übernommen (Default: `grok`).
+
+| Profil | Spawnt | Hinweis |
+|--------|--------|---------|
+| **grok** (Default) | `grok agent --always-approve --no-leader stdio` | `GROK_BIN`; volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
+| **claude** | `claude-agent-acp` (oder `npx -y @agentclientprotocol/claude-agent-acp`) | `GLYPH_CLAUDE_BIN`/`GLYPH_CLAUDE_ARGS`; Sessions liegen unter `~/.claude/projects` (in Glyph nicht gelistet) |
+| **openrouter** | `node server/openrouter-acp.mjs` | `OPENROUTER_API_KEY`; Cloud-Modelle verschiedener Anbieter zum Testen/Anbinden |
+| **glyph-agent** | `node server/glyph-agent-acp.mjs` | Lokaler Agent (glyph-agent); Dünne ACP-Brücke zum lokalen Dienst auf `127.0.0.1:18899` |
+
+### glyph-agent (lokale Tool-/Recherche-Schicht)
+
+Das Profil **glyph-agent** verbindet Glyph mit der separaten **glyph-agent**-Codebasis
+(`~/glyph-agent/`): ein lokaler HTTP-Dienst (`server.py`, Port **18899**, localhost-only) mit
+kontrolliertem Tool-Loop. Es führt einen **Lokal-Modell-Adapter** (heute Qwen, austauschbar
+z. B. MLX) und eine Tool-Schicht für den Obsidian-Vault und die Recherche.
+
+Dünne Brücke (`glyph-agent-acp.mjs`) — **keine Agentenlogik**: Sie übersetzt ACP ↔ HTTP und
+streamt die Antwort als Text-Chunks zurück an Glyph. Modell und Tool-Schicht bleiben in
+`glyph-agent` gekapselt.
+
+**Fähigkeiten (Tool-Schicht):**
+
+| Bereich | Tools | Zugriff |
+|---------|-------|---------|
+| **Vault intern** | VaultSearch, ReadNote | Lesen ✅ (Vault-Daten bleiben intern) |
+| **Vault schreiben** | CreateNote, ProposeEdit (Diff), ApplyEdit | Nur mit Bestätigung ✅ |
+| **Recherche extern** | Summarize, WebSearch (Exa) | Normale Informationseinholung — getrennt von internen Daten |
+
+**Voraussetzung:** Der lokale Dienst muss laufen, sonst antwortet das Profil mit
+`glyph-agent HTTP <code>` anstelle einer Antwort:
+
+```bash
+cd ~/glyph-agent && python server.py   # POST /chat, GET /health auf 127.0.0.1:18899
+curl http://127.0.0.1:18899/health    # → ok
+```
+
+**HTTP-Schnittstelle:** `POST /chat` `{"message": "…"}` → `{"answer": "…"}` · `GET /health`.
+Nur localhost gebunden; keine Internet-Exposition.
+
+**Umgebungsvariablen (Adapter):**
+
+| Variable | Default | Bedeutung |
+|----------|---------|-----------|
+| `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst |
+| `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für die Antwort |
 
 ---
 
@@ -414,6 +476,8 @@ Diagnose im TUI: **`/doctor`**.
 
 - [ ] `grok` eingeloggt  
 - [ ] UI offen, Status **verbunden**  
+- [ ] Aktives Profil passt (Header / `GLYPH_AGENT`)  
+- [ ] glyph-agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
 - [ ] Workspace passt (Header-Pfad / `GLYPH_UI_CWD`)  
 - [ ] Enter = senden, Shift+Enter = Zeile  
 - [ ] Während Arbeit: Text → Queue, leer → Stop  

@@ -1240,9 +1240,16 @@ class GrokBridge {
     }
 
     // Binary + args come from the active profile (see server/agents.js).
+    // env: Profile-spezifische Env-Variablen (z.B. OPENROUTER_API_KEY) auf
+    // process.env legen; profile.env überschreibt bei Kollision.
     const profile = this.agentProfile();
+    const childEnv = {
+      ...process.env,
+      NO_COLOR: "1",
+      ...(profile.env || {}),
+    };
     const child = spawn(profile.bin, profile.args, {
-      env: { ...process.env, NO_COLOR: "1" },
+      env: childEnv,
       stdio: ["pipe", "pipe", "pipe"],
       cwd: WORK_CWD,
     });

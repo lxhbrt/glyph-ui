@@ -263,6 +263,12 @@ export async function listVoices() {
 function mapVoiceError(status, body, kind) {
   const lower = String(body || "").toLowerCase();
   if (status === 401 || status === 403) {
+    // 403 mit Kredit-/Limit-Hinweis ist KEIN Key-Problem:
+    // xAI lehnt ab, weil das Konto kein Guthaben hat oder das
+    // monatliche Spending-Limit erreicht ist (console.x.ai → Billing).
+    if (status === 403 && (lower.includes("credits") || lower.includes("spending limit") || lower.includes("billing") || lower.includes("payment"))) {
+      return `${kind}: xAI-Konto ohne Guthaben oder Spending-Limit erreicht. Lade Guthaben auf oder erhöhe das Limit in console.x.ai (Billing). Der Key selbst ist gültig.`;
+    }
     if (cachedKey?.source === "grok-auth.json") {
       return `${kind}: Login-Token hat keine Voice-Rechte. Setze XAI_API_KEY aus der Console (console.x.ai).`;
     }

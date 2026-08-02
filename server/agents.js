@@ -13,6 +13,12 @@
 
 import { accessSync, constants } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Absoluter Pfad zur glyph-agent-ACP-Brücke (Tool-/Recherche-Schicht).
+const GLYPH_AGENT_ACP_FILE = fileURLToPath(new URL("./glyph-agent-acp.mjs", import.meta.url));
+// Absoluter Pfad zur OpenRouter-ACP-Adapter-Datei.
+const OPENROUTER_ACP_FILE = fileURLToPath(new URL("./openrouter-acp.mjs", import.meta.url));
 
 export const DEFAULT_AGENT_ID = "grok";
 
@@ -103,6 +109,8 @@ export function resolveClaudeCommand(env = process.env) {
  */
 export function buildAgentProfiles(env = process.env) {
   const claude = resolveClaudeCommand(env);
+  // OpenRouter-Key aus der Prozess-Umgebung (kann auch leer sein).
+  const openrouterKey = String(env.OPENROUTER_API_KEY || "");
   return [
     {
       id: "grok",
@@ -122,6 +130,26 @@ export function buildAgentProfiles(env = process.env) {
       // Sessions/activity read ~/.grok/sessions directly; Claude keeps its
       // own store under ~/.claude/projects, so those views stay grok-only.
       hint: "Sitzungen liegen unter ~/.claude/projects — in Glyph nicht gelistet",
+      capabilities: { deepSearch: false, sessions: false, activity: false },
+    },
+    {
+      id: "glyph-agent",
+      label: "glyph-agent",
+      bin: process.execPath,
+      args: [GLYPH_AGENT_ACP_FILE], // dünne Brücke zu glyph-agent (Tools: Vault, Recherche)
+      via: "bin",
+      hint: "Lokaler Agent (glyph-agent): Vault-Suche, Notizen lesen/bearbeiten (Diff+Backup), Web-Recherche. Braucht den lokalen Dienst (server.py) auf 127.0.0.1:18899.",
+      capabilities: { deepSearch: false, sessions: false, activity: false },
+    },
+    {
+      id: "openrouter",
+      label: "OpenRouter",
+      bin: process.execPath,
+      args: [OPENROUTER_ACP_FILE],
+      via: "bin",
+      // API-Key immer (auch leer) über die Prozess-Umgebung an den Adapter durchreichen.
+      env: { OPENROUTER_API_KEY: openrouterKey },
+      hint: "Cloud-Modelle via OpenRouter (Fallback für Grok/Claude-Kontingent). Chat nur.",
       capabilities: { deepSearch: false, sessions: false, activity: false },
     },
   ];
