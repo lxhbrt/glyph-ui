@@ -160,7 +160,9 @@ function SummarizeDialog({ sessionId, sessionTitle, onClose, onSaved }) {
 
           {loading && <p className="summarize-status">Erzeuge Entwurf…</p>}
 
-          {error && <p className="summarize-error">{error}</p>}
+          {error ? (
+            <p className="summarize-error"><b>Konnte keinen Entwurf erzeugen:</b> {error}</p>
+          ) : null}
 
           {saved && (
             <p className="summarize-success">
@@ -168,7 +170,7 @@ function SummarizeDialog({ sessionId, sessionTitle, onClose, onSaved }) {
             </p>
           )}
 
-          {!loading && draft && !saved && (
+          {!loading && draft && !saved && !error && (
             <div className="summarize-preview">
               {external && (
                 <div className="summarize-external-warning">
@@ -203,9 +205,9 @@ function SummarizeDialog({ sessionId, sessionTitle, onClose, onSaved }) {
                 </div>
               ) : (
                 <div className="summarize-rendered">
-                  <h4>{draft.title}</h4>
-                  <p>{draft.summary}</p>
-                  {Array.isArray(draft.decisions) && draft.decisions.length > 0 && (
+                  <h4>{draft?.title}</h4>
+                  <p>{draft?.summary}</p>
+                  {Array.isArray(draft?.decisions) && draft.decisions.length > 0 && (
                     <>
                       <strong>Entscheidungen</strong>
                       <ul>
@@ -215,7 +217,7 @@ function SummarizeDialog({ sessionId, sessionTitle, onClose, onSaved }) {
                       </ul>
                     </>
                   )}
-                  {Array.isArray(draft.next_steps) && draft.next_steps.length > 0 && (
+                  {Array.isArray(draft?.next_steps) && draft.next_steps.length > 0 && (
                     <>
                       <strong>Nächste Schritte</strong>
                       <ul>
