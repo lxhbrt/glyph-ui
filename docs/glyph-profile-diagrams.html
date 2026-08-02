@@ -1,0 +1,279 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Glyph — Agent-Profile: Warum &amp; wie sie funktionieren</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f8fafc;
+    --fg: #172033;
+    --muted: #5b6475;
+    --line: #64748b;
+    --neutral: #e2e8f0;
+    --input: #bfdbfe;
+    --process: #c7d2fe;
+    --storage: #99f6e4;
+    --external: #fde68a;
+    --risk: #fecaca;
+    --ok: #bbf7d0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a;
+      --fg: #e5e7eb;
+      --muted: #a3adbd;
+      --line: #94a3b8;
+      --neutral: #334155;
+      --input: #1d4ed8;
+      --process: #4338ca;
+      --storage: #0f766e;
+      --external: #92400e;
+      --risk: #991b1b;
+      --ok: #14532d;
+    }
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 20px 60px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 17px; margin-top: 44px; border-top: 1px solid var(--line); padding-top: 18px; }
+  .why { background: var(--neutral); border-left: 4px solid var(--line); padding: 10px 14px; border-radius: 0 6px 6px 0; }
+  .why b { display: block; margin-bottom: 2px; }
+  svg { width: 100%; height: auto; display: block; margin: 10px 0; }
+  .title { font-size: 16px; font-weight: 650; fill: var(--fg); }
+  .label { font-size: 13px; font-weight: 600; fill: var(--fg); }
+  .sub { font-size: 11.5px; fill: var(--muted); }
+  .node { stroke: var(--line); stroke-width: 1.2; }
+  .neutral { fill: var(--neutral); }
+  .input { fill: var(--input); }
+  .process { fill: var(--process); }
+  .storage { fill: var(--storage); }
+  .external { fill: var(--external); }
+  .risk { fill: var(--risk); }
+  .ok { fill: var(--ok); }
+  .edge { stroke: var(--line); stroke-width: 1.6; fill: none; }
+  .zone { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 6 5; opacity: 0.75; }
+  tspan.sub { font-size: 11px; }
+</style>
+<main>
+
+  <h1>Glyph — Agent-Profile</h1>
+  <p style="color:var(--muted);margin-top:-8px">Warum die Teile hinzugefügt wurden &amp; wie jedes System funktioniert. Eingebettete SVG-Diagramme (Skalierbar, keine externen Assets, hell/dunkel).</p>
+
+  <!-- ======================================================== -->
+  <!-- 0. STRATEGIE-ÜBERSICHT ================================= -->
+  <h2>0 · Strategie — warum welches Profil</h2>
+  <div class="why"><b>Grundidee</b>Glyph ist ein ACP-Client, kein Modell-Client. Jedes Profil spawnet einen anderen Agenten/Adapter. Die Profile decken bewusst <em>drei verschiedene Bestandsquellen</em> ab, damit nie ein einzelner Anbieter zum Blockierer wird.</div>
+  <svg viewBox="0 0 960 250" role="img" aria-label="Warum welches Profil">
+    <defs>
+      <marker id="a0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/></marker>
+    </defs>
+    <!-- zentrale Glyph -->
+    <rect x="420" y="20" width="120" height="46" rx="8" class="node neutral"/>
+    <text x="480" y="42" text-anchor="middle" class="label">Glyph Browser-UI</text>
+    <text x="480" y="56" text-anchor="middle" class="sub">ACP-Client · localhost</text>
+    <!-- 4 Profile -->
+    <g>
+      <rect x="60" y="150" width="180" height="70" rx="8" class="node external"/>
+      <text x="150" y="176" text-anchor="middle" class="label">grok</text>
+      <text x="150" y="192" text-anchor="middle" class="sub">OAuth-Konto</text>
+      <text x="150" y="206" text-anchor="middle" class="sub">in TUI-Kontingent</text>
+    </g>
+    <g>
+      <rect x="270" y="150" width="180" height="70" rx="8" class="node external"/>
+      <text x="360" y="176" text-anchor="middle" class="label">claude</text>
+      <text x="360" y="192" text-anchor="middle" class="sub">OAuth-Konto</text>
+      <text x="360" y="206" text-anchor="middle" class="sub">in Anthropic-Kontingent</text>
+    </g>
+    <g>
+      <rect x="480" y="150" width="180" height="70" rx="8" class="node ok"/>
+      <text x="570" y="176" text-anchor="middle" class="label">glyph-agent</text>
+      <text x="570" y="192" text-anchor="middle" class="sub">kostenlos · lokal</text>
+      <text x="570" y="206" text-anchor="middle" class="sub">Qwen auf dem Mac</text>
+    </g>
+    <g>
+      <rect x="690" y="150" width="180" height="70" rx="8" class="node input"/>
+      <text x="780" y="176" text-anchor="middle" class="label">openrouter</text>
+      <text x="780" y="192" text-anchor="middle" class="sub">Token / API-Key</text>
+      <text x="780" y="206" text-anchor="middle" class="sub">viele Cloud-Modelle</text>
+    </g>
+    <!-- Kanten Glyph -> Profile -->
+    <path d="M480 66 L480 120 L150 140" class="edge" marker-end="url(#a0)"/>
+    <path d="M480 66 L480 120 L360 140" class="edge" marker-end="url(#a0)"/>
+    <path d="M480 66 L480 120 L570 140" class="edge" marker-end="url(#a0)"/>
+    <path d="M480 66 L480 120 L780 140" class="edge" marker-end="url(#a0)"/>
+    <!-- Fähigkeiten-Zeile -->
+    <text x="480" y="252" text-anchor="middle" class="sub">Bestandsquellen: OAuth-Konten (grok/claude) · lokal gratis (glyph-agent) · Token-API (openrouter)</text>
+  </svg>
+  <p class="sub">Der Grund für die Mischung: <b>grok</b> &amp; <b>claude</b> = vorhandene OAuth-Logins, kein eigener APIV-Kredit nötig · <b>glyph-agent</b> = läuft komplett ohne Internet/Kosten auf der eigenen Maschine · <b>openrouter</b> = Schlüssel zu beliebigen weiteren Modellen zum Testen/Anbinden.</p>
+
+  <!-- ======================================================== -->
+  <!-- 1. GROK ================================================ -->
+  <h2>1 · grok — OAuth-Ablauf</h2>
+  <div class="why"><b>Warum ergänzt</b>Standard-Profil &amp; UI-Heart: gespeichert unter <code>~/.grok/sessions</code>, volle Fähigkeiten (Sessions, Deep Search, Aktivität) — das TUI-Erlebnis im Browser.</div>
+  <svg viewBox="0 0 960 260" role="img" aria-label="grok Ablauf">
+    <defs>
+      <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/></marker>
+    </defs>
+    <rect x="40" y="40" width="150" height="50" rx="8" class="node input"/>
+    <text x="115" y="63" text-anchor="middle" class="label">Browser-Chat</text>
+    <text x="115" y="77" text-anchor="middle" class="sub">Message/Prompt</text>
+    <rect x="260" y="40" width="180" height="50" rx="8" class="node process"/>
+    <text x="350" y="63" text-anchor="middle" class="label">node server/index.js</text>
+    <text x="350" y="77" text-anchor="middle" class="sub">ACP-Bridge (WebSocket)</text>
+    <rect x="520" y="40" width="170" height="50" rx="8" class="node neutral"/>
+    <text x="605" y="63" text-anchor="middle" class="label">grok agent CLI</text>
+    <text x="605" y="77" text-anchor="middle" class="sub">--always-approve</text>
+    <rect x="760" y="40" width="160" height="50" rx="8" class="node external"/>
+    <text x="840" y="63" text-anchor="middle" class="label">xAI Cloud</text>
+    <text x="840" y="77" text-anchor="middle" class="sub">OAuth / Sitzung</text>
+    <path d="M190 65 L260 65" class="edge" marker-end="url(#a1)"/>
+    <path d="M440 65 L520 65" class="edge" marker-end="url(#a1)"/>
+    <path d="M690 65 L760 65" class="edge" marker-end="url(#a1)"/>
+    <!-- Auth-Pfad unten -->
+    <rect x="520" y="150" width="170" height="52" rx="8" class="node storage"/>
+    <text x="605" y="172" text-anchor="middle" class="label">~/.grok/auth.json</text>
+    <text x="605" y="186" text-anchor="middle" class="sub">grok login (OAuth-Token)</text>
+    <path d="M605 90 L605 150" class="edge" marker-end="url(#a1)"/>
+    <text x="605" y="224" text-anchor="middle" class="sub">Sessions &amp; Aktivität: ~/.grok/sessions → Lupe / Kalender</text>
+  </svg>
+
+  <!-- ======================================================== -->
+  <!-- 2. CLAUDE ============================================== -->
+  <h2>2 · claude — OAuth + ACP-Adapter</h2>
+  <div class="why"><b>Warum ergänzt</b>Zweites OAuth-Konto (neben grok) für den Anthropic-Chat innerhalb des vorhandenen Logins. Sessions liegen unter <code>~/.claude/projects</code> — daher in Glyph <em>nicht</em> in der Session-Liste/Aktivität.</div>
+  <svg viewBox="0 0 960 270" role="img" aria-label="claude Ablauf">
+    <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/></marker></defs>
+    <rect x="40" y="40" width="150" height="50" rx="8" class="node input"/>
+    <text x="115" y="63" text-anchor="middle" class="label">Browser-Chat</text>
+    <text x="115" y="77" text-anchor="middle" class="sub">Message/&#8203;Prompt</text>
+    <rect x="260" y="40" width="170" height="50" rx="8" class="node process"/>
+    <text x="345" y="63" text-anchor="middle" class="label">ACP-Bridge</text>
+    <text x="345" y="77" text-anchor="middle" class="sub">spawnt Profil-CLI</text>
+    <rect x="500" y="40" width="185" height="50" rx="8" class="node neutral"/>
+    <text x="592" y="62" text-anchor="middle" class="label">claude-agent-acp</text>
+    <text x="592" y="76" text-anchor="middle" class="sub">via npx (nicht global)</text>
+    <rect x="755" y="40" width="165" height="50" rx="8" class="node external"/>
+    <text x="837" y="63" text-anchor="middle" class="label">Anthropic Cloud</text>
+    <text x="837" y="77" text-anchor="middle" class="sub">Claude-Modelle</text>
+    <path d="M190 65 L260 65" class="edge" marker-end="url(#a2)"/>
+    <path d="M430 65 L500 65" class="edge" marker-end="url(#a2)"/>
+    <path d="M685 65 L755 65" class="edge" marker-end="url(#a2)"/>
+    <rect x="500" y="150" width="185" height="52" rx="8" class="node storage"/>
+    <text x="592" y="172" text-anchor="middle" class="label">~/.claude/</text>
+    <text x="592" y="186" text-anchor="middle" class="sub">OAuth-Login (claude CLI)</text>
+    <path d="M592 90 L592 150" class="edge" marker-end="url(#a2)"/>
+    <text x="410" y="230" text-anchor="middle" class="sub">Sessions: ~/.claude/projects — in Glyph nicht gelistet (deepSearch/Sessions/Aktivität = aus)</text>
+  </svg>
+  <p class="sub"><b>Hinweis:</b> <code>claude-agent-acp</code> ist aktuell <em>nicht</em> global installiert — das Profil lädt es erst via <code>npx -y</code>. Für Offline-Betrieb oder schnellere Starts: <code>npm i -g @agentclientprotocol/claude-agent-acp</code>.</p>
+
+  <!-- ======================================================== -->
+  <!-- 3. GLYPH-AGENT ========================================= -->
+  <h2>3 · glyph-agent — kostenlos &amp; lokal</h2>
+  <div class="why"><b>Warum ergänzt</b>Eigene Tool-/Recherche-Schicht, die <em>ohne</em> Cloud und <em>ohne</em> Kosten läuft (Qwen auf dem Mac). Ersetzt das frühere Ollama-Profil — es bindet keine externe Infrastruktur an und verarbeitet den Obsidian-Vault intern.</div>
+  <svg viewBox="0 0 960 300" role="img" aria-label="glyph-agent Ablauf">
+    <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/></marker></defs>
+    <rect x="40" y="40" width="150" height="50" rx="8" class="node input"/>
+    <text x="115" y="63" text-anchor="middle" class="label">Browser-Chat</text>
+    <text x="115" y="77" text-anchor="middle" class="sub">Message/&#8203;Prompt</text>
+    <rect x="250" y="40" width="180" height="50" rx="8" class="node process"/>
+    <text x="340" y="62" text-anchor="middle" class="label">glyph-agent-acp.mjs</text>
+    <text x="340" y="76" text-anchor="middle" class="sub">Brücke ACP ↔ HTTP</text>
+    <rect x="490" y="40" width="170" height="70" rx="8" class="node storage"/>
+    <text x="575" y="62" text-anchor="middle" class="label">server.py :18899</text>
+    <text x="575" y="76" text-anchor="middle" class="sub">POST /chat · /health</text>
+    <text x="575" y="90" text-anchor="middle" class="sub">localhost only</text>
+    <path d="M190 65 L250 65" class="edge" marker-end="url(#a3)"/>
+    <path d="M430 65 L490 65" class="edge" marker-end="url(#a3)"/>
+    <!-- Tool-Loop interne Box -->
+    <rect x="490" y="150" width="340" height="30" rx="8" class="zone"/>
+    <text x="660" y="169" text-anchor="middle" class="sub">Tool-Loop (Runden-Limit 4 · write nur mit Bestätigung)</text>
+    <rect x="500" y="205" width="150" height="46" rx="8" class="node ok"/>
+    <text x="575" y="226" text-anchor="middle" class="label">Qwen (lokal)</text>
+    <text x="575" y="240" text-anchor="middle" class="sub">austauschbar (z. B. MLX)</text>
+    <rect x="680" y="205" width="140" height="46" rx="8" class="node process"/>
+    <text x="750" y="224" text-anchor="middle" class="label">Tools</text>
+    <text x="750" y="238" text-anchor="middle" class="sub">Vault · Recherche</text>
+    <path d="M575 200 L575 205" class="edge" marker-end="url(#a3)"/>
+    <path d="M650 228 L680 228" class="edge" marker-end="url(#a3)"/>
+    <rect x="40" y="205" width="150" height="50" rx="8" class="node storage"/>
+    <text x="115" y="226" text-anchor="middle" class="label">Obsidian-Vault</text>
+    <text x="115" y="240" text-anchor="middle" class="sub">intern · geht nicht raus</text>
+    <path d="M190 230 L470 230" class="edge" marker-end="url(#a3)"/>
+    <text x="230" y="222" text-anchor="middle" class="sub">search_vault / read_note / propose_edit / apply_edit</text>
+    <text x="585" y="290" text-anchor="middle" class="sub">WebSearch (Exa) nur für externe Recherche — getrennt von Vault-Daten</text>
+  </svg>
+
+  <!-- ======================================================== -->
+  <!-- 4. OPENROUTER ========================================== -->
+  <h2>4 · openrouter — Token/API-Key</h2>
+  <div class="why"><b>Warum ergänzt</b>Zentrale Tür zu vielen Cloud-Modellen (DeepSeek, Llama, …) über einen einzigen API-Key — zum Testen/Anbinden weiterer KIs, ohne je ein eigenes Konto pro Anbieter zu brauchen.</div>
+  <svg viewBox="0 0 960 250" role="img" aria-label="openrouter Ablauf">
+    <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/></marker></defs>
+    <rect x="40" y="40" width="150" height="50" rx="8" class="node input"/>
+    <text x="115" y="63" text-anchor="middle" class="label">Browser-Chat</text>
+    <text x="115" y="77" text-anchor="middle" class="sub">Message/&#8203;Prompt</text>
+    <rect x="260" y="40" width="170" height="50" rx="8" class="node process"/>
+    <text x="345" y="63" text-anchor="middle" class="label">ACP-Bridge</text>
+    <text x="345" y="77" text-anchor="middle" class="sub">spawnt Profil-CLI</text>
+    <rect x="500" y="40" width="180" height="50" rx="8" class="node neutral"/>
+    <text x="590" y="63" text-anchor="middle" class="label">openrouter-acp.mjs</text>
+    <text x="590" y="77" text-anchor="middle" class="sub">Übersetzt ACP → REST/SSE</text>
+    <rect x="750" y="40" width="170" height="50" rx="8" class="node external"/>
+    <text x="835" y="63" text-anchor="middle" class="label">OpenRouter API</text>
+    <text x="835" y="77" text-anchor="middle" class="sub">Cloud-Modelle</text>
+    <path d="M190 65 L260 65" class="edge" marker-end="url(#a4)"/>
+    <path d="M430 65 L500 65" class="edge" marker-end="url(#a4)"/>
+    <path d="M680 65 L750 65" class="edge" marker-end="url(#a4)"/>
+    <rect x="500" y="150" width="230" height="52" rx="8" class="node storage"/>
+    <text x="615" y="172" text-anchor="middle" class="label">.env → OPENROUTER_API_KEY</text>
+    <text x="615" y="186" text-anchor="middle" class="sub">sk-or-v1-… · separater Glyph-Key</text>
+    <path d="M590 90 L590 150" class="edge" marker-end="url(#a4)"/>
+    <text x="590" y="224" text-anchor="middle" class="sub">Modellwahl: OPENROUTER_MODEL (Default)</text>
+  </svg>
+
+  <!-- ======================================================== -->
+  <!-- 5. ZIEL-ARCHITEKTUR ==================================== -->
+  <h2>5 · Ziel-Architektur im Überblick</h2>
+  <div class="why"><b>Gesamtbild</b>Ein Gesicht (Glyph), drei Bestandsquellen dahinter — jedes Profil unabhängig, sodass „Anbieter X down“ die anderen nicht berührt. `glyph-agent` bleibt die DSGVO-bewusste, kostenlose Innenschicht für den Vault; die Cloud-Profile (grok/claude/openrouter) sind die erweiterten, vernetzten Außenwege.</div>
+  <svg viewBox="0 0 960 230" role="img" aria-label="Ziel-Architektur">
+    <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/></marker></defs>
+    <rect x="400" y="40" width="160" height="46" rx="8" class="node neutral"/>
+    <text x="480" y="60" text-anchor="middle" class="label">Glyph</text>
+    <text x="480" y="74" text-anchor="middle" class="sub">Ein Gesicht · localhost</text>
+    <g>
+      <rect x="60" y="140" width="170" height="54" rx="8" class="node external"/>
+      <text x="145" y="160" text-anchor="middle" class="label">grok · OAuth</text>
+      <text x="145" y="174" text-anchor="middle" class="sub">Cloud · TUI-Kontingent</text>
+      <text x="145" y="188" text-anchor="middle" class="sub">tiefste UI-Integration</text>
+    </g>
+    <g>
+      <rect x="255" y="140" width="170" height="54" rx="8" class="node external"/>
+      <text x="340" y="160" text-anchor="middle" class="label">claude · OAuth</text>
+      <text x="340" y="174" text-anchor="middle" class="sub">Anthropic-Konto</text>
+      <text x="340" y="188" text-anchor="middle" class="sub">via npx-Adapter</text>
+    </g>
+    <g>
+      <rect x="450" y="140" width="180" height="54" rx="8" class="node ok"/>
+      <text x="540" y="160" text-anchor="middle" class="label">glyph-agent · lokal</text>
+      <text x="540" y="174" text-anchor="middle" class="sub">kostenlos · Qwen · Vault</text>
+      <text x="540" y="188" text-anchor="middle" class="sub">DSGVO-bewusst</text>
+    </g>
+    <g>
+      <rect x="655" y="140" width="180" height="54" rx="8" class="node input"/>
+      <text x="745" y="160" text-anchor="middle" class="label">openrouter · Token</text>
+      <text x="745" y="174" text-anchor="middle" class="sub">viele Cloud-Modelle</text>
+      <text x="745" y="188" text-anchor="middle" class="sub">zum Testen/Anbinden</text>
+    </g>
+    <path d="M480 86 L145 140" class="edge" marker-end="url(#a5)"/>
+    <path d="M480 86 L340 140" class="edge" marker-end="url(#a5)"/>
+    <path d="M480 86 L540 140" class="edge" marker-end="url(#a5)"/>
+    <path d="M480 86 L745 140" class="edge" marker-end="url(#a5)"/>
+  </svg>
+  <p class="sub">Prio-Anhaltspunkt: Für reine Vault-/Recherche-Arbeit reicht <b>glyph-agent</b> (lokal, gratis). Sobald du breite Kontextarbeit, Sessions oder spezielle Modelle willst, wählst du grok / claude / openrouter im Dropdown.</p>
+
+</main>

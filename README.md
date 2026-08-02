@@ -115,6 +115,9 @@ Adapter (Qwen, austauschbar) und Vault-/Recherche-Tools. Die Brücke `server/gly
 Voraussetzung: lokalen Dienst starten → `cd ~/glyph-agent && python server.py`, prüfen mit
 `curl http://127.0.0.1:18899/health` (→ `ok`).
 
+Grafische Ablaufdiagramme für jedes Profil (*warum hinzugefügt* + *wie es funktioniert*):
+[`docs/glyph-profile-diagrams.html`](./docs/glyph-profile-diagrams.html).
+
 ## UI-Design (Grok Chat Stil)
 
 | Element | Look |

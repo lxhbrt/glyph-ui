@@ -435,6 +435,10 @@ Aktives Profil wird beim Start aus `GLYPH_AGENT` übernommen (Default: `grok`).
 
 ### glyph-agent (lokale Tool-/Recherche-Schicht)
 
+> 📊 **Diagramme:** `docs/glyph-profile-diagrams.html` zeigt für jedes Profil ein
+grafisches Ablauf-/Architektur-Diagramm (*warum hinzugefügt* + *wie es funktioniert*).
+> Im Browser öffnen oder direkt in die App einbetten.
+
 Das Profil **glyph-agent** verbindet Glyph mit der separaten **glyph-agent**-Codebasis
 (`~/glyph-agent/`): ein lokaler HTTP-Dienst (`server.py`, Port **18899**, localhost-only) mit
 kontrolliertem Tool-Loop. Es führt einen **Lokal-Modell-Adapter** (heute Qwen, austauschbar
@@ -469,6 +473,11 @@ Nur localhost gebunden; keine Internet-Exposition.
 |----------|---------|-----------|
 | `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst |
 | `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für die Antwort |
+
+**Warum die Mischung:** Drei unabhängige Bestandsquellen, damit kein einzelner Anbieter zum
+Blockierer wird. Für reine Vault-/Recherche-Arbeit reicht `glyph-agent` (lokal, gratis); für
+breite Kontextarbeit, Sessions oder spezielle Modelle wählst du grok / claude / openrouter.
+Grafische Abläufe: `docs/glyph-profile-diagrams.html`.
 
 ---
 
