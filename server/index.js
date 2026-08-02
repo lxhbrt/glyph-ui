@@ -68,6 +68,14 @@ import {
 import { buildActivity } from "./activity.js";
 import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
 import {
+  buildFileName,
+  getWikiRoot as getSummaryWikiRoot,
+  renderSummaryDocument,
+  resolveTargetPath,
+  resolveSummariesDir,
+  writeSummaryAtomically,
+} from "./summaries.js";
+import {
   listVoices,
   speechToText,
   textToSpeech,
@@ -1059,9 +1067,176 @@ app.post("/api/sessions/:id/close", async (req, res) => {
   }
 });
 
+/**
+ * Deterministische Zubereitung des Session-Transkripts zu einer Summary-Struktur.
+ * Kein Modell nötig (robust): Titel, Kurzfassung, Entscheidungen, offene Punkte,
+ * nächste Schritte werden aus User-/Assistant-Turns abgeleitet. Modell kann
+ * optional in einem späteren Schritt nachschärfen.
+ * @returns {{title:string, summary:string, decisions:string[], open_items:string[], next_steps:string[], references:string[]}}
+ */
+function buildDraftFromTurns(turns, meta = {}) {
+  const userTurns = (turns || []).filter((t) => t.role === "user" && t.text && t.text.trim());
+  const assistantTurns = (turns || []).filter((t) => t.role === "assistant" && t.text && t.text.trim());
+
+  const title = meta.title || userTurns[0]?.text?.replace(/\s+/g, " ").slice(0, 80) || "Unbenannte Session";
+  const firstUser = userTurns[0]?.text?.replace(/\s+/g, " ") || "";
+  // Kurzfassung: erste User-Frage + letzte Assistant-Antwort als Kern.
+  const lastAssistant = assistantTurns.length
+    ? assistantTurns[assistantTurns.length - 1].text.replace(/\s+/g, " ").slice(0, 400)
+    : "";
+  const summary = firstUser
+    ? `Die Session befasste sich mit: „${firstUser.slice(0, 160)}".` +
+      (lastAssistant ? ` Ergebnis: ${lastAssistant.slice(0, 240)}` : "")
+    : "Keine Nachrichten vorhanden.";
+
+  // Entscheidungen/offene Punkte/nächste Schritte: einfache Heuristik aus User-Turns,
+  // die als Anweisung/Ziel formuliert sind (kann später durch Modell verbessert werden).
+  const decisions = userTurns.slice(-3).map((t) => t.text.replace(/\s+/g, " ").slice(0, 180));
+  const next_steps = assistantTurns.slice(-2).map((t) => t.text.replace(/\s+/g, " ").slice(0, 160));
+
+  return {
+    title,
+    summary,
+    decisions: decisions.length ? decisions : [],
+    open_items: [],
+    next_steps: next_steps.length ? next_steps : [],
+    references: [],
+  };
+}
+
+/**
+ * Erzeugt einen Zusammenfassungs-ENTWURF ohne zu schreiben (nicht-destruktiv).
+ * Liefert Entwurf + geplanten Zielpfad/Dateiname + Datenschutz-Status.
+ */
+app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
+  try {
+    if (!isSessionId(req.params.id)) {
+      res.status(400).json({ error: "Ungültige Session-ID" });
+      return;
+    }
+    const session = await getSessionForOpen(req.params.id);
+    if (!session) {
+      res.status(404).json({ error: "Session nicht gefunden" });
+      return;
+    }
+    const turns = session.turns || session.transcriptPreview || [];
+    if (!turns.length) {
+      res.status(400).json({ error: "Session enthält keine Nachrichten — keine Zusammenfassung möglich." });
+      return;
+    }
+
+    const profile = (req.body?.profile) || "glyph-agent";
+    const external = profile === "openrouter"; // Cloud-Verarbeitung
+    const includeAttachments = req.body?.include_attachments === true;
+
+    const draft = buildDraftFromTurns(turns, {
+      title: session.title || session.transcriptTitle || undefined,
+    });
+    const wikiRoot = getSummaryWikiRoot();
+    const fileName = buildFileName({
+      title: draft.title,
+      sessionId: session.id,
+      profile,
+    });
+    const target = resolveTargetPath(fileName, wikiRoot);
+
+    // Vorschau (gespeicherter Inhalt) zur Anzeige in der UI.
+    const previewDocument = renderSummaryDocument({
+      ...draft,
+      meta: {
+        sessionId: session.id,
+        profile,
+        model: session.model || "",
+        external_processing: external,
+      },
+    });
+
+    res.json({
+      ok: true,
+      draft,
+      external_processing: external,
+      include_attachments: includeAttachments,
+      target: { absolutePath: target, fileName, wikiRoot },
+      preview: previewDocument,
+      requires_external_consent: external,
+      message: external
+        ? `Dieses Profil (${profile}) ist extern — Session-Inhalte verlassen den Rechner. Bestätigung nötig.`
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/**
+ * Speichert die Zusammenfassung NUR nach expliziter Bestätigung, atomar,
+ * ohne Überschreiben. Bei openrouter (Cloud) muss external_consent=true sein.
+ */
+app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
+  try {
+    if (!isSessionId(req.params.id)) {
+      res.status(400).json({ error: "Ungültige Session-ID" });
+      return;
+    }
+    const session = await getSessionForOpen(req.params.id);
+    if (!session) {
+      res.status(404).json({ error: "Session nicht gefunden" });
+      return;
+    }
+
+    const body = req.body || {};
+    const profile = body.profile || "glyph-agent";
+    const external = profile === "openrouter";
+    if (external && body.external_consent !== true) {
+      res.status(403).json({
+        error:
+          "Für das externe Profil openrouter ist eine ausdrückliche Bestätigung (external_consent: true) erforderlich, bevor Session-Inhalte verarbeitet werden.",
+      });
+      return;
+    }
+
+    // Entwurf aus dem vom Client ggf. bearbeiteten Body od. neu deterministisch.
+    const turns = session.turns || session.transcriptPreview || [];
+    const base = body.draft
+      ? body.draft
+      : buildDraftFromTurns(turns, { title: session.title });
+
+    const data = {
+      title: base.title || "Unbenannte Session",
+      summary: base.summary || "",
+      decisions: Array.isArray(base.decisions) ? base.decisions : [],
+      open_items: Array.isArray(base.open_items) ? base.open_items : [],
+      next_steps: Array.isArray(base.next_steps) ? base.next_steps : [],
+      references: Array.isArray(base.references) ? base.references : [],
+      tags: Array.isArray(body.tags) ? body.tags : [],
+      meta: {
+        sessionId: session.id,
+        profile,
+        model: session.model || body.model || "",
+        external_processing: external,
+      },
+    };
+
+    const result = await writeSummaryAtomically(data, getSummaryWikiRoot());
+    if (result.written) {
+      res.status(201).json({ ok: true, written: true, path: result.path, fileName: result.fileName });
+    } else {
+      res.status(409).json({
+        ok: false,
+        written: false,
+        existed: true,
+        path: result.path,
+        error: "Es existiert bereits eine Zusammenfassung für diese Session — nicht überschrieben.",
+      });
+    }
+  } catch (err) {
+    const status = /bereits|existed/i.test(err?.message || "") ? 409 : 500;
+    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 /** Tool kinds that should finish cleanly rather than hard-abort mid-flight. */
 const CRITICAL_TOOL_KINDS = new Set(["edit", "delete", "move", "execute"]);
-
 class GrokBridge {
   constructor() {
     this.connected = false;
