@@ -2360,6 +2360,7 @@ export default function App() {
         onClose={() => setShowOverview(false)}
         onOpenSession={handleOpenSession}
         canSummarize={canSummarize}
+        profile={agent?.id || "grok"}
       />
       <ActivityCalendar
         open={showCalendar}
@@ -2372,6 +2373,7 @@ export default function App() {
         <SummarizeDialog
           sessionId={sessionId}
           sessionTitle={agentLabel}
+          profile={agent?.id || "glyph-agent"}
           onClose={() => setActiveSummarizeOpen(false)}
         />
       ) : null}

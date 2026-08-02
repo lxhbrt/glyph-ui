@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatWhen } from "../utils/format.js";
 import { SummarizeDialog } from "./SummarizeDialog.jsx";
 
-function CommandOverview({ open, onClose, onOpenSession, canSummarize = false }) {
+function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, profile = "grok" }) {
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
@@ -418,6 +418,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false })
         <SummarizeDialog
           sessionId={summaryTarget.id}
           sessionTitle={summaryTarget.title}
+          profile={profile}
           onClose={() => setSummaryTarget(null)}
           onSaved={() => void load()}
         />

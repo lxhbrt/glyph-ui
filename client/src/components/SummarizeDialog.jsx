@@ -10,15 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const PROFILES = [
-  { id: "glyph-agent", label: "Glyph-Agent (lokal)" },
-  { id: "openrouter", label: "OpenRouter (extern)" },
-  { id: "grok", label: "Grok" },
-  { id: "claude", label: "Claude" },
-];
-
-function SummarizeDialog({ sessionId, sessionTitle, onClose, onSaved }) {
-  const [profile, setProfile] = useState("glyph-agent");
+function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(null);
@@ -140,27 +132,9 @@ function SummarizeDialog({ sessionId, sessionTitle, onClose, onSaved }) {
             <code className="summarize-id">{sessionId?.slice(0, 8)}</code>
           </p>
 
-          <label className="summarize-label" htmlFor="summarize-profile">
-            Profil / Modell
-          </label>
-          <select
-            id="summarize-profile"
-            className="summarize-select"
-            value={profile}
-            disabled={loading || saving || !!draft}
-            onChange={(e) => {
-              const next = e.target.value;
-              setProfile(next);
-              setDraft(null);
-              void generateDraft(next);
-            }}
-          >
-            {PROFILES.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+          <p className="summarize-profile-line">
+            Profil: <strong>{profile}</strong> · Ziel: <code>{target?.fileName || sessionId}</code>
+          </p>
 
           {loading && <p className="summarize-status">Erzeuge Entwurf…</p>}
 

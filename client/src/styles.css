@@ -2930,3 +2930,15 @@ button.cal-cell {
   background: transparent; border: none; color: inherit; font-size: 15px; cursor: pointer; opacity: 0.7;
 }
 .summarize-actions button.summary-ghost, .summarize-header button.summary-ghost { opacity: 0.7; }
+
+/* Profil-Anzeige im SummarizeDialog (statt Dropdown) */
+.summarize-profile-line {
+  font-size: 12px;
+  opacity: 0.75;
+  margin: 4px 0 10px;
+  word-break: break-all;
+}
+.summarize-profile-line code {
+  font-size: 11px;
+  opacity: 0.8;
+}
