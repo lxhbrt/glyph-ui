@@ -467,7 +467,11 @@ function CommandLegend({
         {tab === "handbook" ? (
           <p className="overview-hint">
             Kurzanleitung für dieses Chatfenster. Volltext:{" "}
-            <code>HANDBUCH.md</code> im Projekt · TUI: <code>/docs</code>.
+            <code>HANDBUCH.md</code> im Projekt · TUI: <code>/docs</code>.{" "}
+            <a href="/docs/glyph-profile-diagrams.html" target="_blank" rel="noreferrer">
+              Agent-Profile · Diagramme
+            </a>
+            .
           </p>
         ) : (
           <p className="overview-hint">

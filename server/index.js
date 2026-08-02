@@ -2075,6 +2075,8 @@ wss.on("connection", (ws) => {
 // Static UI after all API routes (POST /api/* must not be swallowed).
 // index: false — SPA HTML goes through sendIndexHtml so the WS token is injected.
 app.use(express.static(path.join(ROOT, "client/dist"), { index: false }));
+// Repo-Doku statisch ausliefern (z. B. docs/glyph-profile-diagrams.html) für die Buch-Taste.
+app.use("/docs", express.static(path.join(ROOT, "docs"), { index: false }));
 // SPA fallback for client-side routes (GET only)
 app.get(/.*/, (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/ws")) return next();
