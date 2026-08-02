@@ -1175,9 +1175,9 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
     const previewDocument = renderSummaryDocument({
       ...draft,
       meta: {
-        sessionId: session.id,
+        sessionId: session?.id || req.params.id,
         profile,
-        model: session.model || "",
+        model: session?.model || "",
         external_processing: external,
       },
     });
