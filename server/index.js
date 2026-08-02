@@ -1105,12 +1105,25 @@ function buildDraftFromTurns(turns, meta = {}) {
 }
 
 /**
+ * Erweiterte Session-ID-Prüfung für Summarize/History: akzeptiert UUID (Grok/Disk)
+ * ODER In-Memory-Adapter-IDs (openrouter-1, glyph-agent-1, claude-N) — nur sichere
+ * Zeichen, keine Pfad-Tricks. isSessionId (sessions.js) bleibt für Disk-Endpunkte.
+ */
+const SAFE_SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+function isSummarizeSessionId(id) {
+  if (typeof id !== "string" || !id.trim() || id.length > 64) return false;
+  if (isSessionId(id)) return true;
+  // In-Memory-Adapter-IDs: „präfix-N“ (openrouter-1, glyph-agent-2, claude-3).
+  return SAFE_SESSION_ID_RE.test(id);
+}
+
+/**
  * Erzeugt einen Zusammenfassungs-ENTWURF ohne zu schreiben (nicht-destruktiv).
  * Liefert Entwurf + geplanten Zielpfad/Dateiname + Datenschutz-Status.
  */
 app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
   try {
-    if (!isSessionId(req.params.id)) {
+    if (!isSummarizeSessionId(req.params.id)) {
       res.status(400).json({ error: "Ungültige Session-ID" });
       return;
     }
@@ -1180,7 +1193,7 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
  */
 app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
   try {
-    if (!isSessionId(req.params.id)) {
+    if (!isSummarizeSessionId(req.params.id)) {
       res.status(400).json({ error: "Ungültige Session-ID" });
       return;
     }
@@ -1252,7 +1265,7 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
  */
 app.get("/api/sessions/:id/history", async (req, res) => {
   try {
-    if (!isSessionId(req.params.id)) {
+    if (!isSummarizeSessionId(req.params.id)) {
       res.status(400).json({ error: "Ungültige Session-ID" });
       return;
     }
