@@ -1,7 +1,12 @@
 # Glyph — Handbuch
 
-**Glyph** (*Build Term for Grok*) — unabhängige Browser-Oberfläche für **Grok Build** (lokaler Coding-Agent).  
-Du schreibst im Browser; im Hintergrund läuft der echte Grok-Agent auf deinem Mac.
+**Glyph** — unabhängige Browser-Oberfläche für mehrere lokale/Cloud- Agenten über ACP
+(Agent Client Protocol). Du schreibst im Browser; im Hintergrund läuft ein Agent-Profil
+deiner Wahl (Standard: **grok**).
+
+**Hinweis zum Namen:** Glyph entstand als Oberfläche für **Grok Build** — daher nennen manche
+Kapitel weiterhin „Grok“. Die Bedienung gilt für **alle** Profile gleich; wo ein Bereich nur
+für ein bestimmtes Profil gilt (z. B. Voice = nur grok), ist es ausdrücklich markiert.
 
 **Erstellt von Lx Hbrt** · Copyright © 2026 · MIT License  
 *Inoffiziell / unabhängig — nicht von xAI unterstützt oder freigegeben.*
@@ -11,6 +16,19 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
                                                               (grok | claude | openrouter | glyph-agent)
 ```
 
+### Agent-Profile im Überblick
+
+| Profil | Typ | Auth | Fähigkeiten (in Glyph) |
+|--------|-----|------|-------------------------|
+| **grok** (Standard) | Cloud | OAuth | Sessions ✅ · Deep Search ✅ · Aktivität ✅ · Voice ✅ |
+| **claude** | Cloud | OAuth | Chat (Sessions liegen unter `~/.claude/projects`, nicht in Glyph gelistet) |
+| **glyph-agent** | Lokal (kostenlos) | — | Vault-Suche/Notizen, Web-Recherche (Qwen auf dem Mac) |
+| **openrouter** | Cloud | Token/API-Key | Chat über viele Cloud-Modelle (zum Testen/Anbinden) |
+
+> 📊 Grafische Abläufe (warum + wie jedes Profil): `docs/glyph-profile-diagrams.html`
+> · Volltext der Bedienung unten; die Kapitel dieses Handbuchs gelten profilunabhängig,
+> wo nicht anders markiert.
+
 ---
 
 ## 1. Voraussetzungen & Start
@@ -18,7 +36,14 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 ### Brauchst du
 
 - **Node.js 22+**
-- **`grok`** im PATH und eingeloggt (`grok login` bzw. `~/.grok/auth.json`)
+- Mindestens **ein** Agent-Profil (Standard `grok` unten). Weitere Profile sind optional.
+
+| Profil | Voraussetzung |
+|--------|---------------|
+| **grok** (Default) | `grok` im PATH + eingeloggt (`grok login` / `~/.grok/auth.json`) |
+| **claude** | `claude` CLI mit OAuth-Login (`~/.claude`); ACP-Adapter via `npx` (auto) oder global `npm i -g @agentclientprotocol/claude-agent-acp` |
+| **glyph-agent** | Lokaler Dienst `server.py` auf `127.0.0.1:18899` (`~/glyph-agent`) |
+| **openrouter** | `OPENROUTER_API_KEY` in Glyph-`.env` |
 
 ### Entwicklung starten
 
@@ -78,7 +103,7 @@ Chat und Composer folgen der **Grok Chat App**-Ästhetik: schwarze Fläche, Prom
 | Element | Darstellung |
 |---------|-------------|
 | **Chat-Hintergrund** | Gleich wie App-Chrome (`--bg`, nahezu schwarz) |
-| **Grok-Antworten** | Flach auf dem Hintergrund — **kein** Kartenrahmen |
+| **Agent-Antworten** | Flach auf dem Hintergrund — **kein** Kartenrahmen |
 | **Deine Prompts** | Rechte **Sprechblase** (Fill `--user`, abgerundet) |
 | **Thinking / Tool / System** | Transparent; System mit feinem Gold-Strich links |
 | **Composer** | Bubble-Shell (gleiche Fill-Familie wie Prompts), großer Radius, weicher Schatten |
@@ -118,7 +143,7 @@ Oben rechts:
 
 Ohne **verbunden** ist das Eingabefeld deaktiviert.
 
-**Sicherheit:** Die Bridge startet Grok mit `--always-approve` (volle Tool-Rechte). **Nur auf localhost** nutzen, nicht ins Netz hängen.
+**Sicherheit:** Die Bridge startet den Agenten mit vollem Tool-Zugriff (grok mit `--always-approve`). **Nur auf localhost** nutzen, nicht ins Netz hängen.
 
 ---
 
@@ -126,22 +151,28 @@ Ohne **verbunden** ist das Eingabefeld deaktiviert.
 
 1. Status **verbunden** sicherstellen.
 2. Nachricht tippen (Pfad, Fehler, Ziel — je klarer, desto besser).
-3. **Enter** senden · **Shift+Enter** = neue Zeile. Der runde Button zeigt idle **↵**, während Grok arbeitet **Snack** (Klick / leerer Enter = Stopp).
-4. Antwort streamt live flach im Chat; dein Prompt erscheint als Bubble. Rollen: **Grok**, **Thinking**, **Tool**, **System** (Prompts ohne „Du“-Label).
+3. **Enter** senden · **Shift+Enter** = neue Zeile. Der runde Button zeigt idle **↵**, während der
+   Agent arbeitet **Snack** (Klick / leerer Enter = Stopp).
+4. Antwort streamt live flach im Chat; dein Prompt erscheint als Bubble. Rollen: **Agent** (der
+   aktive Name, z. B. Grok), **Thinking**, **Tool**, **System** (Prompts ohne „Du“-Label).
 
 ### Composer-Aktionen
 
-| Aktion | Wirkung |
-|--------|---------|
-| **Chat** | Normale Nachricht |
-| **Deep Search** | Strukturierte Multi-Quellen-Recherche (TUI: `/deep-research`) |
-| **Fork** | Session branchen (TUI: `/fork`); Text = optionale Directive |
+| Aktion | Wirkung | Profil |
+|--------|---------|--------|
+| **Chat** | Normale Nachricht | alle |
+| **Deep Search** | Strukturierte Multi-Quellen-Recherche (TUI: `/deep-research`) | **grok** (für andere Profile ausgegraut) |
+| **Fork** | Session branchen (TUI: `/fork`); Text = optionale Directive | alle |
 
 Die gewählte Aktion gilt für den nächsten Enter/Senden-Klick.
 
 ---
 
-## 5b. Sprache (Grok Voice: STT + TTS)
+## 5b. Sprache (Voice: STT + TTS) — nur das grok-Profil
+
+> ⚠️ Voice ist **ausschließlich** über xAI/Grok verfügbar (xAI Voice APIs). Bei den Profilen
+> claude, glyph-agent und openrouter gibt es diese Funktion **nicht** — sie ist in der UI
+> ausgegraut.
 
 Die UI nutzt die **xAI Voice APIs** (dieselbe Stack-Familie wie Grok Voice):
 
@@ -188,7 +219,9 @@ Markdown (Codeblöcke, Links, …) wird vor dem TTS grob bereinigt.
 
 ---
 
-## 6. Während Grok arbeitet
+## 6. Während der Agent arbeitet
+
+> Gilt für alle Profile gleich (grok, claude, glyph-agent, openrouter).
 
 ### Senden-Button / Snack
 
@@ -214,6 +247,10 @@ Markdown (Codeblöcke, Links, …) wird vor dem TTS grob bereinigt.
 ---
 
 ## 7. Sessions (Lupe)
+
+> ⚠️ **Nur das grok-Profil** hat eine Session-Liste in Glyph. Die Lupe liest
+> `~/.grok/sessions`. Claude speichert unter `~/.claude/projects` (in Glyph nicht gelistet);
+> glyph-agent und openrouter führen In-Session-Kontext ohne persistente Session-Liste.
 
 Sessions sind gespeicherte **Chats** unter `~/.grok/sessions`.
 
@@ -291,15 +328,19 @@ Workspace steuert, wo der Agent Dateien liest/schreibt (Standard oft Home oder `
 
 ---
 
-## 10. Was Grok in dieser UI kann
+## 10. Was der Agent in dieser UI kann
 
-| Bereich | Beispiele |
-|---------|-----------|
-| Code & Dateien | Lesen, schreiben, refaktorieren im Workspace |
-| Terminal | Shell, Builds, Tests, Git |
-| Recherche | Web/Docs; Deep Search für tiefergehende Quellenarbeit |
-| Medien | Bilder/Video oft als Freitext; TUI: `/imagine`, `/imagine-video` |
-| Erweiterungen | Skills, Workflows, Subagents, MCPs (je nach Installation) |
+Gilt für alle Profile; **grok** hat als einziges alle Fähigkeiten (Sessions, Deep Search, Aktivität).
+
+| Bereich | Beispiele | Profile |
+|---------|-----------|---------|
+| Code & Dateien | Lesen, schreiben, refaktorieren im Workspace | alle |
+| Terminal | Shell, Builds, Tests, Git | alle |
+| Recherche | Web/Docs; Deep Search für tiefergehende Quellenarbeit | **grok** (Deep Search); Recherche-Tools auch glyph-agent |
+| Medien | Bilder/Video oft als Freitext; TUI: `/imagine`, `/imagine-video` | **grok** |
+| Erweiterungen | Skills, Workflows, Subagents, MCPs (je nach Installation) | grok · claude |
+| Vault & Notizen | Obsidian-Vault-Suche, Notizen lesen/bearbeiten (Diff+Backup) | **glyph-agent** |
+| Cloud-Modelle | viele Modelle zum Testen/Anbinden über eine API | **openrouter** |
 
 ---
 
@@ -483,15 +524,16 @@ Grafische Abläufe: `docs/glyph-profile-diagrams.html`.
 
 ## 16. Schnell-Checkliste
 
-- [ ] `grok` eingeloggt  
+- [ ] Mindestens ein Profil verfügbar (Default `grok` eingeloggt)  
 - [ ] UI offen, Status **verbunden**  
 - [ ] Aktives Profil passt (Header / `GLYPH_AGENT`)  
 - [ ] glyph-agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
+- [ ] openrouter-Profil: `OPENROUTER_API_KEY` in Glyph-`.env`  
 - [ ] Workspace passt (Header-Pfad / `GLYPH_UI_CWD`)  
 - [ ] Enter = senden, Shift+Enter = Zeile  
 - [ ] Während Arbeit: Text → Queue, leer → Stop  
 - [ ] Sessions: Lupe · Aktivität: Kalender · Wissen: Wiki  
-- [ ] Sprache: `XAI_API_KEY` (falls nötig) · Mic diktieren · Lautsprecher vorlesen  
+- [ ] Sprache (nur grok): `XAI_API_KEY` (falls nötig) · Mic diktieren · Lautsprecher vorlesen  
 
 ---
 
