@@ -9,6 +9,7 @@ import { PlanBar } from "./components/PlanBar.jsx";
 import { SnackBoard, SnackScrollbar } from "./components/Snack.jsx";
 import { CommandLegend } from "./components/CommandLegend.jsx";
 import { CommandOverview } from "./components/CommandOverview.jsx";
+import { SummarizeDialog } from "./components/SummarizeDialog.jsx";
 import { ActivityCalendar } from "./components/ActivityCalendar.jsx";
 import {
   IconSearch,
@@ -64,6 +65,8 @@ export default function App() {
   const drainingRef = useRef(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  /** Öffnet den Summarize-Dialog für die AKTIVE Session (openrouter/glyph-agent). */
+  const [activeSummarizeOpen, setActiveSummarizeOpen] = useState(false);
   const [cwd, setCwd] = useState("");
   /**
    * Active ACP agent + the catalog to switch between. Capabilities decide
@@ -1501,6 +1504,9 @@ export default function App() {
   // Session-Lupe (persistent) nur bei sessionList:true (Grok); Aktivität nur bei activity:true.
   const canBrowseSessions = caps ? Boolean(caps.sessionList) : true;
   const canSeeActivity = caps ? Boolean(caps.activity) : true;
+  // Aktive-Session-Zusammenfassung: möglich, wenn Profil summarize + sessionHistory kann.
+  // Unabhängig von sessionList (gilt auch für openrouter/glyph-agent ohne Lupe).
+  const canSummarize = caps ? Boolean(caps.summarize && caps.sessionHistory) : false;
   const agentLabel = agent?.label || "Agent";
   const unavailableFor = useCallback(
     (what) => `${what} ist nur im grok-Profil verfügbar (aktiv: ${agentLabel})`,
@@ -1847,6 +1853,16 @@ export default function App() {
                   ? "verbunden"
                   : "offline"}
             </button>
+            {canSummarize && connected && sessionId ? (
+              <button
+                type="button"
+                className="pill pill-btn active-session-summarize"
+                title="Aktive Session zusammenfassen (Vorschau → Bestätigen)"
+                onClick={() => setActiveSummarizeOpen(true)}
+              >
+                ✎ Zusammenfassen
+              </button>
+            ) : null}
           </div>
         </header>
 
@@ -2343,13 +2359,22 @@ export default function App() {
         open={showOverview}
         onClose={() => setShowOverview(false)}
         onOpenSession={handleOpenSession}
-        canSummarize={canBrowseSessions}
+        canSummarize={canSummarize}
       />
       <ActivityCalendar
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
         onOpenSession={handleOpenSession}
       />
+
+      {/* Aktive-Session-Zusammenfassung (openrouter/glyph-agent; auch grok möglich) */}
+      {activeSummarizeOpen && sessionId ? (
+        <SummarizeDialog
+          sessionId={sessionId}
+          sessionTitle={agentLabel}
+          onClose={() => setActiveSummarizeOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1115,13 +1115,19 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
       return;
     }
     const session = await getSessionForOpen(req.params.id);
-    if (!session) {
-      res.status(404).json({ error: "Session nicht gefunden" });
-      return;
+    let turns = session ? (session.turns || session.transcriptPreview || []) : [];
+    // Fallback für AKTIVE In-Memory-Session (openrouter/glyph-agent ohne Disk-Ordner):
+    // Verlauf über die ACP-Methode session.history beziehen, statt aus ~/.grok/sessions.
+    if (!turns.length && bridge && bridge.connected && req.params.id === bridge.sessionId) {
+      try {
+        const hist = await bridge.getSessionHistory(req.params.id);
+        turns = (hist.messages || []).map((m) => ({ role: m.role, text: m.content }));
+      } catch {
+        turns = [];
+      }
     }
-    const turns = session.turns || session.transcriptPreview || [];
     if (!turns.length) {
-      res.status(400).json({ error: "Session enthält keine Nachrichten — keine Zusammenfassung möglich." });
+      res.status(404).json({ error: "Session nicht gefunden oder ohne Nachrichten" });
       return;
     }
 
@@ -1179,9 +1185,14 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
       return;
     }
     const session = await getSessionForOpen(req.params.id);
-    if (!session) {
-      res.status(404).json({ error: "Session nicht gefunden" });
-      return;
+    let turns = session ? (session.turns || session.transcriptPreview || []) : [];
+    if (!turns.length && bridge && bridge.connected && req.params.id === bridge.sessionId) {
+      try {
+        const hist = await bridge.getSessionHistory(req.params.id);
+        turns = (hist.messages || []).map((m) => ({ role: m.role, text: m.content }));
+      } catch {
+        turns = [];
+      }
     }
 
     const body = req.body || {};
@@ -1196,10 +1207,9 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
     }
 
     // Entwurf aus dem vom Client ggf. bearbeiteten Body od. neu deterministisch.
-    const turns = session.turns || session.transcriptPreview || [];
     const base = body.draft
       ? body.draft
-      : buildDraftFromTurns(turns, { title: session.title });
+      : buildDraftFromTurns(turns, { title: session?.title });
 
     const data = {
       title: base.title || "Unbenannte Session",
