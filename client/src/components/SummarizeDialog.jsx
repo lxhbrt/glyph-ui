@@ -2,7 +2,7 @@
  * SummarizeDialog — nicht-destruktiver Preview-Flow für Session-Zusammenfassungen.
  *
  * Ablauf: Draft anfragen (POST /summarize/draft) → Vorschau anzeigen →
- *   Bestätigen&Speichern (commit) · Bearbeiten (Textfeld) · Abbrechen · erneut generieren.
+ *   Bestätigen&Speichern (commit) · Bearbeiten (Textfeld) · Abbrechen.
  * Sicherheit: openrouter (extern) verlangt explizite Zustimmung, bevor Session-Inhalte
  * die Cloud verlassen. Keine automatische Überschreibung (409 wird verständlich gezeigt).
  *
@@ -99,12 +99,6 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
       setSaving(false);
     }
   }, [profile, draft, editMode, editTitle, editSummary, external, externalConsent, sessionId, onSaved]);
-
-  /** Erneutes Generieren: nur Entwurf ersetzen, kein Persistieren. */
-  const regenerate = useCallback(() => {
-    setDraft(null);
-    void generateDraft(profile);
-  }, [generateDraft, profile]);
 
   const close = useCallback(() => {
     if (saving) return;
@@ -227,14 +221,6 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
                   onClick={() => setEditMode((v) => !v)}
                 >
                   {editMode ? "Vorschau" : "Bearbeiten"}
-                </button>
-                <button
-                  type="button"
-                  className="summary-ghost"
-                  disabled={loading || saving}
-                  onClick={regenerate}
-                >
-                  Erneut generieren
                 </button>
                 <button
                   type="button"
