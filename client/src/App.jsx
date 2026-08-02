@@ -1502,7 +1502,7 @@ export default function App() {
   const canSeeActivity = caps ? Boolean(caps.activity) : true;
   const agentLabel = agent?.label || "Agent";
   const unavailableFor = useCallback(
-    (what) => `${what} ist nur mit Grok verfügbar (aktiv: ${agentLabel})`,
+    (what) => `${what} ist nur im grok-Profil verfügbar (aktiv: ${agentLabel})`,
     [agentLabel],
   );
 

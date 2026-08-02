@@ -1,12 +1,13 @@
 # Glyph — Handbuch
 
-**Glyph** — unabhängige Browser-Oberfläche für mehrere lokale/Cloud- Agenten über ACP
+**Glyph** — unabhängige Browser-Oberfläche für mehrere lokale/Cloud-Agenten über ACP
 (Agent Client Protocol). Du schreibst im Browser; im Hintergrund läuft ein Agent-Profil
 deiner Wahl (Standard: **grok**).
 
-**Hinweis zum Namen:** Glyph entstand als Oberfläche für **Grok Build** — daher nennen manche
-Kapitel weiterhin „Grok“. Die Bedienung gilt für **alle** Profile gleich; wo ein Bereich nur
-für ein bestimmtes Profil gilt (z. B. Voice = nur grok), ist es ausdrücklich markiert.
+**Entwicklung:** Glyph startete als reine Grok-Oberfläche („Build Term for Grok“) und hat sich
+zu einer **offenen Multi-Agenten-UI** entwickelt (grok · claude · openrouter · glyph-agent).
+Daher nennen manche Kapitel noch „Grok“ — die Bedienung gilt aber für **alle** Profile gleich;
+wo ein Bereich nur für ein bestimmtes Profil gilt (z. B. Voice = nur grok), ist es markiert.
 
 **Erstellt von Lx Hbrt** · Copyright © 2026 · MIT License  
 *Inoffiziell / unabhängig — nicht von xAI unterstützt oder freigegeben.*

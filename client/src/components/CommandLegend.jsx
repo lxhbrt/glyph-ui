@@ -61,7 +61,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Enter",
         need: "normal",
-        desc: "Senden (ohne Shift). Shift+Enter = neue Zeile. Während Grok arbeitet → Warteschlange.",
+        desc: "Senden (ohne Shift). Shift+Enter = neue Zeile. Während der Agent arbeitet → Warteschlange.",
       },
       {
         cmd: "Warteschlange",
@@ -179,7 +179,7 @@ function agentCommandGroup(agentCommands) {
       {
         cmd: "noch leer",
         need: "auto",
-        desc: "Erscheint nach Verbindung, sobald Grok available_commands_update sendet — keine statische Pflege mehr.",
+        desc: "Erscheint nach Verbindung, sobald der Agent available_commands_update sendet — keine statische Pflege mehr.",
       },
     ],
   };
@@ -260,7 +260,7 @@ const SHORT_HANDBOOK = [
     id: "composer",
     title: "Schreiben & senden",
     rows: [
-      ["Chat", "Normale Nachricht an Grok"],
+      ["Chat", "Normale Nachricht an den aktiven Agenten"],
       ["Deep Search", "Strukturierte Multi-Quellen-Recherche"],
       ["Fork", "Session branchen; Text = optionale Directive"],
       ["Enter", "Senden · während Arbeit → Warteschlange"],
@@ -279,7 +279,7 @@ const SHORT_HANDBOOK = [
   },
   {
     id: "working",
-    title: "Während Grok arbeitet",
+    title: "Während der Agent arbeitet",
     rows: [
       ["Idle", "Button zeigt ↵ → senden"],
       ["Arbeitet", "Runder Snack (Schlange jagt roten Stopp-Punkt)"],
@@ -302,7 +302,7 @@ const SHORT_HANDBOOK = [
   },
   {
     id: "can",
-    title: "Was Grok hier kann",
+    title: "Was der Agent hier kann",
     rows: [
       ["Code & Dateien", "Lesen, schreiben, refaktorieren im Workspace"],
       ["Terminal", "Shell, Builds, Tests, Git"],

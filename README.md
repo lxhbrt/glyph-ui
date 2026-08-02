@@ -1,6 +1,8 @@
 # Glyph
 
-**Build Term for Grok** — unabhängige Browser-UI für lokale Agenten über ACP (Agent Client Protocol).
+**Offene Browser-UI für mehrere lokale & Cloud-Agenten** über ACP (Agent Client Protocol).
+*Ursprünglich als „Build Term for Grok“ gestartet — heute ein profilneutrales Gesicht für
+grok, claude, openrouter und glyph-agent.*
 
 **Erstellt von [Lx Hbrt](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
 
@@ -12,6 +14,26 @@
 Browser (React)  --WebSocket-->  Node Bridge  --stdio ACP-->  Agent-Profil
                                                                (grok | claude | openrouter | glyph-agent)
 ```
+
+## Von Grok zu einer offenen UI
+
+Glyph startete als schlanke Browser-Oberfläche **nur** für die lokale **Grok Build**-CLI.
+Seither hat es sich zu einer **offenen Multi-Agenten-UI** entwickelt: Weil Glyph ein
+**ACP-Client** (Agent Client Protocol) ist und nicht an ein Modell gebunden, kam nach und
+nach je ein weiteres Profil hinzu:
+
+| Schritt | Profil | Grund |
+|---------|--------|-------|
+| Start | **grok** | Browser-Oberfläche für die lokale Grok-CLI (OAuth) |
+| +1 | **claude** | zweites OAuth-Konto (Anthropic) für den Chat |
+| +2 | **openrouter** | Token/API-Key → viele Cloud-Modelle zum Testen/Anbinden |
+| +3 | **glyph-agent** | eigene, lokale Tool-/Recherche-Schicht (kostenlos, Qwen) |
+
+Heute ist grok **nur noch das Standard-Profil**, nicht das Produkt. Alle Profile teilen
+dieselbe Bedienung; Grok-spezifische Extras (Deep Search, Voice, Session-Liste) sind pro
+Profil deklariert und in der UI ausgegraut, wo sie nicht gelten.
+
+---
 
 ## Voraussetzungen
 
@@ -84,10 +106,10 @@ Auf `main` und bei Pull Requests läuft dasselbe über GitHub Actions (Node 22 �
 
 1. Nachricht tippen, **Enter** senden (Shift+Enter = Zeilenumbruch)
 2. Streaming: Antwort, Thoughts, Tool-Aufrufe
-3. Composer-Aktion wählen: **Chat** (normal), **Deep Search** (`/deep-research`), **Fork** (Session branchen)
-4. Status-Button **verbunden** / **offline**: klicken startet den lokalen Grok-Agent neu
+3. Composer-Aktion wählen: **Chat** (normal), **Deep Search** (nur grok), **Fork** (Session branchen)
+4. Status-Button **verbunden** / **offline**: klicken startet den aktiven Agenten neu
 5. **Neue Session** startet eine frische ACP-Session
-6. **Overview** listet lokale Grok-Sessions und erlaubt Schließen mit optionalem Wiki-Archiv (**Löschen** ≈ TUI `/delete`)
+6. **Overview** listet lokale Grok-Sessions (nur grok-Profil) und erlaubt Schließen mit optionalem Wiki-Archiv (**Löschen** ≈ TUI `/delete`)
 
 Details: [HANDBUCH.md](./HANDBUCH.md)
 
@@ -118,7 +140,9 @@ Voraussetzung: lokalen Dienst starten → `cd ~/glyph-agent && python server.py`
 Grafische Ablaufdiagramme für jedes Profil (*warum hinzugefügt* + *wie es funktioniert*):
 [`docs/glyph-profile-diagrams.html`](./docs/glyph-profile-diagrams.html).
 
-## UI-Design (Grok Chat Stil)
+## UI-Design (Grok-Chat-Stil als Designsprache)
+
+Das Erscheinungsbild ist vom Grok-Chat inspiriert, gilt aber **für alle Profile** gleich:
 
 | Element | Look |
 |---------|------|
@@ -164,15 +188,20 @@ GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 
 ## Sicherheit
 
-Nur auf **localhost** laufen lassen. Die Bridge startet Grok mit `--always-approve` (volle Tool-Rechte). Nicht ungeschützt ins Netz hängen.
+Nur auf **localhost** laufen lassen. Die Bridge startet den Agenten mit vollem Tool-Zugriff (grok mit `--always-approve`). Nicht ungeschützt ins Netz hängen.
 
 ## Urheberrecht & Marken
 
-- **Produktname:** **Glyph** (eigenständig; „Build Term for Grok“ ist die Funktionsbeschreibung).
+- **Produktname:** **Glyph** (eigenständiger Name). Die Tagline hat sich mit der Entwicklung
+  gewandelt: von „Build Term for Grok“ (Ursprung als Grok-UI) zu einer offenen UI für mehrere
+  lokale & Cloud-Agenten.
 - **Software:** Copyright © 2026 [Lx Hbrt](https://github.com/lxhbrt) (Alexander Hubert). Lizenziert unter [MIT](./LICENSE).
 - **Autorenliste:** [AUTHORS](./AUTHORS) · [NOTICE](./NOTICE)
-- „Grok“ / „Grok Build“ sind Marken der jeweiligen Rechteinhaber (xAI / SpaceXAI). Dieses Projekt ist eine **unabhängige, inoffizielle** Browser-Oberfläche für die **lokale** Grok-Build-CLI. Es steht in **keiner** Partnerschaft mit xAI und wird von xAI **nicht** unterstützt oder freigegeben, sofern nicht ausdrücklich anders angegeben.
-- Glyph nutzt Grok nur als **Interoperabilitätsbezug** (CLI/ACP). Keine xAI-Logos oder offiziellen Assets als eigene Marke.
+- „Grok“ / „Grok Build“ sind Marken der jeweiligen Rechteinhaber (xAI / SpaceXAI). Dieses
+  Projekt ist eine **unabhängige, inoffizielle** Browser-Oberfläche, die Grok **als eines von
+  mehreren** Profilen über ACP nutzt (Interoperabilitätsbezug). Es steht in **keiner**
+  Partnerschaft mit xAI und wird von xAI **nicht** unterstützt oder freigegeben.
+- Keine xAI-Logos oder offiziellen Assets als eigene Marke.
 
 ## Contributing
 
