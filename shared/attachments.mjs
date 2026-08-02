@@ -50,6 +50,61 @@ export const MAX_ATTACH_BYTES = 4 * 1024 * 1024; // 4 MiB
 /** Maximale Dateiendung in einer Quelldatei. */
 const MAX_NAME = 200;
 
+// --- Bildunterstützung (Stufe 2, nur OpenRouter) ---
+/** Erlaubte Bild-MIME-Typen (sichere Whitelist). */
+export const IMAGE_MIME_WHITELIST = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/gif",
+]);
+/** Max. Größe eines Bild-Anhangs (bytes). */
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MiB
+/** Min. gültige Base64-Länge eines „echten“ Bildes (verhindert Trivial-/Kaputt-Fälle). */
+const MIN_IMAGE_B64 = 64;
+
+/**
+ * Ist der MIME-Typ ein erlaubtes Bild?
+ * @param {string} mimeType
+ */
+export function isImageMime(mimeType) {
+  return IMAGE_MIME_WHITELIST.has(String(mimeType || "").toLowerCase());
+}
+
+/**
+ * Validiert + normalisiert einen ACP-Bildblock zu einem OpenAI image_url-Payload.
+ * Strenge Regeln: Whitelist-MIME, Größenlimit, Base64-Validierung (Data-URI-Format).
+ * Wirft bei ungültigem MIME/B64. Liefert { type, image_url:{ url } }.
+ *
+ * @param {{mimeType?:string, data?:string, mediaType?:string, uri?:string}} block
+ * @returns {{type:"image_url", image_url:{url:string}}}
+ */
+export function toOpenAIImage(block) {
+  const mime = String(block?.mimeType || block?.mediaType || "").toLowerCase();
+  if (!IMAGE_MIME_WHITELIST.has(mime)) {
+    throw new Error(`Nicht erlaubtes Bildformat: ${mime || "unbekannt"} (erlaubt: png/jpeg/webp/gif)`);
+  }
+  let b64 = block?.data;
+  if (typeof b64 !== "string" || !b64.trim()) {
+    throw new Error("Bildblock ohne Base64-Daten (data).");
+  }
+  // Data-URI-Präfix entfernen, falls schon vorhanden.
+  b64 = b64.replace(/^data:[^;]*;base64,/, "");
+  if (!/^[A-Za-z0-9+/=]+$/.test(b64)) {
+    throw new Error("Ungültiges Base64 (unerlaubte Zeichen).");
+  }
+  if (b64.length < MIN_IMAGE_B64) {
+    throw new Error("Bild-Base64 zu kurz — beschädigt oder leer.");
+  }
+  // Base64-Dekodierung als harter Validierungs-Check (wirft bei kaputtem B64).
+  const decoded = Buffer.from(b64, "base64");
+  if (!decoded.length || decoded.length > MAX_IMAGE_BYTES) {
+    throw new Error(`Bild zu groß: ${decoded.length} B > ${MAX_IMAGE_BYTES} B.`);
+  }
+  return { type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } };
+}
+
 /**
  * Normalisiert + escaped einen Dateinamen (kein Pfad-Trick, keine Kontrollzeichen).
  * @param {string} name
@@ -232,4 +287,62 @@ export async function buildPromptWithAttachments(blocks) {
     }
   }
   return { message, attachments };
+}
+
+/**
+ * Stufe 2 (nur OpenRouter): Baut aus ACP-Blöcken eine geordnete OpenAI-Content-Liste,
+ * in der Text- und Bildblöcke in ihrer ORIGINAL-Reihenfolge stehen.
+ *
+ * @param {Array<object>} blocks ACP-Prompt-ContentBlocks
+ * @returns {Promise<Array<{type:string, text?:string, image_url?:{url:string}}>>}
+ */
+export async function buildOpenRouterContent(blocks) {
+  const list = Array.isArray(blocks) ? blocks : [];
+  const out = [];
+  const textBuf = [];
+
+  const flush = () => {
+    if (textBuf.length) {
+      out.push({ type: "text", text: textBuf.join("\n") });
+      textBuf.length = 0;
+    }
+  };
+
+  let imageErr = null;
+  for (const b of list) {
+    if (!b || typeof b !== "object") continue;
+
+    if (b.type === "text" && typeof b.text === "string") {
+      if (b.text) textBuf.push(b.text);
+      continue;
+    }
+
+    if (b.type === "image") {
+      try {
+        const img = toOpenAIImage(b);
+        flush();
+        out.push(img);
+      } catch (e) {
+        if (!imageErr) imageErr = e.message;
+        // Fehler nicht still verwerfen: Hinweis als Textblock anhängen.
+        textBuf.push(`[Bild nicht übertragen (Stufe 2-Fehler): ${e.message}]`);
+      }
+      continue;
+    }
+
+    if (b.type === "embedded_resource" || b.type === "resource_link") {
+      // Textanhänge via bestehender Stufe-1-Extraktion einbetten.
+      const sub = await extractTextAttachments([b]);
+      if (sub.text) textBuf.push(sub.text);
+      continue;
+    }
+  }
+
+  flush();
+
+  // Wenn NUR Bilder angefragt wurden und keins übertragbar war, Fehler melden.
+  if (!out.length && imageErr) {
+    throw new Error(`Keine Bildblöcke übertragbar: ${imageErr}`);
+  }
+  return out;
 }

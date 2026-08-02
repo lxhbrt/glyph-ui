@@ -17,7 +17,7 @@
  */
 import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
-import { buildPromptWithAttachments } from "../shared/attachments.mjs";
+import { buildOpenRouterContent } from "../shared/attachments.mjs";
 
 // --- Konfiguration (per Env überschreibbar) ---
 const OPENROUTER_URL = process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1";
@@ -50,17 +50,18 @@ app.onRequest(acp.methods.agent.initialize, async () => {
   return {
     protocolVersion: PROTOCOL_VERSION,
     agentCapabilities: {
-      // Reiner Chat; Textanhänge (Stufe 1) werden vom Adapter verarbeitet.
+      // Reiner Chat; Text- (Stufe 1) UND Bildanhänge (Stufe 2) werden verarbeitet.
       loadSession: false,
       promptCapabilities: {
         attachments: true,
+        images: true, // Stufe 2: image_url-Base64 via OpenRouter
         text: true,
       },
       sessionCapabilities: {},
     },
     agentInfo: {
       name: "openrouter",
-      version: "0.2.0",
+      version: "0.3.0",
     },
   };
 });
@@ -133,13 +134,13 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     throw err;
   }
 
-  // Nutzer-Text + Textanhänge aus ContentBlocks extrahieren (Stufe 1).
-  // Anhänge werden deutlich gekennzeichnet in message eingebettet.
-  const built = await buildPromptWithAttachments(params.prompt);
-  const userText = built.message;
+  // Nutzer-Content aus ACP-Blöcken bauen (Stufe 2: Text+Bilder geordnet).
+  // buildOpenRouterContent erzeugt eine OpenAI-Content-Liste, die BILDER als
+  // image_url-Daten-URIs enthält — dieser Payload geht exakt so an OpenRouter.
+  const userContent = await buildOpenRouterContent(params.prompt);
 
-  // Neue Nutzer-Nachricht anhängen
-  store.messages.push({ role: "user", content: userText });
+  // Neue Nutzer-Nachricht anhängen (content kann String ODER Array sein).
+  store.messages.push({ role: "user", content: userContent });
 
   // OpenAI-Anfrage aufbauen (inkl. der neuen User-Nachricht, Kontext auf letzte 20)
   const openaiMessages = store.messages
