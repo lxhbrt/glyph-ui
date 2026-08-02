@@ -48,11 +48,15 @@ function SummarizeDialog({ sessionId, sessionTitle, onClose, onSaved }) {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Entwurf fehlgeschlagen");
+        // Defensive: Draft muss ein Objekt mit .title sein, sonst klarer Fehler statt Crash.
+        if (!json || typeof json !== "object" || !json.draft || typeof json.draft !== "object") {
+          throw new Error("Server antwortete ohne gültigen Entwurf (draft).");
+        }
         setDraft(json.draft);
-        setTarget(json.target);
+        setTarget(json.target || null);
         setExternal(!!json.external_processing);
-        setEditTitle(json.draft?.title || "");
-        setEditSummary(json.draft?.summary || "");
+        setEditTitle(json.draft?.title ?? "");
+        setEditSummary(json.draft?.summary ?? "");
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
