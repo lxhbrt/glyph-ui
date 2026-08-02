@@ -1134,7 +1134,17 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
     if (!turns.length && bridge && bridge.connected && req.params.id === bridge.sessionId) {
       try {
         const hist = await bridge.getSessionHistory(req.params.id);
-        turns = (hist.messages || []).map((m) => ({ role: m.role, text: m.content }));
+        turns = (hist.messages || []).map((m) => ({
+          role: m.role,
+          // content kann String ODER OpenAI-Array sein ([{type:'text',text}] / image_url) —
+          // extrahiere Text, damit buildDraftFromTurns (erwartet String) sauber läuft.
+          text: Array.isArray(m.content)
+            ? m.content
+                .filter((b) => b?.type === "text" && typeof b.text === "string")
+                .map((b) => b.text)
+                .join("\n")
+            : String(m.content ?? ""),
+        }));
       } catch {
         turns = [];
       }
@@ -1149,12 +1159,14 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
     const includeAttachments = req.body?.include_attachments === true;
 
     const draft = buildDraftFromTurns(turns, {
-      title: session.title || session.transcriptTitle || undefined,
+      // session kann bei In-Memory-Session (openrouter-1) null sein → title optional.
+      title: session?.title || session?.transcriptTitle || undefined,
     });
     const wikiRoot = getSummaryWikiRoot();
     const fileName = buildFileName({
       title: draft.title,
-      sessionId: session.id,
+      // sessionId: disk-UUID oder die aktive In-Memory-ID (req.params.id).
+      sessionId: session?.id || req.params.id,
       profile,
     });
     const target = resolveTargetPath(fileName, wikiRoot);
@@ -1202,7 +1214,15 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
     if (!turns.length && bridge && bridge.connected && req.params.id === bridge.sessionId) {
       try {
         const hist = await bridge.getSessionHistory(req.params.id);
-        turns = (hist.messages || []).map((m) => ({ role: m.role, text: m.content }));
+        turns = (hist.messages || []).map((m) => ({
+          role: m.role,
+          text: Array.isArray(m.content)
+            ? m.content
+                .filter((b) => b?.type === "text" && typeof b.text === "string")
+                .map((b) => b.text)
+                .join("\n")
+            : String(m.content ?? ""),
+        }));
       } catch {
         turns = [];
       }
@@ -1233,9 +1253,9 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
       references: Array.isArray(base.references) ? base.references : [],
       tags: Array.isArray(body.tags) ? body.tags : [],
       meta: {
-        sessionId: session.id,
+        sessionId: session?.id || req.params.id,
         profile,
-        model: session.model || body.model || "",
+        model: session?.model || body.model || "",
         external_processing: external,
       },
     };
