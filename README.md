@@ -140,6 +140,83 @@ Voraussetzung: lokalen Dienst starten → `cd ~/glyph-agent && python server.py`
 Grafische Ablaufdiagramme für jedes Profil (*warum hinzugefügt* + *wie es funktioniert*):
 [`docs/glyph-profile-diagrams.html`](./docs/glyph-profile-diagrams.html).
 
+## Anhänge & Uploads
+
+Glyph nimmt Anhänge über `POST /api/attachments` entgegen (Datei-Oberfläche, Drag&Drop,
+Kopieren). Danach erzeugt die ACP-Brücke die passenden Content-Blöcke. Die Verarbeitung
+hängt vom aktiven Profil ab.
+
+### Unterstützte Profile
+
+| Profil | Textanhänge | Bilder | Hinweis |
+|--------|-------------|--------|---------|
+| **openrouter** | ✅ | ✅ (Stufe 2) | Text via eingebettete Ressource; Bilder als `image_url`-Base64 |
+| **glyph-agent** | ✅ | ❌ | Bilder werden NICHT an das Modell übertragen (Stufe-1-Hinweis) |
+| **grok** | ✅ | ✅ | native ACP-Unterstützung gemäß Grok-Profil |
+| **claude** | (Adapter) | (Adapter) | abhängig vom `claude-agent-acp`-Adapter |
+
+### Erlaubte Formate & Limits
+
+**Textdateien** (Stufe 1): `.txt`, `.md`/`.markdown`, `.csv`, `.json`, `.xml`, `.yaml`/`.yml`, `.log`, `.html`
+- Whitelist-MIME: `text/*`, `application/json`, `application/xml`, `text/yaml`, `text/x-log`
+- max. **2 MiB** extrahierte Zeichen pro Anhang · max. **4 MiB** Byte-Größe
+
+**Bilder** (Stufe 2, nur openrouter): `image/png`, `image/jpeg`, `image/webp`, `image/gif`
+- max. **4 MiB** pro Bild
+
+**Allgemein:** max. **8 Anhänge pro Nachricht** · max. **12 MiB** pro Datei (Upload-Limit)
+
+### Limit-/Fehler-Verhalten
+
+- **Ungültiger MIME-Typ** (z. B. `application/pdf`, `image/tiff`): wird blockiert — geht **nie** an
+  das Modell; es erscheint ein sichtbarer Hinweis statt eines Crashs.
+- **Kaputtes / zu kurzes Base64** (Bild): Validierung (Zeichen + Dekodierung) lehnt ab.
+- **Zu großer Anhang:** klare Fehlermeldung (`Textanhang zu groß` / `Bild zu groß`) —
+  keine stille Verwerfung.
+- **Leerer Anhang:** Hinweis `Übergangen (leer)`.
+- **Bilder bei `glyph-agent`:** werden nicht an das Modell gesendet — ein Stufe-1-Hinweis
+  (`[Übergangen: Bild (multimodale Stufe 2 …)]`) macht das sichtbar.
+
+### Beispiele
+
+**Textdatei mit `openrouter`** — Inhalte werden in die Nachricht eingebettet:
+
+```text
+[Anhang: bericht.txt]
+…Dateiinhalt…
+[Ende Anhang: bericht.txt]
+```
+
+**Bild mit `openrouter`** — wird als Base64-Data-URI übertragen:
+
+```json
+{
+  "type": "image_url",
+  "image_url": {
+    "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg…"
+  }
+}
+```
+
+**Textanhang mit `glyph-agent`** — `POST /chat` rückwärtskompatibel um `attachments` erweitert:
+
+```json
+{
+  "message": "Fasse den Anhang zusammen.",
+  "attachments": [{ "name": "notiz.md", "mime": "text/markdown", "content": "…" }]
+}
+```
+
+### Datenschutz & Sicherheit
+
+- **OpenRouter erhält den Bildinhalt als Base64-Data-URI** — das Bild verlässt den Rechner
+  und geht an den OpenRouter-Dienst (Teil der Anfrage). Bei sensiblen Bildern bewusst
+  entscheiden.
+- **API-Keys gehören ausschließlich** in geschützte Umgebungsvariablen / `.env` (gitignored) —
+  **nie** in Dateien, Logs oder Commits.
+- **Sensible Uploads** (persönliche/Vault-Inhalte) sollten nicht ungeprüft an externe
+  Cloud-Modelle gesendet werden; der lokale `glyph-agent` bleibt dafür der Datenschutz-Weg.
+
 ## UI-Design (Grok-Chat-Stil als Designsprache)
 
 Das Erscheinungsbild ist vom Grok-Chat inspiriert, gilt aber **für alle Profile** gleich:

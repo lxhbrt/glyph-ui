@@ -523,6 +523,31 @@ Grafische Abläufe: `docs/glyph-profile-diagrams.html`.
 
 ---
 
+## 15c. Anhänge & Uploads (Kurzfassung)
+
+Anhänge werden über die Chat-Oberfläche entgegengenommen (Datei, Drag&Drop, Einfügen) und
+je nach Profil verarbeitet:
+
+| Profil | Textanhänge | Bilder |
+|--------|-------------|--------|
+| **openrouter** | ✅ | ✅ Stufe 2 (`image_url`-Base64) |
+| **glyph-agent** | ✅ | ❌ (Stufe-1-Hinweis) |
+| **grok** | ✅ | ✅ native ACP |
+
+- **Textformate:** `.txt` `.md` `.csv` `.json` `.xml` `.yaml` `.log` `.html` · max. **2 MiB**
+- **Bildformate (nur openrouter):** PNG, JPEG, WebP, GIF · max. **4 MiB**
+- **Limit:** max. **8 Anhänge** / max. **12 MiB** pro Datei
+- **Fehler:** ungültiger Typ / kaputtes Base64 / zu groß → blockiert mit klarer Meldung,
+  nie still verworfen und nie an das Modell gesendet.
+- **glyph-agent + Bild:** wird **nicht** an das Modell übertragen → sichtbarer Hinweis.
+- **Datenschutz:** Bilder gehen als Base64-Data-URI an OpenRouter (Cloud). Keys nur in
+  geschützten Env/.env (gitignored), nie in Dateien/Logs/Commits. Sensible Uploads nicht
+  ungeprüft an externe Modelle; dafür bleibt `glyph-agent` (lokal).
+
+Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
+
+---
+
 ## 16. Schnell-Checkliste
 
 - [ ] Mindestens ein Profil verfügbar (Default `grok` eingeloggt)  
