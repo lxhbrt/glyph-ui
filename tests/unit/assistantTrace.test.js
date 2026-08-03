@@ -24,6 +24,52 @@ describe("modelLabel", () => {
   });
 });
 
+describe("buildCompact — neue sources-Zweigeleisigkeit (vault/web)", () => {
+  it("Vault ausreichend -> nur Vault-Recall mit Quellenzahl", () => {
+    const trace = {
+      provider: "ollama", model: "qwen-solid", fallback_used: false,
+      sources: { vault: { count: 2, status: "success", items: ["/wiki/A.md"] }, web: undefined },
+    };
+    assert.equal(buildCompact(trace), "Vault-Recall · ollama / qwen-solid · 2 Quellen verwendet");
+  });
+
+  it("Vault leer + Web erfolgreich -> WebSearch", () => {
+    const trace = {
+      provider: "openrouter", model: "openai/gpt-5.6-luna", fallback_used: false,
+      sources: { vault: { count: 0, status: "empty", items: [] }, web: { count: 3, status: "success", items: [] } },
+    };
+    assert.equal(buildCompact(trace), "WebSearch · openrouter / gpt-5.6-luna · erfolgreich");
+  });
+
+  it("beide Quellen (Vault + Web) -> 'Vault + Web'", () => {
+    const trace = {
+      provider: "openrouter", model: "openai/gpt-5.6-luna", fallback_used: false,
+      sources: { vault: { count: 1, status: "success", items: ["/wiki/A.md"] }, web: { count: 2, status: "success", items: [] } },
+    };
+    assert.equal(buildCompact(trace), "Vault + Web · openrouter / gpt-5.6-luna · erfolgreich");
+  });
+
+  it("Web lief, aber 0 Treffer -> kein verwertbares Ergebnis", () => {
+    const trace = {
+      provider: "openrouter", model: "openai/gpt-5.6-luna", fallback_used: false,
+      sources: { vault: { count: 0, status: "empty", items: [] }, web: { count: 0, status: "empty", items: [] } },
+    };
+    assert.equal(buildCompact(trace), "WebSearch · openrouter / gpt-5.6-luna · kein verwertbares Ergebnis");
+  });
+
+  it("Fallback bleibt über sources sichtbar", () => {
+    const trace = {
+      provider: "fallback", model: "gpt → free (lokal: qwen)", fallback_used: true,
+      sources: { vault: { count: 2, status: "success", items: [] } },
+    };
+    const line = buildCompact(trace);
+    assert.ok(line.includes("Fallback aktiv"));
+    assert.ok(line.includes("2 Quellen verwendet"));
+  });
+});
+
+// Vorhandene Szenarien (Rückwärtskompatibilität, kein/alter sources-Block).
+
 describe("buildCompact — OpenRouter + WebSearch erfolgreich", () => {
   it("shows activity, provider/model and success status", () => {
     const trace = {

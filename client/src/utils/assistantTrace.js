@@ -25,6 +25,10 @@ export function modelLabel(model) {
  * Status-Unterscheidung: nicht verwendet / erfolgreich / fehlgeschlagen /
  * kein verwertbares Ergebnis. fallback_used wird sichtbar angehängt.
  *
+ * Bevorzugt den neuen zweigeteilten Trace-Block `sources: {vault, web}` und fällt
+ * auf das frühere Ableiten über `retrieval`/`tool_calls` zurück, wenn `sources`
+ * fehlt (rückwärtskompatibel).
+ *
  * @param {object} trace Effektiver Server-Trace.
  * @returns {string} Einzeilige kompakte Anzeige.
  */
@@ -33,24 +37,44 @@ export function buildCompact(trace) {
   const model = modelLabel(trace.model);
   const tcs = Array.isArray(trace.tool_calls) ? trace.tool_calls : [];
   const retrieval = trace.retrieval;
+  const sources = trace.sources;
 
   let activity = "";
   let status = "erfolgreich";
 
-  // Vault-Recall hat Vorrang in der Kennzeichnung der Aktivität.
-  if (retrieval && Number(retrieval.selected) > 0) {
-    activity = "Vault-Recall";
-    status = `${retrieval.selected} Quellen verwendet`;
-  } else if (tcs.length) {
-    const names = tcs.map((t) => t.tool).filter(Boolean).join(", ");
-    activity = names || "Tool";
-    const anyErr = tcs.some((t) => t.status === "error");
-    const anyEmpty = tcs.some(
-      (t) => t.tool === "WebSearch" && (t.result_length || 0) === 0,
-    );
-    if (anyErr) status = "fehlgeschlagen";
-    else if (anyEmpty) status = "kein verwertbares Ergebnis";
-    else status = "erfolgreich";
+  if (sources && typeof sources === "object" && (sources.vault || sources.web)) {
+    // --- Neuer zweigeteilter Trace (sources.vault / sources.web) ---
+    const vault = sources.vault || { count: 0, status: "empty" };
+    const web = sources.web;
+
+    if (Number(vault.count) > 0 && !web) {
+      activity = "Vault-Recall";
+      status = `${vault.count} Quellen verwendet`;
+    } else if (web) {
+      // Web lief (current-Frage oder Vault unzureichend).
+      activity = Number(vault.count) > 0 ? "Vault + Web" : "WebSearch";
+      if (Number(web.count) > 0) status = "erfolgreich";
+      else status = "kein verwertbares Ergebnis";
+    } else if (Number(vault.count) === 0) {
+      activity = "Vault-Recall";
+      status = "keine Quellen gefunden";
+    }
+  } else {
+    // --- Rückwärtskompatibel: altes Ableiten über retrieval / tool_calls ---
+    if (retrieval && Number(retrieval.selected) > 0) {
+      activity = "Vault-Recall";
+      status = `${retrieval.selected} Quellen verwendet`;
+    } else if (tcs.length) {
+      const names = tcs.map((t) => t.tool).filter(Boolean).join(", ");
+      activity = names || "Tool";
+      const anyErr = tcs.some((t) => t.status === "error");
+      const anyEmpty = tcs.some(
+        (t) => t.tool === "WebSearch" && (t.result_length || 0) === 0,
+      );
+      if (anyErr) status = "fehlgeschlagen";
+      else if (anyEmpty) status = "kein verwertbares Ergebnis";
+      else status = "erfolgreich";
+    }
   }
 
   let line = activity
