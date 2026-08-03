@@ -1178,6 +1178,71 @@ button.send.send--stuffed .send-snack {
   cursor: not-allowed;
 }
 
+/* Untere Aktionsleiste (Kopieren/Vorlesen) unter dem vollständigen Antworttext.
+   Große Touch-Flächen, Label + Icon; nur bei fertigen Assistant-Antworten. */
+.msg-bottom-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.msg-bottom-actions .msg-bottom-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 70%, var(--bg));
+  color: var(--muted);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.msg-bottom-actions .msg-bottom-btn:hover:not(:disabled) {
+  color: var(--gold-bright);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--border));
+  background: color-mix(in srgb, var(--gold) 10%, var(--panel));
+}
+
+.msg-bottom-actions .msg-bottom-btn.is-copied {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.msg-bottom-actions .msg-bottom-btn.is-speaking {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+}
+
+.msg-bottom-actions .msg-bottom-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.msg-bottom-actions .msg-bottom-label {
+  white-space: nowrap;
+}
+
+/* Große Touch-Flächen auf Mobilgeräten */
+@media (max-width: 640px) {
+  .msg-bottom-actions .msg-bottom-btn {
+    min-height: 48px;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

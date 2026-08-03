@@ -1969,67 +1969,6 @@ export default function App() {
                                 : "Tool"}
                         {m.streaming ? " …" : ""}
                       </span>
-                      {(m.role === "assistant" || m.role === "user") &&
-                      !m.streaming &&
-                      m.text?.trim() ? (
-                        <span className="msg-actions">
-                          <button
-                            type="button"
-                            className={`msg-action-btn${
-                              copiedId === m.id ? " is-copied" : ""
-                            }`}
-                            title={
-                              copiedId === m.id
-                                ? "Kopiert"
-                                : "Nachricht kopieren"
-                            }
-                            aria-label={
-                              copiedId === m.id
-                                ? "Kopiert"
-                                : "Nachricht kopieren"
-                            }
-                            onClick={() => void copyMessage(m.id, m.text)}
-                          >
-                            {copiedId === m.id ? (
-                              <IconCheck size={14} />
-                            ) : (
-                              <IconCopy size={14} />
-                            )}
-                          </button>
-                          {m.role === "assistant" ? (
-                            <button
-                              type="button"
-                              className={`msg-action-btn msg-speak-btn${
-                                speakingId === m.id ? " is-speaking" : ""
-                              }${ttsBusyId === m.id ? " is-busy" : ""}`}
-                              title={
-                                speakingId === m.id
-                                  ? "Vorlesen stoppen"
-                                  : ttsBusyId === m.id
-                                    ? "Erzeuge Sprache…"
-                                    : voiceAvailable
-                                      ? "Mit Grok TTS vorlesen"
-                                      : voiceHint || "TTS: XAI_API_KEY setzen"
-                              }
-                              aria-label={
-                                speakingId === m.id
-                                  ? "Vorlesen stoppen"
-                                  : "Antwort vorlesen"
-                              }
-                              disabled={Boolean(
-                                ttsBusyId && ttsBusyId !== m.id,
-                              )}
-                              onClick={() => void speakText(m.id, m.text)}
-                            >
-                              {speakingId === m.id ? (
-                                <IconSpeakerOff size={14} />
-                              ) : (
-                                <IconSpeaker size={14} />
-                              )}
-                            </button>
-                          ) : null}
-                        </span>
-                      ) : null}
                     </div>
                     {m.role === "user" && m.attachments?.length ? (
                       <ul className="msg-attachments" aria-label="Anhänge">
@@ -2048,6 +1987,77 @@ export default function App() {
                       </ul>
                     ) : null}
                     {m.text ? <MarkdownBody text={m.text} /> : null}
+                    {m.role === "assistant" &&
+                    !m.streaming &&
+                    m.text?.trim() ? (
+                      <div
+                        className="msg-bottom-actions"
+                        role="group"
+                        aria-label="Antwortaktionen"
+                      >
+                        <button
+                          type="button"
+                          className={`msg-action-btn msg-bottom-btn${
+                            copiedId === m.id ? " is-copied" : ""
+                          }`}
+                          title={
+                            copiedId === m.id
+                              ? "Kopiert"
+                              : "Antwort kopieren"
+                          }
+                          aria-label={
+                            copiedId === m.id ? "Kopiert" : "Antwort kopieren"
+                          }
+                          onClick={() => void copyMessage(m.id, m.text)}
+                        >
+                          {copiedId === m.id ? (
+                            <IconCheck size={16} />
+                          ) : (
+                            <IconCopy size={16} />
+                          )}
+                          <span className="msg-bottom-label">
+                            {copiedId === m.id ? "Kopiert" : "Kopieren"}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`msg-action-btn msg-bottom-btn msg-speak-btn${
+                            speakingId === m.id ? " is-speaking" : ""
+                          }${ttsBusyId === m.id ? " is-busy" : ""}`}
+                          title={
+                            speakingId === m.id
+                              ? "Vorlesen stoppen"
+                              : ttsBusyId === m.id
+                                ? "Erzeuge Sprache…"
+                                : voiceAvailable
+                                  ? "Mit Grok TTS vorlesen"
+                                  : voiceHint || "TTS: XAI_API_KEY setzen"
+                          }
+                          aria-label={
+                            speakingId === m.id
+                              ? "Vorlesen stoppen"
+                              : "Antwort vorlesen"
+                          }
+                          disabled={Boolean(
+                            ttsBusyId && ttsBusyId !== m.id,
+                          )}
+                          onClick={() => void speakText(m.id, m.text)}
+                        >
+                          {speakingId === m.id ? (
+                            <IconSpeakerOff size={16} />
+                          ) : (
+                            <IconSpeaker size={16} />
+                          )}
+                          <span className="msg-bottom-label">
+                            {speakingId === m.id
+                              ? "Stoppen"
+                              : ttsBusyId === m.id
+                                ? "Wird vorbereitet…"
+                                : "Vorlesen"}
+                          </span>
+                        </button>
+                      </div>
+                    ) : null}
                     {m.trace ? <AssistantMeta trace={m.trace} /> : null}
                   </article>
                 ))
