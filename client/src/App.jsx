@@ -2011,13 +2011,10 @@ export default function App() {
                           onClick={() => void copyMessage(m.id, m.text)}
                         >
                           {copiedId === m.id ? (
-                            <IconCheck size={16} />
+                            <IconCheck size={18} />
                           ) : (
-                            <IconCopy size={16} />
+                            <IconCopy size={18} />
                           )}
-                          <span className="msg-bottom-label">
-                            {copiedId === m.id ? "Kopiert" : "Kopieren"}
-                          </span>
                         </button>
                         <button
                           type="button"
@@ -2044,17 +2041,10 @@ export default function App() {
                           onClick={() => void speakText(m.id, m.text)}
                         >
                           {speakingId === m.id ? (
-                            <IconSpeakerOff size={16} />
+                            <IconSpeakerOff size={18} />
                           ) : (
-                            <IconSpeaker size={16} />
+                            <IconSpeaker size={18} />
                           )}
-                          <span className="msg-bottom-label">
-                            {speakingId === m.id
-                              ? "Stoppen"
-                              : ttsBusyId === m.id
-                                ? "Wird vorbereitet…"
-                                : "Vorlesen"}
-                          </span>
                         </button>
                       </div>
                     ) : null}
