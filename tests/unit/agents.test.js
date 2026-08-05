@@ -62,10 +62,10 @@ test("resolveClaudeCommand", async (t) => {
 test("buildAgentProfiles", async (t) => {
   const profiles = buildAgentProfiles({ PATH: "/nonexistent-dir-xyz" });
 
-  await t.test("offers all four profiles", () => {
+  await t.test("offers three profiles (no separate openrouter UI)", () => {
     assert.deepEqual(
       profiles.map((p) => p.id),
-      ["grok", "claude", "glyph-agent", "openrouter"],
+      ["grok", "claude", "glyph-agent"],
     );
   });
 
@@ -103,16 +103,14 @@ test("buildAgentProfiles", async (t) => {
       sessionHistory: false,
       summarize: false,
     });
-    // glyph-agent + openrouter: kein SessionList (Lupe), aber History + Summarize
-    for (const id of ["glyph-agent", "openrouter"]) {
-      assert.deepEqual(findAgent(profiles, id).capabilities, {
-        deepSearch: false,
-        activity: false,
-        sessionList: false,
-        sessionHistory: true,
-        summarize: true,
-      });
-    }
+    // glyph-agent: kein SessionList (Lupe), aber History + Summarize
+    assert.deepEqual(findAgent(profiles, "glyph-agent").capabilities, {
+      deepSearch: false,
+      activity: false,
+      sessionList: false,
+      sessionHistory: true,
+      summarize: true,
+    });
   });
 });
 

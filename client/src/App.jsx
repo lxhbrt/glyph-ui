@@ -10,8 +10,15 @@ import { PlanBar } from "./components/PlanBar.jsx";
 import { SnackBoard, SnackScrollbar } from "./components/Snack.jsx";
 import { CommandLegend } from "./components/CommandLegend.jsx";
 import { CommandOverview } from "./components/CommandOverview.jsx";
+import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
+import { SlashPopup } from "./components/SlashPopup.jsx";
 import { SummarizeDialog } from "./components/SummarizeDialog.jsx";
 import { ActivityCalendar } from "./components/ActivityCalendar.jsx";
+import {
+  insertSlashCommand,
+  rankCatalog,
+  slashTokenAt,
+} from "./utils/slash.js";
 import {
   IconSearch,
   IconCompose,
@@ -68,7 +75,7 @@ export default function App() {
   const drainingRef = useRef(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [sessionId, setSessionId] = useState(null);
-  /** Öffnet den Summarize-Dialog für die AKTIVE Session (openrouter/glyph-agent). */
+  /** Öffnet den Summarize-Dialog für die AKTIVE Session (glyph-agent / aktive History). */
   const [activeSummarizeOpen, setActiveSummarizeOpen] = useState(false);
   const [cwd, setCwd] = useState("");
   /**
@@ -118,6 +125,16 @@ export default function App() {
   const [showOverview, setShowOverview] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [legendTab, setLegendTab] = useState("handbook");
+  const [showExtensions, setShowExtensions] = useState(false);
+  const [skills, setSkills] = useState([]);
+  const [skillsHint, setSkillsHint] = useState(null);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsError, setSkillsError] = useState("");
+  /** Slash-Popup state (Composer `/` token). */
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashQuery, setSlashQuery] = useState("");
+  const [slashIndex, setSlashIndex] = useState(0);
+  const composerRef = useRef(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   /**
@@ -1521,7 +1538,7 @@ export default function App() {
   const canBrowseSessions = caps ? Boolean(caps.sessionList) : true;
   const canSeeActivity = caps ? Boolean(caps.activity) : true;
   // Aktive-Session-Zusammenfassung: möglich, wenn Profil summarize + sessionHistory kann.
-  // Unabhängig von sessionList (gilt auch für openrouter/glyph-agent ohne Lupe).
+  // Unabhängig von sessionList (gilt auch für glyph-agent ohne Lupe).
   const canSummarize = caps ? Boolean(caps.summarize && caps.sessionHistory) : false;
   const agentLabel = agent?.label || "Agent";
   const unavailableFor = useCallback(
@@ -1650,7 +1667,9 @@ export default function App() {
   );
 
   const composerPlaceholder = useMemo(() => {
-    if (!connected) return `Warte auf ${agentLabel}-Verbindung…`;
+    if (!connected) {
+      return `Offline — tippen ok · / für Skills · senden nach ${agentLabel}-Verbindung`;
+    }
     if (cancelling) {
       return `Abbruch… ${workingSeconds}s — warte auf sicheres Turn-Ende`;
     }
@@ -1668,7 +1687,7 @@ export default function App() {
     if (sendAction === "fork") {
       return "Optional: Directive für den Fork… (leer = nur Session branchen)";
     }
-    return `Nachricht an ${agentLabel}… Screenshot paste · Datei droppen`;
+    return `Nachricht an ${agentLabel}… / Befehle · Screenshot paste · Datei droppen`;
   }, [
     connected,
     isWorking,
@@ -1679,6 +1698,114 @@ export default function App() {
     workingSeconds,
     agentLabel,
   ]);
+
+  // Profile-dependent skills (offline-capable disk scan on the bridge)
+  const loadSkills = useCallback(async (profileId) => {
+    const id = profileId || "grok";
+    setSkillsLoading(true);
+    setSkillsError("");
+    try {
+      const res = await fetch(`/api/skills?profile=${encodeURIComponent(id)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Skills laden fehlgeschlagen");
+      setSkills(Array.isArray(json.skills) ? json.skills : []);
+      setSkillsHint(json.hint || null);
+    } catch (err) {
+      setSkills([]);
+      setSkillsHint(null);
+      setSkillsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSkillsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSkills(agent?.id || "grok");
+  }, [agent?.id, loadSkills]);
+
+  const skillCatalog = useMemo(
+    () =>
+      (skills || []).map((s) => ({
+        ...s,
+        kind: "skill",
+        name: String(s.name || "").replace(/^\//, ""),
+      })),
+    [skills],
+  );
+
+  const commandCatalog = useMemo(
+    () =>
+      (agentCommands || []).map((c) => ({
+        ...c,
+        kind: "command",
+        name: String(c.name || "").replace(/^\//, ""),
+      })),
+    [agentCommands],
+  );
+
+  const slashItems = useMemo(
+    () => rankCatalog(skillCatalog, commandCatalog, slashQuery),
+    [skillCatalog, commandCatalog, slashQuery],
+  );
+
+  useEffect(() => {
+    if (!slashOpen) return;
+    if (slashItems.length === 0) {
+      setSlashIndex(0);
+      return;
+    }
+    setSlashIndex((i) => Math.min(Math.max(0, i), slashItems.length - 1));
+  }, [slashOpen, slashItems.length, slashQuery]);
+
+  const applySlashInsert = useCallback(
+    (name) => {
+      const el = composerRef.current;
+      const cursor =
+        el && typeof el.selectionStart === "number"
+          ? el.selectionStart
+          : input.length;
+      const result = insertSlashCommand(input, cursor, name);
+      if (!result) return;
+      setInput(result.text);
+      setSlashOpen(false);
+      setSlashQuery("");
+      requestAnimationFrame(() => {
+        const ta = composerRef.current;
+        if (!ta) return;
+        ta.focus();
+        try {
+          ta.setSelectionRange(result.cursor, result.cursor);
+        } catch {
+          /* ignore */
+        }
+      });
+    },
+    [input],
+  );
+
+  const syncSlashFromComposer = useCallback((text, cursor) => {
+    const token = slashTokenAt(text, cursor);
+    if (!token) {
+      setSlashOpen(false);
+      setSlashQuery("");
+      return;
+    }
+    setSlashOpen(true);
+    setSlashQuery(token.query);
+  }, []);
+
+  // Cmd/Ctrl+K → Extensions-Modal
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        // Don't steal when typing in non-composer fields with explicit handling
+        e.preventDefault();
+        setShowExtensions(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Keep Snack mounted briefly after work ends so ↵←Snack morph can play
   const [snackAlive, setSnackAlive] = useState(false);
@@ -1722,12 +1849,9 @@ export default function App() {
         <button
           type="button"
           className="side-rail-btn"
-          onClick={() => {
-            setLegendTab("commands");
-            setShowLegend(true);
-          }}
-          title="Befehle"
-          aria-label="Befehle"
+          onClick={() => setShowExtensions(true)}
+          title="Befehle & Skills (⌘/Ctrl+K)"
+          aria-label="Befehle und Skills"
         >
           <IconCommands />
         </button>
@@ -2171,19 +2295,76 @@ export default function App() {
                 ) : null}
               </div>
             ) : null}
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={composerPlaceholder}
-              rows={3}
-              disabled={!connected}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-            />
+            <div className="composer-input-wrap">
+              <SlashPopup
+                open={slashOpen}
+                items={slashItems}
+                selectedIndex={slashIndex}
+                query={slashQuery}
+                onSelectIndex={setSlashIndex}
+                onClose={() => setSlashOpen(false)}
+                onPick={(item) => applySlashInsert(item.name)}
+              />
+              <textarea
+                ref={composerRef}
+                value={input}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setInput(v);
+                  syncSlashFromComposer(v, e.target.selectionStart ?? v.length);
+                }}
+                onClick={(e) => {
+                  syncSlashFromComposer(
+                    e.currentTarget.value,
+                    e.currentTarget.selectionStart ?? 0,
+                  );
+                }}
+                onSelect={(e) => {
+                  syncSlashFromComposer(
+                    e.currentTarget.value,
+                    e.currentTarget.selectionStart ?? 0,
+                  );
+                }}
+                placeholder={composerPlaceholder}
+                rows={3}
+                onKeyDown={(e) => {
+                  if (slashOpen) {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setSlashOpen(false);
+                      return;
+                    }
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setSlashIndex((i) =>
+                        Math.min(i + 1, Math.max(0, slashItems.length - 1)),
+                      );
+                      return;
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setSlashIndex((i) => Math.max(i - 1, 0));
+                      return;
+                    }
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      const item = slashItems[slashIndex];
+                      if (item) applySlashInsert(item.name);
+                      return;
+                    }
+                    if (e.key === "Tab" && slashItems[slashIndex]) {
+                      e.preventDefault();
+                      applySlashInsert(slashItems[slashIndex].name);
+                      return;
+                    }
+                  }
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (connected) send();
+                  }
+                }}
+              />
+            </div>
             <div className="composer-toolbar">
               <div className="composer-tools">
                 <div
@@ -2372,6 +2553,44 @@ export default function App() {
         initialTab={legendTab}
         agentCommands={agentCommands}
       />
+      <ExtensionsModal
+        open={showExtensions}
+        onClose={() => setShowExtensions(false)}
+        skills={skills}
+        agentCommands={agentCommands}
+        profileLabel={agentLabel}
+        skillsHint={skillsHint}
+        loading={skillsLoading}
+        error={skillsError}
+        onPick={(item) => {
+          const el = composerRef.current;
+          const cursor =
+            el && typeof el.selectionStart === "number"
+              ? el.selectionStart
+              : input.length;
+          const token = slashTokenAt(input, cursor);
+          if (token) {
+            applySlashInsert(item.name);
+            return;
+          }
+          const name = String(item.name || "").replace(/^\//, "");
+          const inserted = `/${name} `;
+          const next =
+            input.slice(0, cursor) + inserted + input.slice(cursor);
+          setInput(next);
+          requestAnimationFrame(() => {
+            const ta = composerRef.current;
+            if (!ta) return;
+            ta.focus();
+            const pos = cursor + inserted.length;
+            try {
+              ta.setSelectionRange(pos, pos);
+            } catch {
+              /* ignore */
+            }
+          });
+        }}
+      />
       <CommandOverview
         open={showOverview}
         onClose={() => setShowOverview(false)}
@@ -2385,7 +2604,7 @@ export default function App() {
         onOpenSession={handleOpenSession}
       />
 
-      {/* Aktive-Session-Zusammenfassung (openrouter/glyph-agent; auch grok möglich) */}
+      {/* Aktive-Session-Zusammenfassung (glyph-agent; auch grok möglich) */}
       {activeSummarizeOpen && sessionId ? (
         <SummarizeDialog
           sessionId={sessionId}

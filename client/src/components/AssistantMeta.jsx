@@ -8,7 +8,7 @@
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
  */
 import { useState } from "react";
-import { buildCompact, modelLabel } from "../utils/assistantTrace.js";
+import { buildCompact, formatSteps, modelLabel } from "../utils/assistantTrace.js";
 
 function AssistantMeta({ trace }) {
   const [open, setOpen] = useState(false);
@@ -50,12 +50,24 @@ function AssistantMeta({ trace }) {
             )}
             {trace.retrieval && (
               <li>
-                <b>Retrieval:</b> {trace.retrieval.type} · {trace.retrieval.status} ·{" "}
+                <b>Retrieval:</b> {trace.retrieval.type}
+                {trace.retrieval.mode ? ` (${trace.retrieval.mode})` : ""} ·{" "}
+                {trace.retrieval.status} ·{" "}
                 {trace.retrieval.selected ?? 0} aus {trace.retrieval.candidates ?? 0} ·{" "}
                 Schwelle {trace.retrieval.threshold ?? "?"}
                 {Array.isArray(trace.retrieval.sources) && trace.retrieval.sources.length
                   ? ` · Quellen: ${trace.retrieval.sources.join(", ")}`
                   : ""}
+              </li>
+            )}
+            {Array.isArray(trace.steps) && trace.steps.length > 0 && (
+              <li>
+                <b>Schritte:</b>
+                <ul>
+                  {formatSteps(trace.steps).map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ul>
               </li>
             )}
           </ul>

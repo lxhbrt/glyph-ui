@@ -6,7 +6,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildCompact, modelLabel } from "../../client/src/utils/assistantTrace.js";
+import { buildCompact, formatSteps, modelLabel } from "../../client/src/utils/assistantTrace.js";
 
 describe("modelLabel", () => {
   it("returns 'unbekannt' for missing/empty model", () => {
@@ -201,5 +201,33 @@ describe("buildCompact — fehlender / unvollständiger Trace", () => {
     assert.ok(!line.includes("system_prompt"));
     assert.ok(!line.includes("auth"));
     assert.ok(!line.includes("Bearer"));
+  });
+});
+
+describe("formatSteps + buildCompact steps chain", () => {
+  it("formatSteps renders numbered lines", () => {
+    const lines = formatSteps([
+      { step: "VaultFind", status: "success", detail: "2 Treffer" },
+      { step: "WebSearch", status: "success" },
+    ]);
+    assert.equal(lines.length, 2);
+    assert.ok(lines[0].includes("VaultFind"));
+    assert.ok(lines[0].includes("2 Treffer"));
+  });
+
+  it("buildCompact prefers steps chain when present", () => {
+    const line = buildCompact({
+      provider: "openrouter",
+      model: "openai/gpt-5.6-luna",
+      steps: [
+        { step: "VaultFind", status: "success" },
+        { step: "WebSearch", status: "success" },
+        { step: "LLM", status: "success" },
+        { step: "answer", status: "success" },
+      ],
+      sources: { vault: { count: 1, status: "success" }, web: { count: 2, status: "success" } },
+    });
+    assert.ok(line.includes("VaultFind → WebSearch → LLM → answer"));
+    assert.ok(line.includes("openrouter"));
   });
 });

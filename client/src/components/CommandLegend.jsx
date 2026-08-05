@@ -21,12 +21,12 @@ const COMMAND_LEGEND = [
       {
         cmd: "Befehle",
         need: "optional",
-        desc: "Filterbare Befehls-Legende (Slash, Composer, Leiste).",
+        desc: "Extensions-Modal: Skills + Agent-Commands. ⌘/Ctrl+K. Auswahl fügt /name in den Composer ein (sendet nicht).",
       },
       {
         cmd: "Buch · Handbuch",
         need: "optional",
-        desc: "Kurzhandbuch ganz unten in der Leiste (Tabs: Handbuch / Befehle).",
+        desc: "Kurzhandbuch und Befehls-Legende (Doku) ganz unten in der Leiste.",
       },
       {
         cmd: "Kalender",
@@ -61,7 +61,12 @@ const COMMAND_LEGEND = [
       {
         cmd: "Enter",
         need: "normal",
-        desc: "Senden (ohne Shift). Shift+Enter = neue Zeile. Während der Agent arbeitet → Warteschlange.",
+        desc: "Senden (ohne Shift). Shift+Enter = neue Zeile. Slash-Popup offen: Enter = auswählen. Während der Agent arbeitet → Warteschlange.",
+      },
+      {
+        cmd: "/ · Slash-Popup",
+        need: "empfohlen",
+        desc: "/ am Zeilenanfang oder nach Leerzeichen → Skills & Agent-Commands. ↑↓ Enter, Esc. Fügt /name ein, sendet nicht.",
       },
       {
         cmd: "Warteschlange",

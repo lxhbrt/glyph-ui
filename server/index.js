@@ -44,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import * as acp from "@agentclientprotocol/sdk";
 import {
+  DEFAULT_AGENT_ID,
   buildAgentProfiles,
   publicAgent,
   publicAgents,
@@ -53,6 +54,7 @@ import {
   commandsBroadcastPayload,
   normalizeAvailableCommands,
 } from "./commands.js";
+import { listSkillsForProfile } from "./skills.js";
 import {
   planBroadcastPayload,
   planUpdateFromSession,
@@ -533,6 +535,29 @@ app.get("/api/health", (_req, res) => {
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMsg: MAX_ATTACHMENTS_PER_MSG,
   });
+});
+
+/**
+ * Profile-dependent skills for Extensions-Modal / Slash-Popup.
+ * Query: ?profile=grok|claude|glyph-agent (default: active bridge agent or grok)
+ */
+app.get("/api/skills", async (req, res) => {
+  try {
+    const activeId = bridge?.agentProfile?.()?.id;
+    const profile = String(
+      req.query.profile || activeId || DEFAULT_AGENT_ID || "grok",
+    ).trim();
+    const result = await listSkillsForProfile(profile, {
+      home: os.homedir(),
+      cwd: WORK_CWD,
+      env: process.env,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 });
 
 /**

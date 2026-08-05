@@ -1759,11 +1759,17 @@ button.send.send--stuffed .send-snack {
   border: 1px solid color-mix(in srgb, var(--user) 70%, var(--border));
   border-radius: 1.45rem;
   background: var(--user);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 6px 24px color-mix(in srgb, var(--bg) 55%, transparent);
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease;
+}
+
+.composer-input-wrap {
+  position: relative;
+  width: 100%;
+  min-width: 0;
 }
 
 .composer.composer--grok textarea {
@@ -1780,6 +1786,184 @@ button.send.send--stuffed .send-snack {
   font: inherit;
   line-height: 1.45;
   overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* Slash-Popup — floats above composer textarea */
+.slash-popup {
+  position: absolute;
+  left: 0.65rem;
+  right: 0.65rem;
+  bottom: calc(100% + 4px);
+  z-index: 35;
+  max-height: min(280px, 42vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.slash-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.slash-popup-kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+}
+
+.slash-popup-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.slash-popup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+.slash-popup-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.slash-popup-row:last-child {
+  border-bottom: none;
+}
+
+.slash-popup-row.is-selected,
+.slash-popup-row:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+.slash-popup-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+  font-size: 0.9rem;
+}
+
+.slash-popup-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.slash-popup-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.slash-popup-empty {
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.slash-badge {
+  font-size: 0.65rem;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.slash-badge--skill {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+}
+
+.slash-badge--command {
+  opacity: 0.9;
+}
+
+.extensions-panel {
+  grid-template-rows: auto auto auto 1fr;
+}
+
+.extensions-list {
+  min-height: 200px;
+}
+
+.extensions-row {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.extensions-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.extensions-row-title code {
+  font-size: 0.92rem;
+}
+
+.extensions-source {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.extensions-hint-line {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.overview-hint--error {
+  border-color: color-mix(in srgb, #ff6b6b 50%, var(--border));
+  color: #ff8a8a;
 }
 
 .composer.composer--grok textarea::placeholder {

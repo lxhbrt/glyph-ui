@@ -17,8 +17,7 @@ import { fileURLToPath } from "node:url";
 
 // Absoluter Pfad zur glyph-agent-ACP-Brücke (Tool-/Recherche-Schicht).
 const GLYPH_AGENT_ACP_FILE = fileURLToPath(new URL("./glyph-agent-acp.mjs", import.meta.url));
-// Absoluter Pfad zur OpenRouter-ACP-Adapter-Datei.
-const OPENROUTER_ACP_FILE = fileURLToPath(new URL("./openrouter-acp.mjs", import.meta.url));
+// OpenRouter-UI-Profil entfernt (B+ 2026-08-05): Cloud läuft nur noch *innerhalb* von glyph-agent.
 
 export const DEFAULT_AGENT_ID = "grok";
 
@@ -114,8 +113,8 @@ export function resolveClaudeCommand(env = process.env) {
  */
 export function buildAgentProfiles(env = process.env) {
   const claude = resolveClaudeCommand(env);
-  // OpenRouter-Key aus der Prozess-Umgebung (kann auch leer sein).
-  const openrouterKey = String(env.OPENROUTER_API_KEY || "");
+  // Nur drei Profile: Grok (Build), Claude (Code), glyph-agent (Vault/Tools + Cloud intern).
+  // Separates OpenRouter-UI-Profil entfällt — Cloud-Denker steckt in glyph-agent (B+).
   return [
     {
       id: "grok",
@@ -143,19 +142,7 @@ export function buildAgentProfiles(env = process.env) {
       bin: process.execPath,
       args: [GLYPH_AGENT_ACP_FILE], // dünne Brücke zu glyph-agent (Tools: Vault, Recherche)
       via: "bin",
-      hint: "Lokaler Agent (glyph-agent): Vault-Suche, Notizen lesen/bearbeiten (Diff+Backup), Web-Recherche. Braucht den lokalen Dienst (server.py) auf 127.0.0.1:18899.",
-      // Kein persistentes Session-Listing, aber aktiver In-Memory-Verlauf (session/history) → summarize.
-      capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
-    },
-    {
-      id: "openrouter",
-      label: "OpenRouter",
-      bin: process.execPath,
-      args: [OPENROUTER_ACP_FILE],
-      via: "bin",
-      // API-Key immer (auch leer) über die Prozess-Umgebung an den Adapter durchreichen.
-      env: { OPENROUTER_API_KEY: openrouterKey },
-      hint: "Cloud-Modelle via OpenRouter (Fallback für Grok/Claude-Kontingent). Chat nur.",
+      hint: "B+: VaultFind (Hybrid) + Web (Exa/TinyFish) + Cloud-Antwort. Diff+Backup. Dienst :18899.",
       // Kein persistentes Session-Listing, aber aktiver In-Memory-Verlauf (session/history) → summarize.
       capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
@@ -229,7 +216,7 @@ export function summarizeCapabilities(profile) {
   return {
     // Lupe (persistente Session-Liste) braucht List + History + Summarize → nur Grok.
     lupeSummarize: sessionList && sessionHistory && summarize,
-    // Aktiver In-Memory-Chat (openrouter/glyph-agent): History + Summarize, ohne List.
+    // Aktiver In-Memory-Chat (glyph-agent): History + Summarize, ohne List.
     activeSession: sessionHistory && summarize,
   };
 }

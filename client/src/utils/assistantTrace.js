@@ -77,9 +77,33 @@ export function buildCompact(trace) {
     }
   }
 
+  // Prefer chronological steps when present (B+ Step-Display).
+  if (Array.isArray(trace.steps) && trace.steps.length > 0) {
+    const chain = trace.steps
+      .map((s) => s.step)
+      .filter(Boolean)
+      .join(" → ");
+    if (chain) activity = chain;
+  }
+
   let line = activity
     ? `${activity} · ${provider} / ${model} · ${status}`
     : `${provider} / ${model}`;
   if (trace.fallback_used) line += " · Fallback aktiv";
   return line;
+}
+
+/**
+ * Formatiert steps[] für die Detail-Ansicht.
+ * @param {Array<{step?:string,status?:string,detail?:string}>|undefined} steps
+ * @returns {string[]}
+ */
+export function formatSteps(steps) {
+  if (!Array.isArray(steps) || !steps.length) return [];
+  return steps.map((s, i) => {
+    const name = s.step || `step-${i + 1}`;
+    const st = s.status || "?";
+    const d = s.detail ? ` — ${s.detail}` : "";
+    return `${i + 1}. ${name} (${st})${d}`;
+  });
 }

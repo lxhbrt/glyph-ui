@@ -7,8 +7,8 @@
  * KEINE Agentenlogik — er leitet an den glyph-agent-HTTP-Dienst (POST /chat)
  * durch und streamt die Antwort als Text-Chunks zurück an Glyph.
  *
- * Vorteil: Das Modell (Qwen heute, später MLX/anderes) und die Tool-Schicht
- * bleiben in glyph-agent gekapselt; hier wird NUR übersetzt (dünne Brücke).
+ * Vorteil: Cloud-Denker + Tool-Schicht (VaultFind, Web) bleiben in glyph-agent
+ * gekapselt; hier wird NUR übersetzt (dünne Brücke).
  *
  * Protokoll: ACP v1 über NDJSON-Stdio (acp.ndJsonStream).
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT

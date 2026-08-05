@@ -3,7 +3,7 @@
  *
  * Ablauf: Draft anfragen (POST /summarize/draft) → Vorschau anzeigen →
  *   Bestätigen&Speichern (commit) · Bearbeiten (Textfeld) · Abbrechen.
- * Sicherheit: openrouter (extern) verlangt explizite Zustimmung, bevor Session-Inhalte
+ * Sicherheit: externes/Cloud-Profil verlangt explizite Zustimmung, bevor Session-Inhalte
  * die Cloud verlassen. Keine automatische Überschreibung (409 wird verständlich gezeigt).
  *
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
@@ -71,7 +71,7 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
     try {
       if (external && !externalConsent) {
         setError(
-          "Externes Profil (openrouter): Bestätigung erforderlich, bevor Session-Inhalte verarbeitet werden.",
+          "Externes Profil (Cloud): Bestätigung erforderlich, bevor Session-Inhalte verarbeitet werden.",
         );
         return;
       }
@@ -146,7 +146,7 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
             <div className="summarize-preview">
               {external && (
                 <div className="summarize-external-warning">
-                  ⚠️ Externes Profil (openrouter): Session-Inhalte verlassen den Rechner.
+                  ⚠️ Externes Profil (Cloud): Session-Inhalte verlassen den Rechner.
                   <label className="summarize-consent">
                     <input
                       type="checkbox"

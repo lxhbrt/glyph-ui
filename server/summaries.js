@@ -23,7 +23,8 @@ import crypto from "node:crypto";
 export const AGENT_SLUGS = {
   grok: "Grok",
   claude: "Claude",
-  "openrouter": "OpenRouter",
+  // openrouter: nur Legacy-Alias für alte Summary-Dateinamen (kein UI-Profil mehr)
+  openrouter: "Glyph-Agent",
   "glyph-agent": "Glyph-Agent",
 };
 
