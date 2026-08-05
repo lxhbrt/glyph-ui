@@ -41,8 +41,10 @@ test("buildStepBanner", async (t) => {
     assert.doesNotMatch(banner, /Tool · answer/);
     // OpenRouter-Zeile mit Modell.
     assert.match(banner, /OpenRouter · OpenRouter \/ openai\/gpt-5\.6-luna/);
-    // Trennung vom Antworttext.
+    // Endet mit Sentinel (für UI-Split), KEIN Querstrich mehr.
+    assert.ok(banner.includes("<!-- glyph-steps-end -->"));
     assert.ok(banner.endsWith("\n\n"));
+    assert.doesNotMatch(banner, /─/);
   });
 
   await t.test("Fehler-Status wird als fehlgeschlagen übersetzt", () => {

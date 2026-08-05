@@ -1120,6 +1120,34 @@ button.send.send--stuffed .send-snack {
   opacity: 0.72;
 }
 
+/*
+  glyph-agent Tool-/Stufen-Banner (SearchVault/SearchWeb/... + Modell):
+  bewusst gedeckt — kleiner + dunkler als der eigentliche Antworttext, damit
+  die „Tool/Think“-Stufen als Nebenkanal erscheinen und die Antwort im Fokus bleibt.
+*/
+.agent-steps {
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
+  opacity: 0.9;
+  margin: 0 0 8px 0;
+  padding: 6px 9px;
+  border-left: 3px solid color-mix(in srgb, var(--muted) 55%, transparent);
+  background: color-mix(in srgb, var(--panel) 40%, var(--bg));
+  border-radius: 6px;
+  word-break: break-word;
+}
+
+.agent-step-line {
+  margin: 0;
+  padding: 0;
+}
+
+.agent-step-line + .agent-step-line {
+  margin-top: 2px;
+}
+
 .role {
   font-size: 0.72rem;
   text-transform: uppercase;

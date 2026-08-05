@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MarkdownBody } from "./components/MarkdownBody.jsx";
+import { AssistantText } from "./components/AssistantText.jsx";
 import { AssistantMeta } from "./components/AssistantMeta.jsx";
 import { PlanBar } from "./components/PlanBar.jsx";
 import { ContextLvlBar } from "./components/ContextLvlBar.jsx";
@@ -2297,7 +2297,7 @@ export default function App() {
                           markdownFallback
                         />
                       ) : (
-                        <MarkdownBody text={m.text} />
+                        <AssistantText text={m.text} />
                       )
                     ) : null}
                     {m.role === "assistant" &&

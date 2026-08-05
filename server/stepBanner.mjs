@@ -72,6 +72,7 @@ export function buildStepBanner(data) {
   const model = trace.model || "unbekannt";
   const openrouter = `OpenRouter · ${provider === "openrouter" ? "OpenRouter" : provider} / ${model}`;
 
-  const sep = "─".repeat(40);
-  return `${lines.join("\n")}\n${openrouter}\n${sep}\n\n`;
+  // Endet mit einem Markierer, damit die UI den Tool-Block sauber vom
+  // eigentlichen Antworttext trennen und separat stylen kann (dunkler/kleiner).
+  return `${lines.join("\n")}\n${openrouter}\n<!-- glyph-steps-end -->\n\n`;
 }

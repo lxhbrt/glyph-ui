@@ -12,6 +12,24 @@
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
  */
 
+/** Sentinel, an dem die UI den Tool-Banner vom eigentlichen Antworttext trennt. */
+export const STEP_BANNER_SENTINEL = "<!-- glyph-steps-end -->";
+
+/**
+ * Trennt den Grok-artigen Tool-Banner (wenn vorhanden) vom Antworttext.
+ * @param {string} text Vollständiger Nachrichtentext (Banner + Antwort).
+ * @returns {{banner: string, answer: string}}
+ */
+export function splitStepBanner(text) {
+  const t = String(text || "");
+  const idx = t.indexOf(STEP_BANNER_SENTINEL);
+  if (idx < 0) return { banner: "", answer: t };
+  // Banner = alles bis zum Sentinel (inkl. Zeilenumbruch davor), bereinigt.
+  const banner = t.slice(0, idx).replace(/\n+$/g, "").trim();
+  const answer = t.slice(idx + STEP_BANNER_SENTINEL.length).replace(/^\n+/, "");
+  return { banner, answer };
+}
+
 /** Beschriftetes Modell-Label (nur Anzeige-Normalisierung; nie Config als Quelle). */
 export function modelLabel(model) {
   const m = String(model || "");
