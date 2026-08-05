@@ -1818,7 +1818,20 @@ class GrokBridge {
 
     if (kind === "agent_message_chunk") {
       const text = update.content?.text || update.text || "";
-      if (text) this.broadcast({ type: "assistant_chunk", text });
+      if (!text) return;
+      // Live-Tool-/Denk-Stufen (von glyph-agent-adapter) vom normalen Antworttext
+      // trennen: ⏺STEP⏺... = Stufe beginnt, ⏹STEP⏹... = Ergebnis derselben Stufe.
+      const STEP_START = "⏺STEP⏺";
+      const STEP_END = "⏹STEP⏹";
+      if (text.startsWith(STEP_START)) {
+        this.broadcast({ type: "step_chunk", phase: "start", text: text.slice(STEP_START.length) });
+        return;
+      }
+      if (text.startsWith(STEP_END)) {
+        this.broadcast({ type: "step_chunk", phase: "end", text: text.slice(STEP_END.length) });
+        return;
+      }
+      this.broadcast({ type: "assistant_chunk", text });
       return;
     }
     // agent_message_complete: effektiven Trace (falls vom glyph-agent-Adapter geliefert)

@@ -1148,6 +1148,51 @@ button.send.send--stuffed .send-snack {
   margin-top: 2px;
 }
 
+/*
+  Live-Stufen-Rail (glyph-agent, Streaming): Stufen erscheinen beim Beginn der
+  Tätigkeit, das Ergebnis wird nachträglich angehängt. Bewusst gedeckt — kleiner
+  + dunkler als der eigentliche Antworttext, damit die „Tool/Think“-Stufen als
+  Nebenkanal erscheinen und die Antwort im Fokus bleibt.
+*/
+.steps-rail {
+  display: block;
+  margin: 0 0 8px 0;
+  padding: 6px 9px;
+  border-left: 3px solid color-mix(in srgb, var(--muted) 55%, transparent);
+  background: color-mix(in srgb, var(--panel) 40%, var(--bg));
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
+  opacity: 0.9;
+  word-break: break-word;
+}
+
+.step-block {
+  margin: 0;
+  padding: 0;
+}
+
+.step-block + .step-block {
+  margin-top: 3px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  padding-top: 3px;
+}
+
+.step-line {
+  margin: 0;
+  padding: 0;
+}
+
+.step-line--start {
+  font-weight: 600;
+}
+
+.step-line--result {
+  opacity: 0.78;
+  font-weight: 400;
+}
+
 .role {
   font-size: 0.72rem;
   text-transform: uppercase;

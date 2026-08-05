@@ -1,12 +1,14 @@
 /**
  * AssistantText — rendert die Antwort eines lokalen/Cloud-Agenten.
  *
- * Erkennt den Grok-artigen Tool-Banner (Schritte + Modell) am Ende des
- * stepBanner-Sentinels und zeigt ihn als eigenes, bewusst gedecktes Element
- * (dunkler, kleiner) ÜBER dem normalen Markdown-Antworttext. So hebt sich
- * die Tool-/Denk-Stufe visuell vom eigentlichen Antworttext ab.
+ * Zwei Quellen für die Tool-/Denk-Stufen („SearchVault“/„SearchWeb“/„Think“ …):
+ *   1. `steps` (live): Array von {start, result} pro Stufe, das die UI während
+ *      des Streamings aufbaut (Stufe erscheint, sobald sie beginnt; das Ergebnis
+ *      wird nach der Aktivität angehängt).
+ *   2. Fallback über den Sentinel im Text (alte, nicht-streamende Antworten).
  *
- * Ohne Banner einfach MarkdownBody. Reines Rendering — keine Datenlogik.
+ * Die Stufen werden als eigenes, bewusst gedecktes Element (dunkler, kleiner)
+ * ÜBER dem normalen Markdown-Antworttext gezeigt — so heben sie sich visuell ab.
  *
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
  */
@@ -14,11 +16,36 @@ import { memo } from "react";
 import { MarkdownBody } from "./MarkdownBody.jsx";
 import { splitStepBanner } from "../utils/assistantTrace.js";
 
-const AssistantText = memo(function AssistantText({ text }) {
-  const { banner, answer } = splitStepBanner(text);
+function StepRail({ steps }) {
+  if (!Array.isArray(steps) || !steps.length) return null;
+  return (
+    <div className="steps-rail" data-testid="steps-rail">
+      {steps.map((s, i) => (
+        <div className="step-block" key={s.id ?? i}>
+          {s.start ? <div className="step-line step-line--start">{s.start}</div> : null}
+          {s.result ? <div className="step-line step-line--result">{s.result}</div> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
 
+const AssistantText = memo(function AssistantText({ text, steps }) {
+  // Live-Stufen bevorzugt; sonst Fallback auf den (alten) zusammengefassten Banner.
+  const hasLiveSteps = Array.isArray(steps) && steps.length > 0;
+
+  if (hasLiveSteps) {
+    return (
+      <>
+        <StepRail steps={steps} />
+        {text ? <MarkdownBody text={text} /> : null}
+      </>
+    );
+  }
+
+  const { banner, answer } = splitStepBanner(text);
   if (!banner) {
-    return <MarkdownBody text={text} />;
+    return text ? <MarkdownBody text={text} /> : null;
   }
   return (
     <>
@@ -29,7 +56,7 @@ const AssistantText = memo(function AssistantText({ text }) {
           </div>
         ))}
       </div>
-      <MarkdownBody text={answer} />
+      {answer ? <MarkdownBody text={answer} /> : null}
     </>
   );
 });

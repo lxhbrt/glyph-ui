@@ -566,6 +566,8 @@ export default function App() {
   const messagesContentRef = useRef(null);
   const assistantBuf = useRef("");
   const thoughtBuf = useRef("");
+  // Live-Tool-/Denk-Stufen der laufenden Antwort: Array von {id, start, result}.
+  const stepsRef = useRef([]);
   /**
    * Sticky bottom:
    * 1) While pinned → every update/size change scrolls to latest output.
@@ -731,8 +733,32 @@ export default function App() {
     );
     assistantBuf.current = "";
     thoughtBuf.current = "";
+    stepsRef.current = []; // Live-Stufen gehören zur abgeschlossenen Antwort-Runde
     traceRef.current = null; // Trace nur an die letzte Message anhängen
   }, []);
+
+  // Aktualisiert die laufende (letzte) Assistant-Message mit den Live-Stufen.
+  const upsertStreamingSteps = useCallback(() => {
+    const steps = [...stepsRef.current];
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last && last.role === "assistant" && last.streaming) {
+        next[next.length - 1] = { ...last, steps };
+        return next;
+      }
+      // Keine laufende Assistant-Message (z.B. Stufen vor erstem Text): neue anlegen.
+      next.push({
+        id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        role: "assistant",
+        text: assistantBuf.current || "",
+        steps,
+        streaming: true,
+      });
+      return next;
+    });
+    scrollToBottom();
+  }, [scrollToBottom]);
 
   /**
    * Pop the next parked follow-up and send it once the agent is idle.
@@ -911,6 +937,30 @@ export default function App() {
           return;
         }
 
+        if (msg.type === "step_chunk") {
+          // Live-Tool-/Denk-Stufe: „start“ öffnet Block, „end“ hängt Ergebnis an.
+          busyRef.current = true;
+          streamingRef.current = true;
+          setBusy(true);
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
+          const text = msg.text || "";
+          if (msg.phase === "start") {
+            stepsRef.current.push({ id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, start: text, result: "" });
+          } else {
+            // Ergebnis an letzte offene Stufe anhängen (sonst als eigene Zeile).
+            const steps = [...stepsRef.current];
+            if (steps.length && !steps[steps.length - 1].result) {
+              steps[steps.length - 1] = { ...steps[steps.length - 1], result: text };
+            } else {
+              steps.push({ id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, start: "", result: text });
+            }
+            stepsRef.current = steps;
+          }
+          upsertStreamingSteps();
+          return;
+        }
+
         if (msg.type === "system") {
           lastActivityRef.current = Date.now();
           setSnackStuffed(false);
@@ -997,7 +1047,7 @@ export default function App() {
       }
       ws?.close();
     };
-  }, [finalizeStreaming, scheduleDrainQueue, scrollToBottom, upsertStreaming]);
+  }, [finalizeStreaming, scheduleDrainQueue, scrollToBottom, upsertStreaming, upsertStreamingSteps]);
 
   const clearPendingAttachments = useCallback(() => {
     setPendingAttachments((prev) => {
@@ -2287,7 +2337,7 @@ export default function App() {
                         ))}
                       </ul>
                     ) : null}
-                    {m.text ? (
+                    {m.text || m.steps?.length ? (
                       m.role === "user" ? (
                         <SlashHighlightedText
                           text={m.text}
@@ -2297,7 +2347,7 @@ export default function App() {
                           markdownFallback
                         />
                       ) : (
-                        <AssistantText text={m.text} />
+                        <AssistantText text={m.text} steps={m.steps} />
                       )
                     ) : null}
                     {m.role === "assistant" &&

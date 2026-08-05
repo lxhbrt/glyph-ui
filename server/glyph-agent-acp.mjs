@@ -62,6 +62,51 @@ function streamChunks(text, client, sessionId, chunkSize = 400) {
   );
 }
 
+// Sprach-Mapping für Live-Stufen (identisch zu stepBanner.mjs, hier lokal für die
+// Chunk-Serialisierung ohne Import-Zyklus über die reine Funktion).
+const STEP_MARKERS = {
+  VaultFind: ["SearchVault", "suche im Obsidian-Vault (Arbeitssicherheit/HSEQ)"],
+  VaultRecall: ["SearchVault", "suche im Obsidian-Vault (alias)"],
+  VaultSearch: ["SearchVault", "suche im Obsidian-Vault (alias)"],
+  WebSearch: ["SearchWeb", "suche im Internet (Exa, grob)"],
+  ExtractUrl: ["Fetch", "rufe konkrete URL ab (TinyFish, fein)"],
+  FetchUrl: ["Fetch", "rufe konkrete URL ab (TinyFish, fein)"],
+  OpenRouter: ["Think", "Cloud-Denker (OpenRouter)"],
+  ReadNote: ["ReadNote", "liest Notiz aus dem Vault"],
+  Summarize: ["Summarize", "fasst Notiz zusammen"],
+  CreateNote: ["WriteNote", "erstellt Notiz"],
+  EditNote: ["WriteNote", "ändert Notiz"],
+};
+
+function stepLabel(action) {
+  const m = STEP_MARKERS[action] || [action, action];
+  return m[0];
+}
+
+function renderStepStart(action, detail) {
+  const m = STEP_MARKERS[action] || [action, action];
+  const base = `${m[0]} · ${m[1]}`;
+  return detail ? `${base} — ${detail}` : base;
+}
+
+function renderStepEnd(action, status, detail) {
+  const label = stepLabel(action);
+  if (status === "error") {
+    return `${label} — fehlgeschlagen${detail ? `: ${detail}` : ""}`;
+  }
+  if (status === "done" && !detail) {
+    return `${label} — erledigt`;
+  }
+  return `${label}${detail ? ` — ${detail}` : " — erledigt"}`;
+}
+
+// Einzelne Stufe als eigener ACP-Chunk mit Marker streamen (UI rendert sie als
+// Live-Block). `⏺` = Stufe beginnt, `⏹` = Ergebnis/Status derselben Stufe.
+function streamStepChunk(prefixedText, client, sessionId) {
+  if (!prefixedText) return Promise.resolve();
+  return streamChunks(prefixedText, client, sessionId, 2000);
+}
+
 /**
  * buildStepBanner liegt in stepBanner.mjs (pure Funktion, separat getestet) —
  * hier nur importiert und vor dem Antworttext eingefügt.
@@ -150,9 +195,13 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
   signal.addEventListener("abort", onAbort, { once: true });
 
   try {
+    // NDJSON-Streaming: Stufen/Teil-Antworten kommen live vom glyph-agent-Dienst.
     const resp = await fetch(`${AGENT_URL}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/x-ndjson",
+      },
       body: JSON.stringify({
         message: built.message,
         attachments: built.attachments,
@@ -162,26 +211,87 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     if (!resp.ok) {
       throw new Error(`glyph-agent HTTP ${resp.status} — läuft der lokale Dienst? (server.py)`);
     }
-    const data = await resp.json();
-    const answer = data?.answer ?? "";
+    if (!resp.body) {
+      throw new Error("glyph-agent: leerer Antwortstream (kein body).");
+    }
 
-    // Grok-artigen Banner (Tool/Think-Stufen + Modell) vor die Antwort setzen,
-    // damit die Stufen textlich sichtbar im Chat stehen (nicht nur im Meta-Klapp).
-    const banner = SHOW_STEP_BANNER ? buildStepBanner(data) : "";
-    const displayText = banner ? banner + answer : answer;
+    // Antworttext + Live-Stufen sammeln (für store/meta; Antwort wird in Chunks
+    // nach Glyph gestreamt, sobald sie eintrifft).
+    let answerText = "";
+    const stepBlocks = [];
+    let trace = null;
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+
+    // Schritt-Handler: Stufe beginnt → „⏺STEP⏺<Zeile>“, Ergebnis/Status → „⏹STEP⏹<Zeile>“.
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const raw = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!raw) continue;
+        let ev;
+        try {
+          ev = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+        const type = ev && ev.type;
+        if (type === "step") {
+          const action = ev.action || "step";
+          const status = ev.status || "";
+          const detail = ev.detail;
+          // Start: neue Stufenzeile live öffnen (beim Beginn der Tätigkeit).
+          if (status === "start") {
+            const line = renderStepStart(action, detail);
+            stepBlocks.push({ action, line });
+            await streamStepChunk(`⏺STEP⏺${line}`, client, sessionId);
+          } else {
+            // done/error: Ergebnis/Status an die Stufe anhängen (live nach Aktivität).
+            const line = renderStepEnd(action, status, detail);
+            await streamStepChunk(`⏹STEP⏹${line}`, client, sessionId);
+          }
+        } else if (type === "answer") {
+          if (typeof ev.text === "string" && ev.text) {
+            answerText += ev.text;
+            await streamChunks(ev.text, client, sessionId);
+          }
+        } else if (type === "done" || type === "error") {
+          if (ev && typeof ev.trace === "object" && ev.trace !== null) trace = ev.trace;
+          if (ev && typeof ev.answer === "string" && ev.answer && !answerText) {
+            answerText = ev.answer;
+          }
+          // done/error sind Endmarker; Schleife endet über Stream-Ende ohnehin.
+          if (type === "error" && !answerText) {
+            answerText = `Fehler: ${ev.error || "unbekannt"}`;
+          }
+        }
+      }
+    }
+
+    // Für Fallback-Clients ohne UI-Schritt-Rendering: dünner Zusammenfassungs-Header
+    // nur, wenn noch KEINE Live-Stufen gezeigt wurden UND ein Banner gewünscht ist.
+    let displayText = answerText;
+    if (stepBlocks.length === 0 && SHOW_STEP_BANNER && trace) {
+      const banner = buildStepBanner({ trace, answer: answerText });
+      if (banner) displayText = banner + answerText;
+    }
 
     store.messages.push({ role: "assistant", content: displayText });
-
-    // Antwort als Chunks nach Glyph streamen (mit Banner)
-    await streamChunks(displayText, client, sessionId);
 
     // Abschluss als finales Ergebnis signalisieren (inkl. effektivem Server-Trace als
     // Metadaten, damit die UI Provider/Modell/Tool-Status aus dem ECHTEN Server anzeigt,
     // nicht aus der UI-Konfiguration).
     try {
       const meta = {};
-      if (data && typeof data.trace === "object" && data.trace !== null) {
-        meta.trace = data.trace;
+      if (trace) {
+        meta.trace = trace;
       }
       await client.notify(acp.methods.client.session.update, {
         sessionId,
