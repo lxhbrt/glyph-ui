@@ -66,6 +66,8 @@ import {
   getSessionForOpen,
   isSessionId,
   listSessions,
+  readSessionContext,
+  resolveContextDefaults,
 } from "./sessions.js";
 import { buildActivity } from "./activity.js";
 import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
@@ -1013,6 +1015,45 @@ app.get("/api/sessions/:id", async (req, res) => {
       return;
     }
     res.json({ session, activeSessionId: bridge?.sessionId || null });
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * LVL-UP context meter: used/window for the active or named session.
+ * Grok: signals.json ground truth. Others: window map + estimated used (client).
+ * Query: ?sessionId=&profile=&model=
+ */
+app.get("/api/context", async (req, res) => {
+  try {
+    const sessionId = String(req.query.sessionId || bridge?.sessionId || "").trim();
+    const profile = String(
+      req.query.profile || bridge?.agentProfile?.()?.id || DEFAULT_AGENT_ID || "grok",
+    ).trim();
+    // Effective model: query → env cloud model for glyph-agent → empty
+    let modelHint = String(req.query.model || "").trim();
+    if (!modelHint && profile === "glyph-agent") {
+      modelHint = String(process.env.OPENROUTER_MODEL || "").trim();
+    }
+
+    let ctx = null;
+    if (sessionId && isSessionId(sessionId)) {
+      ctx = await readSessionContext(sessionId, { profile, modelHint });
+    }
+    if (!ctx) {
+      ctx = await resolveContextDefaults({ profile, modelHint });
+      if (sessionId) ctx = { ...ctx, sessionId };
+    }
+
+    res.json({
+      ok: true,
+      ...ctx,
+      profile,
+      activeSessionId: bridge?.sessionId || null,
+    });
   } catch (err) {
     res.status(500).json({
       error: err instanceof Error ? err.message : String(err),

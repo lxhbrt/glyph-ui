@@ -7,7 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkdownBody } from "./components/MarkdownBody.jsx";
 import { AssistantMeta } from "./components/AssistantMeta.jsx";
 import { PlanBar } from "./components/PlanBar.jsx";
-import { SnackBoard, SnackScrollbar } from "./components/Snack.jsx";
+import { ContextLvlBar } from "./components/ContextLvlBar.jsx";
+import { SnackBoard } from "./components/Snack.jsx";
 import { CommandLegend } from "./components/CommandLegend.jsx";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
@@ -48,6 +49,12 @@ import {
   uploadAttachmentFiles,
 } from "./utils/attachments.js";
 import { invalidateWsToken, wsUrl } from "./utils/format.js";
+import {
+  contextFillRatio,
+  estimateTokensFromTexts,
+  goldFillRatio,
+  scrollMetrics,
+} from "./utils/contextMeter.js";
 import { upsertToolMessage } from "./utils/messages.js";
 import { normalizeClientPlanEntries } from "./utils/plan.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
@@ -56,6 +63,8 @@ import { GLYPH_BUILD, GLYPH_VERSION } from "./version.js";
 
 /** Busy + no thought/answer/tool for this long → snack “overate” (X_X). */
 const SNACK_STALE_MS = 120_000;
+/** Grok context poll while a turn is running (signals.json lag). */
+const CONTEXT_POLL_MS = 8_000;
 
 export default function App() {
   const [connected, setConnected] = useState(false);
@@ -143,6 +152,23 @@ export default function App() {
    */
   const lastActivityRef = useRef(Date.now());
   const [snackStuffed, setSnackStuffed] = useState(false);
+
+  /**
+   * LVL-UP context meter (sticky above messages).
+   * Server: grok signals ground truth; else window map + client estimate.
+   */
+  const [contextInfo, setContextInfo] = useState({
+    used: 0,
+    window: 500_000,
+    model: "",
+    softCapPercent: 80,
+    estimated: true,
+    source: "default",
+  });
+  const [scrollHud, setScrollHud] = useState({
+    scrollRatio: 1,
+    hasOverflow: false,
+  });
 
   // —— Grok Voice (xAI STT / TTS) ——
   const [voiceAvailable, setVoiceAvailable] = useState(false);
@@ -603,12 +629,13 @@ export default function App() {
     [isNearBottom, setPinned, jumpToEnd],
   );
 
-  // Track pin from user scroll (SnackScrollbar also drives scrollTop)
+  // Track pin from user scroll + feed LVL bar (gold shrinks when scrolling up)
   useEffect(() => {
     const el = listRef.current;
     if (!el) return undefined;
 
     const onScroll = () => {
+      setScrollHud(scrollMetrics(el));
       // Don't treat our own stick-scroll as "user left the bottom"
       if (programmaticScrollRef.current) return;
       const near = isNearBottom(el);
@@ -1594,6 +1621,114 @@ export default function App() {
   const showWorking = isWorking || snackDemo;
   const showStuffed = snackStuffed || snackDemo;
 
+  // Effective model for window map (last assistant trace beats session signals)
+  const effectiveModel = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]?.trace?.model;
+      if (m) return String(m);
+    }
+    if (traceRef.current?.model) return String(traceRef.current.model);
+    return contextInfo.model || "";
+  }, [messages, contextInfo.model]);
+
+  // Client-side used estimate when server has no signals (claude / glyph-agent / new chat)
+  const estimatedUsed = useMemo(() => {
+    return estimateTokensFromTexts(
+      messages.map((m) => m.text).filter(Boolean),
+    );
+  }, [messages]);
+
+  const contextFill = useMemo(() => {
+    const used =
+      contextInfo.estimated || contextInfo.used == null
+        ? estimatedUsed
+        : contextInfo.used;
+    return contextFillRatio(used, contextInfo.window);
+  }, [contextInfo, estimatedUsed]);
+
+  const goldFill = useMemo(
+    () =>
+      goldFillRatio(contextFill, scrollHud.scrollRatio, scrollHud.hasOverflow),
+    [contextFill, scrollHud],
+  );
+
+  const displayUsed = useMemo(() => {
+    if (contextInfo.estimated || contextInfo.used == null) return estimatedUsed;
+    return contextInfo.used;
+  }, [contextInfo, estimatedUsed]);
+
+  // ~ when used is client-estimated (no signals) — window may still be exact
+  const displayEstimated =
+    Boolean(contextInfo.estimated) || contextInfo.used == null;
+
+  // Fetch context used/window (grok signals or map defaults)
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (sessionId) params.set("sessionId", sessionId);
+        if (agent?.id) params.set("profile", agent.id);
+        const modelHint =
+          (traceRef.current && traceRef.current.model) || contextInfo.model || "";
+        if (modelHint) params.set("model", String(modelHint));
+        const res = await fetch(`/api/context?${params.toString()}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (cancelled || !j?.ok) return;
+        setContextInfo({
+          used: j.used != null ? Number(j.used) : null,
+          window: Number(j.window) || 500_000,
+          model: String(j.model || modelHint || agent?.id || ""),
+          softCapPercent: Number(j.softCapPercent) || 80,
+          estimated: Boolean(j.estimated),
+          source: String(j.source || "default"),
+        });
+      } catch {
+        /* ignore — keep last known */
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- contextInfo.model intentionally not a dep (write target)
+  }, [sessionId, agent?.id, isWorking, messages.length]);
+
+  // Poll grok signals while tools run (context grows without turn_done)
+  useEffect(() => {
+    if (!isWorking || agent?.id !== "grok") return undefined;
+    const id = window.setInterval(() => {
+      const params = new URLSearchParams();
+      if (sessionId) params.set("sessionId", sessionId);
+      params.set("profile", "grok");
+      void fetch(`/api/context?${params.toString()}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j) => {
+          if (!j?.ok) return;
+          setContextInfo({
+            used: j.used != null ? Number(j.used) : null,
+            window: Number(j.window) || 500_000,
+            model: String(j.model || ""),
+            softCapPercent: Number(j.softCapPercent) || 80,
+            estimated: Boolean(j.estimated),
+            source: String(j.source || "default"),
+          });
+        })
+        .catch(() => {});
+    }, CONTEXT_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [isWorking, agent?.id, sessionId]);
+
+  // Re-measure scroll HUD when transcript size changes
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => setScrollHud(scrollMetrics(el)));
+  }, [messages.length, isWorking]);
+
   // Keep streaming mirror in sync (e.g. after history load / finalize)
   useEffect(() => {
     streamingRef.current = messages.some((m) => m.streaming);
@@ -2055,9 +2190,9 @@ export default function App() {
         ) : null}
         {error ? <div className="banner">{error}</div> : null}
 
-        <div className="messages-shell">
+        <div className="messages-shell messages-shell--col">
           <main
-            className={`messages messages--borderless messages--snack-scroll${
+            className={`messages messages--borderless${
               dropActive ? " is-drop-target" : ""
             }`}
             ref={listRef}
@@ -2183,10 +2318,6 @@ export default function App() {
               </div>
             ) : null}
           </main>
-          <SnackScrollbar
-            scrollRef={listRef}
-            deps={[visibleMessages.length, isWorking]}
-          />
           {/* Unpinned + new chunks below → jump re-enables sticky follow */}
           {!pinnedToBottom && hasNewBelow ? (
             <button
@@ -2250,6 +2381,16 @@ export default function App() {
               </ol>
             </div>
           ) : null}
+          <ContextLvlBar
+            contextFill={contextFill}
+            goldFill={goldFill}
+            softCapRatio={(contextInfo.softCapPercent || 80) / 100}
+            used={displayUsed}
+            windowTokens={contextInfo.window}
+            model={effectiveModel || contextInfo.model}
+            estimated={displayEstimated}
+            animateKey={sessionId || agent?.id || "new"}
+          />
           <div
             className={`composer-box${attachBusy ? " composer-box--attach-busy" : ""}${
               dropActive ? " is-drop-target" : ""

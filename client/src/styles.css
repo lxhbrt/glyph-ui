@@ -708,6 +708,67 @@ button.send.send--stuffed .send-snack {
   gap: 0;
 }
 
+/* Column: LVL context bar (sticky top) + scrollable messages */
+.messages-shell--col {
+  flex-direction: column;
+  gap: 0;
+}
+
+/*
+  LVL-UP context Jagd-Bar — strip directly above the composer input.
+  Gray = context fill; gold snake shrinks with scroll (when overflow).
+*/
+.context-lvl-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 6px 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  cursor: help;
+  user-select: none;
+}
+
+.context-lvl-bar-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 1rem;
+  padding: 0 2px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.context-lvl-bar-tag {
+  color: var(--gold-bright, var(--gold));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+}
+
+.context-lvl-bar-label {
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+}
+
+.context-lvl-bar-est {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.context-lvl-bar-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
 /* Drag-and-drop target on the transcript (no toolbar button needed) */
 .messages.is-drop-target {
   outline: 2px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
@@ -884,6 +945,9 @@ button.send.send--stuffed .send-snack {
   padding: 14px;
   position: relative;
   z-index: 1;
+  /* Native scrollbar — LVL bar owns the snack hunt metaphor */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--gold) 45%, var(--border)) transparent;
 }
 
 /* Inner column — height changes observed for stick-to-bottom */
@@ -900,58 +964,6 @@ button.send.send--stuffed .send-snack {
   border-radius: 0;
   background: var(--bg);
   padding: 8px 8px 18px 4px;
-}
-
-/* Hide native scrollbar — SnackScrollbar is the rail */
-.messages.messages--snack-scroll {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none;
-  padding-right: 4px;
-}
-
-.messages.messages--snack-scroll::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
-
-/*
-  Pixel-Snack scrollbar — 8×8 stones only (no stretch).
-  Snake tight & fixed; only apple distance changes with chat length.
-*/
-.snack-scroll {
-  flex: 0 0 auto;
-  align-self: stretch;
-  position: relative;
-  z-index: 2;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-  /* width set inline — never stretch stones via % sizing */
-  min-width: calc(var(--snack-pixel, 8px) + 4px);
-  overflow: hidden;
-}
-
-.snack-scroll--on {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.snack-scroll-canvas {
-  display: block;
-  /* size set in JS (px) — do NOT use width/height 100% (that elongated the apple) */
-  width: auto;
-  height: auto;
-  max-width: none;
-  max-height: none;
-  cursor: grab;
-  touch-action: none;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-}
-
-.snack-scroll-canvas:active {
-  cursor: grabbing;
 }
 
 .empty {

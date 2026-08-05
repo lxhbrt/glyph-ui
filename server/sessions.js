@@ -11,15 +11,163 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import {
+  DEFAULT_SOFT_CAP_PERCENT,
+  resolveContextWindow,
+} from "../shared/contextMeter.mjs";
 
 const GROK_HOME = process.env.GROK_HOME || path.join(os.homedir(), ".grok");
 const SESSIONS_ROOT = path.join(GROK_HOME, "sessions");
+const MODELS_CACHE = path.join(GROK_HOME, "models_cache.json");
 const STATE_DIR =
   process.env.GLYPH_UI_STATE_DIR ||
   path.join(os.homedir(), ".glyph-ui");
 const CLOSED_LOG = path.join(STATE_DIR, "closed-sessions.json");
 
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Read Grok models_cache entry for window + soft-cap.
+ * @param {string} modelId
+ * @returns {Promise<{ window: number | null, softCapPercent: number | null }>}
+ */
+async function readGrokModelMeta(modelId) {
+  const id = String(modelId || "").trim();
+  if (!id) return { window: null, softCapPercent: null };
+  try {
+    const raw = await fs.readFile(MODELS_CACHE, "utf8");
+    const data = JSON.parse(raw);
+    const entry = data?.models?.[id] || data?.models?.[id.toLowerCase()];
+    const info = entry?.info || entry || {};
+    const window =
+      Number.isFinite(Number(info.context_window)) && Number(info.context_window) > 0
+        ? Number(info.context_window)
+        : null;
+    const soft =
+      Number.isFinite(Number(info.auto_compact_threshold_percent)) &&
+      Number(info.auto_compact_threshold_percent) > 0
+        ? Number(info.auto_compact_threshold_percent)
+        : null;
+    return { window, softCapPercent: soft };
+  } catch {
+    return { window: null, softCapPercent: null };
+  }
+}
+
+/**
+ * Context fill for the LVL-UP bar (Grok ground truth from signals.json).
+ *
+ * @param {string} sessionId
+ * @param {{ profile?: string, modelHint?: string }} [opts]
+ * @returns {Promise<{
+ *   sessionId: string,
+ *   used: number | null,
+ *   window: number,
+ *   model: string,
+ *   softCapPercent: number,
+ *   estimated: boolean,
+ *   source: string,
+ *   fillRatio: number,
+ * } | null>}
+ */
+export async function readSessionContext(sessionId, opts = {}) {
+  if (!isSessionId(sessionId)) return null;
+  const dir = await findSessionDir(sessionId);
+  if (!dir) return null;
+
+  let signals = null;
+  try {
+    signals = JSON.parse(
+      await fs.readFile(path.join(dir, "signals.json"), "utf8"),
+    );
+  } catch {
+    signals = null;
+  }
+
+  let summary = {};
+  try {
+    summary = JSON.parse(
+      await fs.readFile(path.join(dir, "summary.json"), "utf8"),
+    );
+  } catch {
+    summary = {};
+  }
+
+  const model =
+    String(
+      signals?.primaryModelId ||
+        summary?.current_model_id ||
+        opts.modelHint ||
+        "",
+    ).trim() || "";
+
+  const usedRaw = Number(signals?.contextTokensUsed);
+  const used =
+    Number.isFinite(usedRaw) && usedRaw >= 0 ? Math.round(usedRaw) : null;
+
+  const winSignals = Number(signals?.contextWindowTokens);
+  const grokMeta = await readGrokModelMeta(model);
+  const mapped = resolveContextWindow(model, opts.profile);
+
+  let window = null;
+  let source = "default";
+  if (Number.isFinite(winSignals) && winSignals > 0) {
+    window = Math.round(winSignals);
+    source = "signals";
+  } else if (grokMeta.window) {
+    window = grokMeta.window;
+    source = "models_cache";
+  } else {
+    window = mapped.window;
+    source = mapped.source;
+  }
+
+  const softCapPercent =
+    grokMeta.softCapPercent != null
+      ? grokMeta.softCapPercent
+      : DEFAULT_SOFT_CAP_PERCENT;
+
+  const estimated = used == null;
+  const fillRatio =
+    !estimated && window > 0 ? Math.min(1, Math.max(0, used / window)) : 0;
+
+  return {
+    sessionId,
+    used,
+    window,
+    model: model || mapped.matchedKey || String(opts.profile || "unknown"),
+    softCapPercent,
+    estimated,
+    source,
+    fillRatio,
+  };
+}
+
+/**
+ * Resolve window/soft-cap without a disk session (new chat / non-grok).
+ * @param {{ profile?: string, modelHint?: string }} [opts]
+ */
+export async function resolveContextDefaults(opts = {}) {
+  const model = String(opts.modelHint || "").trim();
+  const profile = String(opts.profile || "grok").trim();
+  const grokMeta = model ? await readGrokModelMeta(model) : { window: null, softCapPercent: null };
+  const mapped = resolveContextWindow(model, profile);
+  const window = grokMeta.window || mapped.window;
+  const softCapPercent =
+    grokMeta.softCapPercent != null
+      ? grokMeta.softCapPercent
+      : DEFAULT_SOFT_CAP_PERCENT;
+  return {
+    sessionId: null,
+    used: null,
+    window,
+    model: model || mapped.matchedKey || profile,
+    softCapPercent,
+    estimated: true,
+    source: grokMeta.window ? "models_cache" : mapped.source,
+    fillRatio: 0,
+  };
+}
 
 export function isSessionId(id) {
   return typeof id === "string" && SESSION_ID_RE.test(id);
