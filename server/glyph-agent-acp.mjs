@@ -16,11 +16,20 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
 import { buildPromptWithAttachments } from "../shared/attachments.mjs";
+import { buildStepBanner } from "./stepBanner.mjs";
 
 // glyph-agent HTTP-Dienst (Standard wie in server.py)
 const AGENT_URL = process.env.GLYPH_AGENT_URL || "http://127.0.0.1:18899";
 const TIMEOUT_MS = Number(process.env.GLYPH_AGENT_TIMEOUT || 300000);
 const PROTOCOL_VERSION = acp.PROTOCOL_VERSION;
+
+// Grok-artige Stufen-/Tool-Anzeige im Chat-Text (Ausgabe).
+// Standard: AN — zeigt vor der Antwort einen kompakten Block, welche Stufen der
+// Agent durchlaufen hat (VaultFind/WebSearch/ExtractUrl) + Modell.
+// Auf "0"/"false" setzen, um nur noch den reinen Antworttext zu sehen.
+const SHOW_STEP_BANNER = !["0", "false", "off"].includes(
+  String(process.env.GLYPH_AGENT_SHOW_STEPS || "1").toLowerCase().trim(),
+);
 
 // In-Memory Session-Speicher (Test/Zustand; ohne Langzeit-Persistenz)
 const sessions = new Map();
@@ -52,6 +61,11 @@ function streamChunks(text, client, sessionId, chunkSize = 400) {
     })
   );
 }
+
+/**
+ * buildStepBanner liegt in stepBanner.mjs (pure Funktion, separat getestet) —
+ * hier nur importiert und vor dem Antworttext eingefügt.
+ */
 
 const app = acp.agent({ name: "glyph-agent" });
 
@@ -151,10 +165,15 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     const data = await resp.json();
     const answer = data?.answer ?? "";
 
-    store.messages.push({ role: "assistant", content: answer });
+    // Grok-artigen Banner (Tool/Think-Stufen + Modell) vor die Antwort setzen,
+    // damit die Stufen textlich sichtbar im Chat stehen (nicht nur im Meta-Klapp).
+    const banner = SHOW_STEP_BANNER ? buildStepBanner(data) : "";
+    const displayText = banner ? banner + answer : answer;
 
-    // Antwort als Chunks nach Glyph streamen
-    await streamChunks(answer, client, sessionId);
+    store.messages.push({ role: "assistant", content: displayText });
+
+    // Antwort als Chunks nach Glyph streamen (mit Banner)
+    await streamChunks(displayText, client, sessionId);
 
     // Abschluss als finales Ergebnis signalisieren (inkl. effektivem Server-Trace als
     // Metadaten, damit die UI Provider/Modell/Tool-Status aus dem ECHTEN Server anzeigt,
@@ -170,7 +189,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
           sessionUpdate: "agent_message_complete",
           message: {
             role: "assistant",
-            content: [{ type: "text", text: answer }],
+            content: [{ type: "text", text: displayText }],
             ...(Object.keys(meta).length ? { metadata: meta } : {}),
           },
         },
