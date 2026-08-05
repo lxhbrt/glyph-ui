@@ -13,6 +13,7 @@ import { CommandLegend } from "./components/CommandLegend.jsx";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
 import { SlashPopup } from "./components/SlashPopup.jsx";
+import { SlashHighlightedText } from "./components/SlashHighlightedText.jsx";
 import { SummarizeDialog } from "./components/SummarizeDialog.jsx";
 import { ActivityCalendar } from "./components/ActivityCalendar.jsx";
 import {
@@ -53,6 +54,9 @@ import {
   contextFillRatio,
   estimateTokensFromTexts,
   goldFillRatio,
+  isModelCompatibleWithProfile,
+  PROFILE_DEFAULT_WINDOWS,
+  resolveContextWindow,
   scrollMetrics,
 } from "./utils/contextMeter.js";
 import { upsertToolMessage } from "./utils/messages.js";
@@ -157,13 +161,16 @@ export default function App() {
    * LVL-UP context meter (sticky above messages).
    * Server: grok signals ground truth; else window map + client estimate.
    */
-  const [contextInfo, setContextInfo] = useState({
-    used: 0,
-    window: 500_000,
-    model: "",
-    softCapPercent: 80,
-    estimated: true,
-    source: "default",
+  const [contextInfo, setContextInfo] = useState(() => {
+    const r = resolveContextWindow("", "grok");
+    return {
+      used: null,
+      window: r.window,
+      model: "",
+      softCapPercent: 80,
+      estimated: true,
+      source: r.source,
+    };
   });
   const [scrollHud, setScrollHud] = useState({
     scrollRatio: 1,
@@ -1460,9 +1467,9 @@ export default function App() {
   }, [connected, reconnecting]);
 
   /**
-   * Switch the ACP agent (Grok ↔ Claude). The bridge restarts into the other
-   * binary, so this always yields a fresh session — the transcript is dropped
-   * for the same reason reconnect drops it.
+   * Switch the ACP agent (Grok ↔ Claude ↔ glyph-agent). The bridge restarts
+   * into the other binary, so this always yields a fresh session — the
+   * transcript is dropped for the same reason reconnect drops it.
    */
   const switchAgent = useCallback(
     async (id) => {
@@ -1486,6 +1493,21 @@ export default function App() {
           thoughtBuf.current = "";
           queueRef.current = [];
           setQueue([]);
+          // Fresh bridge session after agent switch — drop previous id so
+          // /api/context cannot re-read a leftover grok signals.json (500k).
+          setSessionId(null);
+          // Drop sticky model from previous profile so LVL window follows the
+          // new profile default (e.g. glyph-agent → 1M, not leftover grok 500k).
+          traceRef.current = null;
+          const r = resolveContextWindow("", id);
+          setContextInfo({
+            used: null,
+            window: r.window,
+            model: "",
+            softCapPercent: 80,
+            estimated: true,
+            source: r.source,
+          });
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -1669,8 +1691,17 @@ export default function App() {
         const params = new URLSearchParams();
         if (sessionId) params.set("sessionId", sessionId);
         if (agent?.id) params.set("profile", agent.id);
-        const modelHint =
+        // Prefer live trace; never send a foreign sticky model from a prior
+        // profile (e.g. grok-4.5 while on glyph-agent).
+        const profileId = agent?.id || "grok";
+        let modelHint =
           (traceRef.current && traceRef.current.model) || contextInfo.model || "";
+        if (
+          modelHint &&
+          !isModelCompatibleWithProfile(modelHint, profileId)
+        ) {
+          modelHint = "";
+        }
         if (modelHint) params.set("model", String(modelHint));
         const res = await fetch(`/api/context?${params.toString()}`, {
           cache: "no-store",
@@ -1678,10 +1709,18 @@ export default function App() {
         if (!res.ok) return;
         const j = await res.json();
         if (cancelled || !j?.ok) return;
+        const fallbackWin =
+          PROFILE_DEFAULT_WINDOWS[profileId] ??
+          resolveContextWindow("", profileId).window;
+        const serverModel = String(j.model || "");
+        const nextModel =
+          serverModel && isModelCompatibleWithProfile(serverModel, profileId)
+            ? serverModel
+            : modelHint || profileId;
         setContextInfo({
           used: j.used != null ? Number(j.used) : null,
-          window: Number(j.window) || 500_000,
-          model: String(j.model || modelHint || agent?.id || ""),
+          window: Number(j.window) || fallbackWin,
+          model: nextModel,
           softCapPercent: Number(j.softCapPercent) || 80,
           estimated: Boolean(j.estimated),
           source: String(j.source || "default"),
@@ -1708,9 +1747,12 @@ export default function App() {
         .then((r) => r.json())
         .then((j) => {
           if (!j?.ok) return;
+          const fallbackWin =
+            PROFILE_DEFAULT_WINDOWS.grok ??
+            resolveContextWindow("", "grok").window;
           setContextInfo({
             used: j.used != null ? Number(j.used) : null,
-            window: Number(j.window) || 500_000,
+            window: Number(j.window) || fallbackWin,
             model: String(j.model || ""),
             softCapPercent: Number(j.softCapPercent) || 80,
             estimated: Boolean(j.estimated),
@@ -2245,7 +2287,19 @@ export default function App() {
                         ))}
                       </ul>
                     ) : null}
-                    {m.text ? <MarkdownBody text={m.text} /> : null}
+                    {m.text ? (
+                      m.role === "user" ? (
+                        <SlashHighlightedText
+                          text={m.text}
+                          skills={skillCatalog}
+                          commands={commandCatalog}
+                          className="md-body user-text-with-slash"
+                          markdownFallback
+                        />
+                      ) : (
+                        <MarkdownBody text={m.text} />
+                      )
+                    ) : null}
                     {m.role === "assistant" &&
                     !m.streaming &&
                     m.text?.trim() ? (
@@ -2446,13 +2500,30 @@ export default function App() {
                 onClose={() => setSlashOpen(false)}
                 onPick={(item) => applySlashInsert(item.name)}
               />
+              <SlashHighlightedText
+                text={input}
+                skills={skillCatalog}
+                commands={commandCatalog}
+                className="composer-highlight"
+              />
               <textarea
                 ref={composerRef}
+                className="composer-textarea--overlay"
                 value={input}
                 onChange={(e) => {
                   const v = e.target.value;
                   setInput(v);
                   syncSlashFromComposer(v, e.target.selectionStart ?? v.length);
+                }}
+                onScroll={(e) => {
+                  const mirror = e.currentTarget.previousElementSibling;
+                  if (
+                    mirror &&
+                    mirror.classList.contains("composer-highlight")
+                  ) {
+                    mirror.scrollTop = e.currentTarget.scrollTop;
+                    mirror.scrollLeft = e.currentTarget.scrollLeft;
+                  }
                 }}
                 onClick={(e) => {
                   syncSlashFromComposer(

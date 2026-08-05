@@ -17,7 +17,7 @@ export const DEFAULT_CONTEXT_WINDOW = 200_000;
  * Keys are matched case-insensitively as exact id, then as substring of the
  * resolved model string (longest key wins for substring matches).
  *
- * Sources: Grok models_cache / provider cards (Luna, Sonnet 5, DeepSeek V4 Flash).
+ * Sources: Grok models_cache / provider cards (Luna, Sonnet 5, DeepSeek V4).
  */
 export const CONTEXT_WINDOWS = {
   "grok-4.5": 500_000,
@@ -37,8 +37,9 @@ export const CONTEXT_WINDOWS = {
   "deepseek/deepseek-v4-flash": 1_000_000,
   "deepseek-v4-flash": 1_000_000,
   "deepseek-v4-flash-0731": 1_000_000,
-  "deepseek-chat": 128_000,
-  "deepseek-reasoner": 128_000,
+  "deepseek/deepseek-reasoner": 1_000_000,
+  "deepseek-reasoner": 1_000_000,
+  "deepseek-chat": 1_000_000,
 };
 
 /** Profile defaults when no model id is known. */
@@ -61,13 +62,63 @@ export function normalizeModelId(model) {
 }
 
 /**
+ * Which Glyph agent-profile family a model id belongs to.
+ * Used so a sticky `grok-4.5` hint cannot pin the window after switching to
+ * glyph-agent / claude.
+ *
+ * @param {string | null | undefined} model
+ * @returns {"grok" | "claude" | "glyph-agent" | null}
+ */
+export function modelProfileFamily(model) {
+  const id = normalizeModelId(model);
+  if (!id) return null;
+  if (id === "grok" || id === "claude" || id === "glyph-agent") return id;
+  if (id.includes("grok")) return "grok";
+  if (
+    id.includes("claude") ||
+    id.includes("sonnet") ||
+    id.includes("opus") ||
+    id.includes("anthropic") ||
+    id.includes("fable")
+  ) {
+    return "claude";
+  }
+  // gpt / luna / deepseek / openrouter / minimax / … → cloud path under glyph-agent
+  return "glyph-agent";
+}
+
+/**
+ * @param {string | null | undefined} model
+ * @param {string | null | undefined} profile
+ * @returns {boolean}
+ */
+export function isModelCompatibleWithProfile(model, profile) {
+  const p = String(profile || "")
+    .trim()
+    .toLowerCase();
+  if (!p) return true;
+  const fam = modelProfileFamily(model);
+  if (!fam) return false;
+  return fam === p;
+}
+
+/**
  * Resolve context window for a model (+ optional profile fallback).
+ * Foreign model ids (e.g. grok-4.5 while profile is glyph-agent) are ignored
+ * so the profile default applies until a matching used_model arrives.
+ *
  * @param {string | null | undefined} model
  * @param {string | null | undefined} [profile]
  * @returns {{ window: number, source: "map" | "profile" | "default", matchedKey: string | null }}
  */
 export function resolveContextWindow(model, profile) {
-  const id = normalizeModelId(model);
+  const pid = String(profile || "")
+    .trim()
+    .toLowerCase();
+  let id = normalizeModelId(model);
+  if (id && pid && !isModelCompatibleWithProfile(model, profile)) {
+    id = "";
+  }
   if (id && CONTEXT_WINDOWS[id] != null) {
     return { window: CONTEXT_WINDOWS[id], source: "map", matchedKey: id };
   }
@@ -85,7 +136,6 @@ export function resolveContextWindow(model, profile) {
     }
     if (best) return best;
   }
-  const pid = String(profile || "").trim().toLowerCase();
   if (pid && PROFILE_DEFAULT_WINDOWS[pid] != null) {
     return {
       window: PROFILE_DEFAULT_WINDOWS[pid],

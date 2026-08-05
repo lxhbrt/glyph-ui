@@ -5,8 +5,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  findSlashHighlightRanges,
   fuzzyScore,
+  highlightSlashSegments,
   insertSlashCommand,
+  isValidSlashCommand,
   rankCatalog,
   slashTokenAt,
 } from "../../client/src/utils/slash.js";
@@ -59,5 +62,51 @@ describe("rankCatalog", () => {
 
   it("fuzzy prefers prefix", () => {
     assert.ok(fuzzyScore("gr", "grill-me") > fuzzyScore("gr", "angry"));
+  });
+});
+
+describe("isValidSlashCommand / highlight", () => {
+  const skills = [{ name: "grilling", kind: "skill" }];
+  const commands = [
+    { name: "compact", kind: "command" },
+    { name: "context", kind: "command" },
+  ];
+
+  it("accepts exact catalog name", () => {
+    assert.equal(isValidSlashCommand("compact", skills, commands), true);
+    assert.equal(isValidSlashCommand("grilling", skills, commands), true);
+  });
+
+  it("accepts unique prefix match", () => {
+    assert.equal(isValidSlashCommand("comp", skills, commands), true); // only compact
+  });
+
+  it("rejects ambiguous prefix", () => {
+    // "c" matches compact + context
+    assert.equal(isValidSlashCommand("c", skills, commands), false);
+  });
+
+  it("rejects unknown", () => {
+    assert.equal(isValidSlashCommand("nope", skills, commands), false);
+    assert.equal(isValidSlashCommand("", skills, commands), false);
+  });
+
+  it("finds ranges in free text", () => {
+    const ranges = findSlashHighlightRanges(
+      "/compact keep auth",
+      skills,
+      commands,
+    );
+    assert.equal(ranges.length, 1);
+    assert.equal(ranges[0].start, 0);
+    assert.equal(ranges[0].end, "/compact".length);
+  });
+
+  it("segments highlight only the command token", () => {
+    const segs = highlightSlashSegments("/compact keep", skills, commands);
+    assert.equal(segs[0].highlight, true);
+    assert.equal(segs[0].text, "/compact");
+    assert.equal(segs[1].highlight, false);
+    assert.match(segs[1].text, /keep/);
   });
 });

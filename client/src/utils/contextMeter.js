@@ -12,6 +12,8 @@ export {
   formatContextTooltip,
   formatTokenCount,
   goldFillRatio,
+  isModelCompatibleWithProfile,
+  modelProfileFamily,
   normalizeModelId,
   resolveContextWindow,
   scrollMetrics,

@@ -33,12 +33,42 @@ describe("resolveContextWindow", () => {
     );
   });
 
+  it("maps deepseek-reasoner to 1M", () => {
+    assert.equal(
+      resolveContextWindow("deepseek-reasoner", "glyph-agent").window,
+      1_000_000,
+    );
+    assert.equal(
+      resolveContextWindow("deepseek/deepseek-reasoner", "glyph-agent").window,
+      1_000_000,
+    );
+  });
+
   it("maps grok-4.5 to 500k", () => {
     assert.equal(resolveContextWindow("grok-4.5", "grok").window, 500_000);
   });
 
   it("falls back to profile default", () => {
     const r = resolveContextWindow("", "claude");
+    assert.equal(r.window, 1_000_000);
+    assert.equal(r.source, "profile");
+  });
+
+  it("ignores sticky grok model when profile is glyph-agent", () => {
+    const r = resolveContextWindow("grok-4.5", "glyph-agent");
+    assert.equal(r.window, 1_000_000);
+    assert.equal(r.source, "profile");
+    assert.equal(r.matchedKey, "glyph-agent");
+  });
+
+  it("ignores sticky grok model when profile is claude", () => {
+    const r = resolveContextWindow("grok-4.5", "claude");
+    assert.equal(r.window, 1_000_000);
+    assert.equal(r.source, "profile");
+  });
+
+  it("glyph-agent profile default is 1M with empty model", () => {
+    const r = resolveContextWindow("", "glyph-agent");
     assert.equal(r.window, 1_000_000);
     assert.equal(r.source, "profile");
   });

@@ -13,6 +13,7 @@ import path from "node:path";
 import os from "node:os";
 import {
   DEFAULT_SOFT_CAP_PERCENT,
+  isModelCompatibleWithProfile,
   resolveContextWindow,
 } from "../shared/contextMeter.mjs";
 
@@ -72,6 +73,19 @@ async function readGrokModelMeta(modelId) {
  */
 export async function readSessionContext(sessionId, opts = {}) {
   if (!isSessionId(sessionId)) return null;
+  const profile = String(opts.profile || "grok").trim();
+
+  // Grok disk sessions (signals.json) only apply to the grok profile. After a
+  // profile switch the client may still hold a grok sessionId briefly — do not
+  // let that pin the LVL window at 500k for glyph-agent / claude.
+  if (profile !== "grok") {
+    const defaults = await resolveContextDefaults({
+      profile,
+      modelHint: opts.modelHint,
+    });
+    return { ...defaults, sessionId };
+  }
+
   const dir = await findSessionDir(sessionId);
   if (!dir) return null;
 
@@ -93,13 +107,17 @@ export async function readSessionContext(sessionId, opts = {}) {
     summary = {};
   }
 
-  const model =
+  let model =
     String(
       signals?.primaryModelId ||
         summary?.current_model_id ||
         opts.modelHint ||
         "",
     ).trim() || "";
+  if (model && !isModelCompatibleWithProfile(model, profile)) {
+    model = String(opts.modelHint || "").trim();
+    if (model && !isModelCompatibleWithProfile(model, profile)) model = "";
+  }
 
   const usedRaw = Number(signals?.contextTokensUsed);
   const used =
@@ -107,7 +125,7 @@ export async function readSessionContext(sessionId, opts = {}) {
 
   const winSignals = Number(signals?.contextWindowTokens);
   const grokMeta = await readGrokModelMeta(model);
-  const mapped = resolveContextWindow(model, opts.profile);
+  const mapped = resolveContextWindow(model, profile);
 
   let window = null;
   let source = "default";
@@ -135,7 +153,7 @@ export async function readSessionContext(sessionId, opts = {}) {
     sessionId,
     used,
     window,
-    model: model || mapped.matchedKey || String(opts.profile || "unknown"),
+    model: model || mapped.matchedKey || String(profile || "unknown"),
     softCapPercent,
     estimated,
     source,
@@ -148,9 +166,15 @@ export async function readSessionContext(sessionId, opts = {}) {
  * @param {{ profile?: string, modelHint?: string }} [opts]
  */
 export async function resolveContextDefaults(opts = {}) {
-  const model = String(opts.modelHint || "").trim();
+  let model = String(opts.modelHint || "").trim();
   const profile = String(opts.profile || "grok").trim();
-  const grokMeta = model ? await readGrokModelMeta(model) : { window: null, softCapPercent: null };
+  if (model && !isModelCompatibleWithProfile(model, profile)) {
+    model = "";
+  }
+  const grokMeta =
+    profile === "grok" && model
+      ? await readGrokModelMeta(model)
+      : { window: null, softCapPercent: null };
   const mapped = resolveContextWindow(model, profile);
   const window = grokMeta.window || mapped.window;
   const softCapPercent =

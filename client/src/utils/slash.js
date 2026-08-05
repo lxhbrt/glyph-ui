@@ -114,6 +114,18 @@ export function fuzzyScore(query, name, description = "") {
  */
 
 /**
+ * Normalize a catalog command/skill name (no leading slash, lowercased).
+ * @param {string} name
+ * @returns {string}
+ */
+export function catalogNameKey(name) {
+  return String(name || "")
+    .trim()
+    .replace(/^\//, "")
+    .toLowerCase();
+}
+
+/**
  * Filter + rank: skills first (by score), then agent commands (by score).
  *
  * @param {CatalogItem[]} skills
@@ -136,4 +148,90 @@ export function rankCatalog(skills, commands, query) {
       .map((x) => x.item);
 
   return [...rank(skills), ...rank(commands)];
+}
+
+/**
+ * Valid slash command: exact catalog name match, or exactly one fuzzy hit
+ * (prefix/name match — description-only hits do not count for uniqueness).
+ *
+ * @param {string} query  without leading slash
+ * @param {CatalogItem[]} skills
+ * @param {CatalogItem[]} commands
+ * @returns {boolean}
+ */
+export function isValidSlashCommand(query, skills, commands) {
+  const q = catalogNameKey(query);
+  if (!q) return false;
+  const items = [...(skills || []), ...(commands || [])];
+  if (items.some((it) => catalogNameKey(it.name) === q)) return true;
+
+  // Name-only fuzzy (ignore description-only matches for "valid command")
+  const nameHits = items.filter((it) => {
+    const n = catalogNameKey(it.name);
+    if (!n) return false;
+    if (n === q) return true;
+    if (n.startsWith(q)) return true;
+    if (n.includes(q)) return true;
+    // subsequence on name
+    let qi = 0;
+    for (let i = 0; i < n.length && qi < q.length; i++) {
+      if (n[i] === q[qi]) qi += 1;
+    }
+    return qi === q.length;
+  });
+  return nameHits.length === 1;
+}
+
+/**
+ * Ranges of valid `/cmd` tokens in free text (line start or after whitespace).
+ *
+ * @param {string} text
+ * @param {CatalogItem[]} skills
+ * @param {CatalogItem[]} commands
+ * @returns {{ start: number, end: number }[]}
+ */
+export function findSlashHighlightRanges(text, skills, commands) {
+  const s = String(text ?? "");
+  const ranges = [];
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === "/" && (i === 0 || /\s/.test(s[i - 1]))) {
+      let end = i + 1;
+      while (end < s.length && !/[\s]/.test(s[end])) end += 1;
+      const body = s.slice(i + 1, end);
+      if (body && isValidSlashCommand(body, skills, commands)) {
+        ranges.push({ start: i, end });
+      }
+      i = Math.max(end, i + 1);
+    } else {
+      i += 1;
+    }
+  }
+  return ranges;
+}
+
+/**
+ * Split text into plain / highlighted segments for rendering.
+ *
+ * @param {string} text
+ * @param {CatalogItem[]} skills
+ * @param {CatalogItem[]} commands
+ * @returns {{ text: string, highlight: boolean }[]}
+ */
+export function highlightSlashSegments(text, skills, commands) {
+  const s = String(text ?? "");
+  const ranges = findSlashHighlightRanges(s, skills, commands);
+  if (!ranges.length) return [{ text: s, highlight: false }];
+  const segs = [];
+  let pos = 0;
+  for (const r of ranges) {
+    if (r.start > pos) {
+      segs.push({ text: s.slice(pos, r.start), highlight: false });
+    }
+    segs.push({ text: s.slice(r.start, r.end), highlight: true });
+    pos = r.end;
+  }
+  if (pos < s.length) segs.push({ text: s.slice(pos), highlight: false });
+  return segs;
 }

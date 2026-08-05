@@ -1029,10 +1029,19 @@ app.get("/api/sessions/:id", async (req, res) => {
  */
 app.get("/api/context", async (req, res) => {
   try {
-    const sessionId = String(req.query.sessionId || bridge?.sessionId || "").trim();
     const profile = String(
       req.query.profile || bridge?.agentProfile?.()?.id || DEFAULT_AGENT_ID || "grok",
     ).trim();
+    // Prefer explicit query sessionId. Only fall back to the live bridge
+    // session when the *active* profile is grok — a leftover grok UUID must
+    // not pin the LVL window at 500k after switching to glyph-agent / claude.
+    const bridgeProfile = String(bridge?.agentProfile?.()?.id || "").trim();
+    const bridgeSid = String(bridge?.sessionId || "").trim();
+    const querySid = String(req.query.sessionId || "").trim();
+    let sessionId = querySid;
+    if (!sessionId && bridgeSid && (profile === "grok" || bridgeProfile === profile)) {
+      sessionId = bridgeSid;
+    }
     // Effective model: query → env cloud model for glyph-agent → empty
     let modelHint = String(req.query.model || "").trim();
     if (!modelHint && profile === "glyph-agent") {
