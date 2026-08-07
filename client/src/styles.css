@@ -1158,13 +1158,13 @@ button.send.send--stuffed .send-snack {
   display: block;
   margin: 0 0 8px 0;
   padding: 6px 9px;
-  border-left: 3px solid color-mix(in srgb, var(--muted) 55%, transparent);
   background: color-mix(in srgb, var(--panel) 40%, var(--bg));
   border-radius: 6px;
-  font-size: 0.82rem;
+  font-size: 0.7rem;
   line-height: 1.45;
-  color: var(--muted);
-  opacity: 0.9;
+  /* einen Ton dunkler als zuvor (bisher var(--muted)), Richtung Antworttext */
+  color: color-mix(in srgb, var(--muted) 45%, var(--text));
+  opacity: 0.95;
   word-break: break-word;
 }
 
@@ -1175,7 +1175,6 @@ button.send.send--stuffed .send-snack {
 
 .step-block + .step-block {
   margin-top: 3px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
   padding-top: 3px;
 }
 
@@ -1272,7 +1271,6 @@ button.send.send--stuffed .send-snack {
   gap: 8px;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
 }
 
 .msg-bottom-actions .msg-bottom-btn {
@@ -3359,3 +3357,77 @@ button.cal-cell {
 }
 .assistant-meta-list li { margin: 1px 0; }
 .assistant-meta-list ul { padding-left: 14px; }
+
+/* ^_Code permission modal */
+.permission-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.permission-modal {
+  width: min(520px, 100%);
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  background: var(--panel, #1a1a1a);
+  color: var(--text, #eee);
+  border: 1px solid var(--line, #444);
+  border-radius: 12px;
+  padding: 16px 18px 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.permission-modal h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.permission-modal-kind {
+  margin: 0 0 10px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.permission-modal-preview {
+  margin: 0 0 14px;
+  max-height: 280px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg, #0f0f0f);
+  border: 1px solid var(--line, #333);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.permission-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.permission-btn {
+  border-radius: 8px;
+  border: 1px solid var(--line, #444);
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--bg, #222);
+  color: inherit;
+}
+.permission-btn--allow {
+  background: #1a5c2e;
+  border-color: #2a7a40;
+  color: #e8ffe8;
+}
+.permission-btn--reject {
+  background: #4a2020;
+  border-color: #6a3030;
+  color: #ffe8e8;
+}
+.permission-btn:hover {
+  filter: brightness(1.08);
+}

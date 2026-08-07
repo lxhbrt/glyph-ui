@@ -41,8 +41,12 @@ Ein entdeckbarer, benennbarer Prompt-/Workflow-Eintrag (z. B. aus `~/.grok/skill
 _Avoid_: Plugin, Hook, Agent-Command
 
 **Agent-Profil**:
-Eines der wählbaren ACP-Agenten in Glyph: **grok**, **claude**, **glyph-agent**. Glyph spawnt ein anderes Binary, nicht „ein anderes Modell“.
-_Avoid_: OpenRouter (kein UI-Profil mehr), Provider, Modell (als Profilname)
+Eines der wählbaren ACP-Agenten in Glyph: **grok**, **`^_Code`** (`_code`), **glyph-agent**. Glyph spawnt ein anderes Binary/Env, nicht „ein anderes Modell“.
+_Avoid_: OpenRouter (kein UI-Profil mehr), Claude (ersetzt durch ^_Code), Provider, Modell (als Profilname)
+
+**^_Code**:
+Code-Profil (id `_code`): DeepSeek V4 Flash via OpenRouter, Workspace-Tools, Genehmigung in Glyph. Nutzt dieselbe ACP-Brücke wie glyph-agent mit `GLYPH_AGENT_MODE=code`.
+_Avoid_: Claude-Profil, Anthropic-OAuth
 
 **glyph-agent (Profil)**:
 UI-Profil, das die lokale Engine `~/glyph-agent` anbindet (Vault/Tools + Cloud-Antwort). Engine-Vokabular lebt in `glyph-agent/CONTEXT.md`.
@@ -60,7 +64,7 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - **Zwei Einstiege:** Slash-Popup bei `/` im Composer **und** volles Extensions-Modal (Button/Shortcut). Command-Legend bleibt vorerst eigenständig (Hilfe), wird nicht ersetzt.
 - **Menü-Auswahl:** Eintrag bestätigt → Text in den Composer (`/name `), Fokus zurück; **kein** automatisches Senden.
 - **Tastatur im Popup/Modal:** Solange die Liste offen ist, steuern Pfeile/Enter die Menü-Auswahl; Enter sendet **nicht** die Chat-Nachricht.
-- **Skill-Quellen:** profilabhängig (B) — grok → Grok-Skill-Pfade; claude → Claude-Skills; glyph-agent → eigene/leer mit Hinweis.
+- **Skill-Quellen:** profilabhängig (B) — grok → Grok-Skill-Pfade; ^_Code → code-skills/optional Claude-Skills; glyph-agent → eigene/leer mit Hinweis.
 - **Offline:** Modal und Slash-Popup nutzbar; Skills von Disk, Agent-Commands leer bis Verbindung.
 - **Öffnen Extensions-Modal:** Sidebar-Button **und** `Cmd/Ctrl+K` (kein `Ctrl+P` wegen Browser-Print).
 - **Slash-Popup-Trigger:** `/` am Zeilenanfang oder nach Whitespace; nicht mitten in Pfaden/URLs.

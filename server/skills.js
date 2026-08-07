@@ -83,8 +83,10 @@ export function skillRootsForProfile(profileId, opts = {}) {
       { dir: path.join(cwd, ".grok", "skills"), source: "project" },
       { dir: path.join(cwd, ".agents", "skills"), source: "project" },
     );
-  } else if (id === "claude") {
+  } else if (id === "claude" || id === "_code" || id === "code") {
+    // ^_Code: eigene + optional Claude-Skills (falls noch vorhanden)
     roots.push(
+      { dir: path.join(home, ".glyph", "code-skills"), source: "user" },
       { dir: path.join(home, ".claude", "skills"), source: "user" },
       { dir: path.join(home, ".claude", "commands"), source: "user" },
       { dir: path.join(cwd, ".claude", "skills"), source: "project" },
@@ -239,9 +241,9 @@ export async function listSkillsForProfile(profileId, opts = {}) {
     if (id === "glyph-agent") {
       hint =
         "Keine Skills gefunden. Optional: ~/.glyph/skills/<name>/SKILL.md anlegen.";
-    } else if (id === "claude") {
+    } else if (id === "claude" || id === "_code" || id === "code") {
       hint =
-        "Keine Claude-Skills gefunden unter ~/.claude/skills (oder Projekt .claude/skills).";
+        "Keine ^_Code-Skills gefunden (optional: ~/.glyph/code-skills oder ~/.claude/skills).";
     } else {
       hint = "Keine Skills gefunden unter ~/.grok/skills.";
     }

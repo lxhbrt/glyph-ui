@@ -1,5 +1,5 @@
 /**
- * Glyph UI — ACP browser UI (Grok, Claude)
+ * Glyph UI — ACP browser UI (Grok, ^_Code, glyph-agent)
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
@@ -98,6 +98,8 @@ export default function App() {
   const [agent, setAgent] = useState(null);
   const [agents, setAgents] = useState([]);
   const [agentSwitching, setAgentSwitching] = useState(false);
+  /** ^_Code: Write/Shell-Genehmigung aus dem Bridge-Server */
+  const [permissionReq, setPermissionReq] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
@@ -1023,6 +1025,22 @@ export default function App() {
           return;
         }
 
+        if (msg.type === "permission_request") {
+          setPermissionReq({
+            id: msg.id,
+            title: msg.title || "Aktion freigeben",
+            kind: msg.kind || "other",
+            preview: msg.preview || "",
+            options: Array.isArray(msg.options) ? msg.options : [],
+          });
+          return;
+        }
+        if (msg.type === "permission_dismiss") {
+          setPermissionReq((prev) =>
+            prev && prev.id === msg.id ? null : prev,
+          );
+          return;
+        }
         if (msg.type === "error") {
           setError(msg.message || "Unbekannter Fehler");
           finalizeStreaming();
@@ -2808,6 +2826,89 @@ export default function App() {
           </div>
         </footer>
       </div>
+
+      {permissionReq && (
+        <div
+          className="permission-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="permission-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              // Backdrop: reject once (safe default)
+              const ws = wsRef.current;
+              if (ws?.readyState === 1) {
+                ws.send(
+                  JSON.stringify({
+                    type: "permission_response",
+                    id: permissionReq.id,
+                    optionId: "reject-once",
+                  }),
+                );
+              }
+              setPermissionReq(null);
+            }
+          }}
+        >
+          <div className="permission-modal">
+            <h2 id="permission-modal-title">
+              Freigabe · {permissionReq.title}
+            </h2>
+            <p className="permission-modal-kind">
+              {permissionReq.kind === "execute"
+                ? "Shell-Befehl (Whitelist)"
+                : permissionReq.kind === "edit"
+                  ? "Datei schreiben"
+                  : "Aktion"}
+              {" · "}Profil ^_Code
+            </p>
+            {permissionReq.preview ? (
+              <pre className="permission-modal-preview">
+                {permissionReq.preview}
+              </pre>
+            ) : null}
+            <div className="permission-modal-actions">
+              {(permissionReq.options?.length
+                ? permissionReq.options
+                : [
+                    { optionId: "allow-once", name: "Einmal erlauben" },
+                    { optionId: "reject-once", name: "Ablehnen" },
+                  ]
+              ).map((opt) => {
+                const isAllow = String(opt.kind || opt.optionId || "").includes(
+                  "allow",
+                );
+                return (
+                  <button
+                    key={opt.optionId}
+                    type="button"
+                    className={
+                      isAllow
+                        ? "permission-btn permission-btn--allow"
+                        : "permission-btn permission-btn--reject"
+                    }
+                    onClick={() => {
+                      const ws = wsRef.current;
+                      if (ws?.readyState === 1) {
+                        ws.send(
+                          JSON.stringify({
+                            type: "permission_response",
+                            id: permissionReq.id,
+                            optionId: opt.optionId,
+                          }),
+                        );
+                      }
+                      setPermissionReq(null);
+                    }}
+                  >
+                    {opt.name || opt.optionId}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <CommandLegend
         open={showLegend}

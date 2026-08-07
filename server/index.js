@@ -1379,6 +1379,31 @@ app.get("/api/sessions/:id/history", async (req, res) => {
 
 /** Tool kinds that should finish cleanly rather than hard-abort mid-flight. */
 const CRITICAL_TOOL_KINDS = new Set(["edit", "delete", "move", "execute"]);
+
+/** Pull a short preview string from an ACP toolCall for the permission modal. */
+function extractPermissionPreview(toolCall) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  const parts = [];
+  if (toolCall.rawInput && typeof toolCall.rawInput === "object") {
+    try {
+      parts.push(JSON.stringify(toolCall.rawInput, null, 2).slice(0, 2000));
+    } catch {
+      /* ignore */
+    }
+  }
+  const content = toolCall.content;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      const text =
+        block?.content?.text ||
+        block?.text ||
+        (typeof block?.content === "string" ? block.content : "");
+      if (text) parts.push(String(text).slice(0, 2500));
+    }
+  }
+  return parts.join("\n").slice(0, 4000);
+}
+
 class GrokBridge {
   constructor() {
     this.connected = false;
@@ -1415,11 +1440,80 @@ class GrokBridge {
      * @type {Array<{ name: string, description: string, inputHint: string }>}
      */
     this.availableCommands = [];
+    /**
+     * Pending ACP permission request (for ^_Code Write/Shell).
+     * { id, resolve, params, timer }
+     * @type {null | { id: string, resolve: Function, params: object, timer: NodeJS.Timeout }}
+     */
+    this.pendingPermission = null;
   }
 
   /** Currently selected agent profile (never null — resolveAgent falls back). */
   agentProfile() {
     return resolveAgent(AGENT_PROFILES, this.agentId);
+  }
+
+  /**
+   * Interactive permission for ^_Code (never auto-approve shell/write).
+   * Broadcasts to browser; waits for permission_response or timeout/cancel.
+   */
+  askBrowserPermission(params) {
+    return new Promise((resolve) => {
+      // Cancel any previous waiter
+      if (this.pendingPermission) {
+        try {
+          clearTimeout(this.pendingPermission.timer);
+          this.pendingPermission.resolve({
+            outcome: { outcome: "cancelled" },
+          });
+        } catch {
+          /* ignore */
+        }
+        this.pendingPermission = null;
+      }
+      const id = `perm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const toolCall = params?.toolCall || {};
+      const options = Array.isArray(params?.options) ? params.options : [];
+      const timer = setTimeout(() => {
+        if (this.pendingPermission?.id === id) {
+          this.pendingPermission = null;
+          this.broadcast({ type: "permission_dismiss", id });
+          resolve({ outcome: { outcome: "cancelled" } });
+        }
+      }, 5 * 60 * 1000);
+      this.pendingPermission = { id, resolve, params, timer };
+      this.broadcast({
+        type: "permission_request",
+        id,
+        sessionId: params?.sessionId || this.sessionId,
+        title: toolCall.title || toolCall.toolCallId || "Aktion freigeben",
+        kind: toolCall.kind || "other",
+        preview: extractPermissionPreview(toolCall),
+        options: options.map((o) => ({
+          optionId: o.optionId,
+          name: o.name || o.optionId,
+          kind: o.kind || "allow_once",
+        })),
+      });
+    });
+  }
+
+  resolveBrowserPermission(id, optionId) {
+    if (!this.pendingPermission || this.pendingPermission.id !== id) {
+      return false;
+    }
+    clearTimeout(this.pendingPermission.timer);
+    const resolve = this.pendingPermission.resolve;
+    this.pendingPermission = null;
+    this.broadcast({ type: "permission_dismiss", id });
+    if (!optionId || optionId === "cancelled") {
+      resolve({ outcome: { outcome: "cancelled" } });
+    } else {
+      resolve({
+        outcome: { outcome: "selected", optionId: String(optionId) },
+      });
+    }
+    return true;
   }
 
   statusPayload(extra = {}) {
@@ -1598,12 +1692,17 @@ class GrokBridge {
 
       const clientApp = acp
         .client({ name: "grok-build-terminal" })
-        .onRequest(acp.methods.client.session.requestPermission, async () => {
+        .onRequest(acp.methods.client.session.requestPermission, async ({ params }) => {
           // ACP: after session/cancel, pending permissions MUST be cancelled
           if (this.cancelling) {
             return { outcome: { outcome: "cancelled" } };
           }
-          // always-approve on agent CLI; still answer cleanly if asked
+          // ^_Code: Write/Shell immer interaktiv in Glyph bestätigen (nie auto-approve).
+          // Grok/Build: always-approve (CLI-Äquivalent --always-approve).
+          const profileId = this.agentId;
+          if (profileId === "_code" || profileId === "code") {
+            return await this.askBrowserPermission(params || {});
+          }
           return {
             outcome: { outcome: "selected", optionId: "allow-once" },
           };
@@ -2181,6 +2280,10 @@ class GrokBridge {
     if (!this.connected || !this.connection || !this.sessionId) {
       throw new Error("Grok is not connected");
     }
+    // Offene ^_Code-Genehmigung verwerfen
+    if (this.pendingPermission) {
+      this.resolveBrowserPermission(this.pendingPermission.id, "cancelled");
+    }
     if (!this.busy) {
       return { ok: true, cancelled: false, reason: "not_busy" };
     }
@@ -2411,6 +2514,19 @@ wss.on("connection", (ws) => {
         await bridge.disconnect();
       } else if (msg.type === "ping") {
         ws.send(JSON.stringify({ type: "pong" }));
+      } else if (msg.type === "permission_response") {
+        // ^_Code Genehmigung aus dem Browser
+        const ok = bridge.resolveBrowserPermission(
+          msg.id,
+          msg.optionId || (msg.allow ? "allow-once" : "reject-once"),
+        );
+        ws.send(
+          JSON.stringify({
+            type: "permission_ack",
+            id: msg.id,
+            ok,
+          }),
+        );
       }
     } catch (err) {
       ws.send(

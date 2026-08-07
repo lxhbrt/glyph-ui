@@ -45,7 +45,9 @@ export const CONTEXT_WINDOWS = {
 /** Profile defaults when no model id is known. */
 export const PROFILE_DEFAULT_WINDOWS = {
   grok: 500_000,
-  claude: 1_000_000,
+  claude: 1_000_000, // legacy alias → ^_Code
+  _code: 1_000_000,
+  code: 1_000_000,
   "glyph-agent": 1_000_000,
 };
 
@@ -72,7 +74,10 @@ export function normalizeModelId(model) {
 export function modelProfileFamily(model) {
   const id = normalizeModelId(model);
   if (!id) return null;
-  if (id === "grok" || id === "claude" || id === "glyph-agent") return id;
+  if (id === "grok" || id === "claude" || id === "glyph-agent" || id === "_code" || id === "code") {
+    if (id === "claude" || id === "code") return "_code";
+    return id;
+  }
   if (id.includes("grok")) return "grok";
   if (
     id.includes("claude") ||
@@ -81,9 +86,10 @@ export function modelProfileFamily(model) {
     id.includes("anthropic") ||
     id.includes("fable")
   ) {
-    return "claude";
+    return "_code"; // Claude-Ersatz: ^_Code
   }
-  // gpt / luna / deepseek / openrouter / minimax / … → cloud path under glyph-agent
+  if (id.includes("deepseek") && id.includes("flash")) return "_code";
+  // gpt / luna / openrouter / minimax / … → cloud path under glyph-agent
   return "glyph-agent";
 }
 
@@ -93,10 +99,12 @@ export function modelProfileFamily(model) {
  * @returns {boolean}
  */
 export function isModelCompatibleWithProfile(model, profile) {
-  const p = String(profile || "")
+  let p = String(profile || "")
     .trim()
     .toLowerCase();
   if (!p) return true;
+  // Aliase: claude/code → _code
+  if (p === "claude" || p === "code" || p === "^_code") p = "_code";
   const fam = modelProfileFamily(model);
   if (!fam) return false;
   return fam === p;

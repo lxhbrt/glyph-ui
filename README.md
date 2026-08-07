@@ -2,7 +2,7 @@
 
 **Offene Browser-UI für mehrere lokale & Cloud-Agenten** über ACP (Agent Client Protocol).
 *Ursprünglich als „Build Term for Grok“ gestartet — heute ein profilneutrales Gesicht für
-grok, claude und glyph-agent.*
+grok, ^_Code und glyph-agent.*
 
 **Erstellt von [Lx Hbrt](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
 
@@ -25,7 +25,7 @@ nach je ein weiteres Profil hinzu:
 | Schritt | Profil | Grund |
 |---------|--------|-------|
 | Start | **grok** | Browser-Oberfläche für die lokale Grok-CLI (OAuth) |
-| +1 | **claude** | zweites OAuth-Konto (Anthropic) für den Chat |
+| +1 | **^_Code** | DeepSeek V4 Flash (OpenRouter) · Workspace Read/Write/Shell · Genehmigung in Glyph |
 | +2 | **glyph-agent** | Vault/Tools + Cloud-Antwort intern (B+, Engine) |
 
 Heute ist grok **nur noch das Standard-Profil**, nicht das Produkt. Alle Profile teilen
@@ -121,7 +121,7 @@ Auswahl in der UI (Header), Start-Profil via `GLYPH_AGENT` (Default `grok`).
 | Profil | Spawnt | Hinweis |
 |--------|--------|---------|
 | **grok** (Default) | `grok agent --always-approve --no-leader stdio` | Volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
-| **claude** | `claude-agent-acp` (od. `npx …`) | Sessions unter `~/.claude/projects` (nicht in Glyph gelistet) |
+| **^_Code** | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | DeepSeek CODE · Write/Shell mit Glyph-Freigabe |
 | **glyph-agent** | `node server/glyph-agent-acp.mjs` | Dünne Brücke zum lokalen glyph-agent-Dienst (Vault/Tools + Cloud-Antwort) |
 
 **glyph-agent** (separate Codebasis `~/glyph-agent/`) ist die lokale Tool-/Recherche-Schicht:
@@ -149,7 +149,7 @@ hängt vom aktiven Profil ab.
 | Profil | Textanhänge | Bilder | Hinweis |
 |--------|-------------|--------|---------|
 | **grok** | ✅ | ✅ | native ACP-Unterstützung gemäß Grok-Profil |
-| **claude** | (Adapter) | (Adapter) | abhängig vom `claude-agent-acp`-Adapter |
+| **^_Code** | ✅ | ❌ | Textanhänge ja; Write/Shell brauchen Genehmigung |
 | **glyph-agent** | ✅ | ❌ | Bilder werden NICHT an das Modell übertragen (Stufe-1-Hinweis) |
 
 ### Erlaubte Formate & Limits
