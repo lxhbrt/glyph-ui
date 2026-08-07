@@ -3,12 +3,11 @@
  * glyph-agent-acp.mjs — ACP-Stdio-Adapter: Glyph (ACP-Client) <-> glyph-agent (lokal)
  *
  * Dünne Brücke: Glyph spricht ACP, glyph-agent liefert die Tool-Orchestrierung
- * (Vault, Obsidian, Recherche) über das lokale Modell. Dieser Adapter hat
- * KEINE Agentenlogik — er leitet an den glyph-agent-HTTP-Dienst (POST /chat)
- * durch und streamt die Antwort als Text-Chunks zurück an Glyph.
+ * über den lokalen HTTP-Dienst (POST /chat). Dieser Adapter hat KEINE Agentenlogik.
  *
- * Vorteil: Cloud-Denker + Tool-Schicht (VaultFind, Web) bleiben in glyph-agent
- * gekapselt; hier wird NUR übersetzt (dünne Brücke).
+ * Modi (Env GLYPH_AGENT_MODE):
+ *   agent (Default) — VaultFind + Web + Cloud-Antwort
+ *   code            — ^_Code: DeepSeek + Read/Write/Shell, Genehmigung via ACP
  *
  * Protokoll: ACP v1 über NDJSON-Stdio (acp.ndJsonStream).
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
@@ -20,8 +19,18 @@ import { buildStepBanner } from "./stepBanner.mjs";
 
 // glyph-agent HTTP-Dienst (Standard wie in server.py)
 const AGENT_URL = process.env.GLYPH_AGENT_URL || "http://127.0.0.1:18899";
-const TIMEOUT_MS = Number(process.env.GLYPH_AGENT_TIMEOUT || 300000);
+// Wall-Clock für einen session/prompt-Turn (inkl. CODE-Genehmigungsschleife).
+// CODE: Default 8 min (mehrere DeepSeek-Runden); agent: 5 min.
+// Server-seitig greift zusätzlich CODE_CHAT_TIMEOUT/CHAT_TIMEOUT pro LLM-Call.
 const PROTOCOL_VERSION = acp.PROTOCOL_VERSION;
+const AGENT_MODE = String(process.env.GLYPH_AGENT_MODE || "agent").toLowerCase();
+const AGENT_NAME =
+  process.env.GLYPH_AGENT_ACP_NAME ||
+  (AGENT_MODE === "code" ? "^_Code" : "glyph-agent");
+const IS_CODE = AGENT_MODE === "code";
+const TIMEOUT_MS = Number(
+  process.env.GLYPH_AGENT_TIMEOUT || (IS_CODE ? 480000 : 300000),
+);
 
 // Grok-artige Stufen-/Tool-Anzeige im Chat-Text (Ausgabe).
 // Standard: AN — zeigt vor der Antwort einen kompakten Block, welche Stufen der
@@ -34,7 +43,8 @@ const SHOW_STEP_BANNER = !["0", "false", "off"].includes(
 // In-Memory Session-Speicher (Test/Zustand; ohne Langzeit-Persistenz)
 const sessions = new Map();
 let sessionCounter = 0;
-const newSessionId = () => `glyph-agent-${++sessionCounter}`;
+const newSessionId = () =>
+  `${IS_CODE ? "code" : "glyph-agent"}-${++sessionCounter}`;
 
 function streamChunks(text, client, sessionId, chunkSize = 400) {
   // Zerlegt die Antwort in Chunks und sendet sie als agent_message_chunk,
@@ -71,11 +81,18 @@ const STEP_MARKERS = {
   WebSearch: ["SearchWeb", "suche im Internet (Exa, grob)"],
   ExtractUrl: ["Fetch", "rufe konkrete URL ab (TinyFish, fein)"],
   FetchUrl: ["Fetch", "rufe konkrete URL ab (TinyFish, fein)"],
-  OpenRouter: ["Think", "Cloud-Denker (OpenRouter)"],
+  OpenRouter: [
+    "Think",
+    IS_CODE ? "DeepSeek CODE (OpenRouter)" : "Cloud-Denker (OpenRouter)",
+  ],
   ReadNote: ["ReadNote", "liest Notiz aus dem Vault"],
   Summarize: ["Summarize", "fasst Notiz zusammen"],
   CreateNote: ["WriteNote", "erstellt Notiz"],
   EditNote: ["WriteNote", "ändert Notiz"],
+  ListDir: ["ListDir", "listet Workspace-Verzeichnis"],
+  ReadFile: ["ReadFile", "liest Datei im Workspace"],
+  WriteFile: ["WriteFile", "schreibt Datei (Diff+Backup)"],
+  RunCommand: ["RunCommand", "Shell (Whitelist)"],
 };
 
 function stepLabel(action) {
@@ -112,7 +129,7 @@ function streamStepChunk(prefixedText, client, sessionId) {
  * hier nur importiert und vor dem Antworttext eingefügt.
  */
 
-const app = acp.agent({ name: "glyph-agent" });
+const app = acp.agent({ name: AGENT_NAME });
 
 app.onRequest(acp.methods.agent.initialize, async () => ({
   protocolVersion: PROTOCOL_VERSION,
@@ -126,7 +143,11 @@ app.onRequest(acp.methods.agent.initialize, async () => ({
     },
     sessionCapabilities: {},
   },
-  agentInfo: { name: "glyph-agent", version: "0.2.1" },
+  agentInfo: {
+    name: AGENT_NAME,
+    title: AGENT_NAME,
+    version: IS_CODE ? "0.3.0-code" : "0.2.1",
+  },
 }));
 
 app.onRequest(acp.methods.agent.authenticate, async () => ({}));
@@ -174,6 +195,135 @@ app.onRequest(acp.methods.agent.session.delete, async ({ params }) => {
   return {};
 });
 
+/**
+ * Stream one /chat NDJSON response; returns { answerText, stepBlocks, trace, final }.
+ */
+async function streamChat(body, client, sessionId, signal) {
+  const resp = await fetch(`${AGENT_URL}/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/x-ndjson",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!resp.ok) {
+    throw new Error(
+      `glyph-agent HTTP ${resp.status} — läuft der lokale Dienst? (server.py)`,
+    );
+  }
+  if (!resp.body) {
+    throw new Error("glyph-agent: leerer Antwortstream (kein body).");
+  }
+
+  let answerText = "";
+  const stepBlocks = [];
+  let trace = null;
+  let final = null;
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const raw = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!raw) continue;
+      let ev;
+      try {
+        ev = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      const type = ev && ev.type;
+      if (type === "step") {
+        const action = ev.action || "step";
+        const status = ev.status || "";
+        const detail = ev.detail;
+        if (status === "start") {
+          const line = renderStepStart(action, detail);
+          stepBlocks.push({ action, line });
+          await streamStepChunk(`⏺STEP⏺${line}`, client, sessionId);
+        } else {
+          const line = renderStepEnd(action, status, detail);
+          await streamStepChunk(`⏹STEP⏹${line}`, client, sessionId);
+        }
+      } else if (type === "answer") {
+        if (typeof ev.text === "string" && ev.text) {
+          answerText += ev.text;
+          await streamChunks(ev.text, client, sessionId);
+        }
+      } else if (type === "pending_confirmation") {
+        // Live-Hinweis: Genehmigung steht an (final kommt als done).
+        const tool = ev.tool || "tool";
+        await streamStepChunk(
+          `⏺STEP⏺Permission · ${tool} wartet auf Freigabe`,
+          client,
+          sessionId,
+        );
+      } else if (type === "done" || type === "error") {
+        final = ev;
+        if (ev && typeof ev.trace === "object" && ev.trace !== null) trace = ev.trace;
+        if (ev && typeof ev.answer === "string" && ev.answer && !answerText) {
+          answerText = ev.answer;
+          // done-only answers (z.B. pending_confirmation) noch streamen
+          await streamChunks(ev.answer, client, sessionId);
+        }
+        if (type === "error" && !answerText) {
+          answerText = `Fehler: ${ev.error || "unbekannt"}`;
+          await streamChunks(answerText, client, sessionId);
+        }
+      }
+    }
+  }
+
+  return { answerText, stepBlocks, trace, final };
+}
+
+/**
+ * Ask Glyph (ACP client) for permission; returns true if allow_once/allow_always.
+ */
+async function askPermission(client, sessionId, pending) {
+  const tool = pending?.tool || "tool";
+  const preview = String(pending?.preview || "").slice(0, 3500);
+  const toolCallId = `code-${Date.now()}`;
+  try {
+    const res = await client.request(acp.methods.client.session.requestPermission, {
+      sessionId,
+      toolCall: {
+        toolCallId,
+        title: tool,
+        kind: tool === "RunCommand" ? "execute" : "edit",
+        status: "pending",
+        rawInput: pending?.args || {},
+        content: preview
+          ? [{ type: "content", content: { type: "text", text: preview } }]
+          : undefined,
+      },
+      options: [
+        { optionId: "allow-once", name: "Einmal erlauben", kind: "allow_once" },
+        { optionId: "reject-once", name: "Ablehnen", kind: "reject_once" },
+      ],
+    });
+    const outcome = res?.outcome;
+    if (!outcome) return false;
+    if (outcome.outcome === "cancelled") return false;
+    if (outcome.outcome === "selected") {
+      const id = outcome.optionId || "";
+      return id === "allow-once" || id === "allow-always" || id === "allow_once" || id === "allow_always";
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // --- session/prompt: dünne Brücke zu glyph-agent /chat ---
 app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
   const { params, signal, client } = ctx;
@@ -191,88 +341,76 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
   store.messages.push({ role: "user", content: built.message });
 
   const abortController = new AbortController();
+  let timedOut = false;
   const onAbort = () => abortController.abort();
   signal.addEventListener("abort", onAbort, { once: true });
+  // Hartes Wall-Clock-Cancel: TIMEOUT_MS war definiert, aber unbenutzt —
+  // ohne Timer wartet Glyph ewig, wenn der Agent-Stream hängt.
+  const timeoutTimer = setTimeout(() => {
+    timedOut = true;
+    abortController.abort();
+  }, TIMEOUT_MS);
 
   try {
-    // NDJSON-Streaming: Stufen/Teil-Antworten kommen live vom glyph-agent-Dienst.
-    const resp = await fetch(`${AGENT_URL}/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/x-ndjson",
-      },
-      body: JSON.stringify({
-        message: built.message,
-        attachments: built.attachments,
-      }),
-      signal: abortController.signal,
-    });
-    if (!resp.ok) {
-      throw new Error(`glyph-agent HTTP ${resp.status} — läuft der lokale Dienst? (server.py)`);
-    }
-    if (!resp.body) {
-      throw new Error("glyph-agent: leerer Antwortstream (kein body).");
-    }
+    let body = {
+      message: built.message,
+      attachments: built.attachments,
+      mode: IS_CODE ? "code" : "agent",
+    };
 
-    // Antworttext + Live-Stufen sammeln (für store/meta; Antwort wird in Chunks
-    // nach Glyph gestreamt, sobald sie eintrifft).
-    let answerText = "";
-    const stepBlocks = [];
-    let trace = null;
+    let { answerText, stepBlocks, trace, final } = await streamChat(
+      body,
+      client,
+      sessionId,
+      abortController.signal,
+    );
 
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-
-    // Schritt-Handler: Stufe beginnt → „⏺STEP⏺<Zeile>“, Ergebnis/Status → „⏹STEP⏹<Zeile>“.
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let nl;
-      while ((nl = buf.indexOf("\n")) >= 0) {
-        const raw = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (!raw) continue;
-        let ev;
-        try {
-          ev = JSON.parse(raw);
-        } catch {
-          continue;
-        }
-        const type = ev && ev.type;
-        if (type === "step") {
-          const action = ev.action || "step";
-          const status = ev.status || "";
-          const detail = ev.detail;
-          // Start: neue Stufenzeile live öffnen (beim Beginn der Tätigkeit).
-          if (status === "start") {
-            const line = renderStepStart(action, detail);
-            stepBlocks.push({ action, line });
-            await streamStepChunk(`⏺STEP⏺${line}`, client, sessionId);
-          } else {
-            // done/error: Ergebnis/Status an die Stufe anhängen (live nach Aktivität).
-            const line = renderStepEnd(action, status, detail);
-            await streamStepChunk(`⏹STEP⏹${line}`, client, sessionId);
-          }
-        } else if (type === "answer") {
-          if (typeof ev.text === "string" && ev.text) {
-            answerText += ev.text;
-            await streamChunks(ev.text, client, sessionId);
-          }
-        } else if (type === "done" || type === "error") {
-          if (ev && typeof ev.trace === "object" && ev.trace !== null) trace = ev.trace;
-          if (ev && typeof ev.answer === "string" && ev.answer && !answerText) {
-            answerText = ev.answer;
-          }
-          // done/error sind Endmarker; Schleife endet über Stream-Ende ohnehin.
-          if (type === "error" && !answerText) {
-            answerText = `Fehler: ${ev.error || "unbekannt"}`;
-          }
+    // CODE: Genehmigungsschleife (WriteFile / RunCommand)
+    let guard = 0;
+    while (
+      IS_CODE &&
+      final?.pending_confirmation &&
+      final?.resume_token &&
+      guard < 8
+    ) {
+      guard += 1;
+      const pending = final.pending || {
+        tool: "tool",
+        args: {},
+        preview: final.answer || "",
+      };
+      const allowed = await askPermission(client, sessionId, pending);
+      await streamStepChunk(
+        allowed
+          ? `⏹STEP⏹Permission · ${pending.tool} freigegeben`
+          : `⏹STEP⏹Permission · ${pending.tool} abgelehnt`,
+        client,
+        sessionId,
+      );
+      const resume = await streamChat(
+        {
+          message: "",
+          mode: "code",
+          resume_token: final.resume_token,
+          allow_pending: allowed,
+        },
+        client,
+        sessionId,
+        abortController.signal,
+      );
+      // Fortsetzung anhängen (Antwort kann neu sein)
+      if (resume.answerText) {
+        // Wenn die erste Antwort nur der Freigabe-Hinweis war, ersetzen;
+        // sonst anhängen.
+        if (final.pending_confirmation && answerText === final.answer) {
+          answerText = resume.answerText;
+        } else {
+          answerText = (answerText ? answerText + "\n\n" : "") + resume.answerText;
         }
       }
+      stepBlocks = stepBlocks.concat(resume.stepBlocks || []);
+      if (resume.trace) trace = resume.trace;
+      final = resume.final;
     }
 
     // Für Fallback-Clients ohne UI-Schritt-Rendering: dünner Zusammenfassungs-Header
@@ -293,6 +431,8 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       if (trace) {
         meta.trace = trace;
       }
+      if (final?.used_model) meta.used_model = final.used_model;
+      if (final?.mode) meta.mode = final.mode;
       await client.notify(acp.methods.client.session.update, {
         sessionId,
         update: {
@@ -310,11 +450,26 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
 
     return { stopReason: "end_turn" };
   } catch (err) {
-    signal.removeEventListener("abort", onAbort);
     if (err.name === "AbortError") {
+      if (timedOut) {
+        const secs = Math.round(TIMEOUT_MS / 1000);
+        const msg =
+          `Timeout nach ${secs}s — glyph-agent hat nicht rechtzeitig geantwortet ` +
+          `(GLYPH_AGENT_TIMEOUT). Bitte erneut versuchen oder Server prüfen.`;
+        try {
+          await streamChunks(msg, client, sessionId);
+          store.messages.push({ role: "assistant", content: msg });
+        } catch {
+          /* still */
+        }
+        return { stopReason: "end_turn" };
+      }
       return { stopReason: "stop" };
     }
     throw err;
+  } finally {
+    clearTimeout(timeoutTimer);
+    signal.removeEventListener("abort", onAbort);
   }
 });
 
