@@ -46,30 +46,48 @@ let sessionCounter = 0;
 const newSessionId = () =>
   `${IS_CODE ? "code" : "glyph-agent"}-${++sessionCounter}`;
 
-function streamChunks(text, client, sessionId, chunkSize = 400) {
-  // Zerlegt die Antwort in Chunks und sendet sie als agent_message_chunk,
-  // damit Glyph (wie bei Ollama-Stream) zeichenweise aufbauen kann.
-  if (!text) return Promise.resolve();
-  const chunks = [];
+async function streamChunks(text, client, sessionId, chunkSize = 400) {
+  // Sequential agent_message_chunk stream (schema-valid ContentChunk only).
+  // Must NOT use Promise.all — parallel notifies reorder/drop on stdio.
+  // Must NOT send extra fields like `complete` — ACP schema rejects them.
+  if (!text) return;
   for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push(text.slice(i, i + chunkSize));
+    const c = text.slice(i, i + chunkSize);
+    try {
+      await client.notify(acp.methods.client.session.update, {
+        sessionId,
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: c },
+        },
+      });
+    } catch {
+      /* still stream remaining chunks */
+    }
   }
-  return Promise.all(
-    chunks.map(async (c, idx) => {
-      try {
-        await client.notify(acp.methods.client.session.update, {
-          sessionId,
-          update: {
-            sessionUpdate: "agent_message_chunk",
-            content: { type: "text", text: c },
-            complete: idx === chunks.length - 1,
-          },
-        });
-      } catch (e) {
-        // still
-      }
-    })
-  );
+}
+
+/**
+ * Send effective server trace via ACP _meta (extensibility), not a fake
+ * sessionUpdate type — `agent_message_complete` is not in the ACP schema and
+ * the client SDK rejects it with Invalid params (-32602), which spammed logs
+ * and blocked the live path for °_Agent / ^_Code.
+ */
+async function notifyAssistantMeta(client, sessionId, meta) {
+  if (!meta || typeof meta !== "object" || !Object.keys(meta).length) return;
+  try {
+    await client.notify(acp.methods.client.session.update, {
+      sessionId,
+      _meta: { glyph: meta },
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "" },
+        _meta: { glyph: meta },
+      },
+    });
+  } catch {
+    /* optional */
+  }
 }
 
 // Sprach-Mapping für Live-Stufen (identisch zu stepBanner.mjs, hier lokal für die
@@ -435,30 +453,12 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
 
     store.messages.push({ role: "assistant", content: displayText });
 
-    // Abschluss als finales Ergebnis signalisieren (inkl. effektivem Server-Trace als
-    // Metadaten, damit die UI Provider/Modell/Tool-Status aus dem ECHTEN Server anzeigt,
-    // nicht aus der UI-Konfiguration).
-    try {
-      const meta = {};
-      if (trace) {
-        meta.trace = trace;
-      }
-      if (final?.used_model) meta.used_model = final.used_model;
-      if (final?.mode) meta.mode = final.mode;
-      await client.notify(acp.methods.client.session.update, {
-        sessionId,
-        update: {
-          sessionUpdate: "agent_message_complete",
-          message: {
-            role: "assistant",
-            content: [{ type: "text", text: displayText }],
-            ...(Object.keys(meta).length ? { metadata: meta } : {}),
-          },
-        },
-      });
-    } catch (e) {
-      // optional
-    }
+    // Effective server trace via ACP _meta (schema-valid). UI reads glyph.trace.
+    const meta = {};
+    if (trace) meta.trace = trace;
+    if (final?.used_model) meta.used_model = final.used_model;
+    if (final?.mode) meta.mode = final.mode;
+    await notifyAssistantMeta(client, sessionId, meta);
 
     return { stopReason: "end_turn" };
   } catch (err) {

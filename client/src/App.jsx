@@ -2011,8 +2011,9 @@ export default function App() {
   }, [slashOpen, slashItems.length, slashQuery]);
 
   /** SuperGrok-style: 1-line default, grow downward up to COMPOSER_MAX_H.
-   *  Textarea defines wrap height; absolute mirror follows via CSS inset:0.
-   *  Only scrollTop/Left need JS sync (not height — that desynced caret vs text). */
+   *  Mirror must match textarea *content* box (clientWidth/Height), not the
+   *  border box — otherwise scrollbar / gutter shifts wraps by ~10–15 chars
+   *  from line 2 onward and the caret drifts from the visible text. */
   const resizeComposer = useCallback(() => {
     const ta = composerRef.current;
     if (!ta) return;
@@ -2030,8 +2031,9 @@ export default function App() {
     ta.style.minHeight = `${h}px`;
 
     if (mirror) {
-      // Clear any leftover inline sizes from older builds
-      mirror.style.height = "";
+      // clientWidth excludes scrollbar — wrap points match caret column
+      mirror.style.width = `${ta.clientWidth}px`;
+      mirror.style.height = `${ta.clientHeight}px`;
       mirror.style.minHeight = "";
       mirror.scrollTop = ta.scrollTop;
       mirror.scrollLeft = ta.scrollLeft;
@@ -2041,6 +2043,17 @@ export default function App() {
   useEffect(() => {
     resizeComposer();
   }, [input, resizeComposer]);
+
+  /* Keep mirror width in sync when the composer pane is resized. */
+  useEffect(() => {
+    const ta = composerRef.current;
+    if (!ta || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      resizeComposer();
+    });
+    ro.observe(ta);
+    return () => ro.disconnect();
+  }, [resizeComposer]);
 
   /* Close mode menu on outside click / Escape. */
   useEffect(() => {
@@ -2383,80 +2396,59 @@ export default function App() {
                   </span>
                 </div>
               ) : (
-                visibleMessages.map((m) => (
-                  <article key={m.id} className={`msg msg-${m.role}`}>
-                    <div className="role role-row">
-                      <span>
-                        {m.role === "user"
-                          ? "Du"
-                          : m.role === "assistant"
-                            ? agentLabel
-                            : m.role === "thought"
-                              ? "Thinking"
-                              : m.role === "system"
-                                ? "System"
-                                : "Tool"}
-                        {m.streaming ? " …" : ""}
-                      </span>
-                    </div>
-                    {m.role === "user" && m.attachments?.length ? (
-                      <ul className="msg-attachments" aria-label="Anhänge">
-                        {m.attachments.map((a) => (
-                          <li
-                            key={a.id || a.path || a.name}
-                            className="msg-attach-chip"
-                            title={a.name}
-                          >
-                            <span className="msg-attach-icon" aria-hidden="true">
-                              {isImageMime(a.mimeType) ? "🖼" : "📄"}
-                            </span>
-                            <span className="msg-attach-name">{a.name}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {m.text || m.steps?.length ? (
-                      m.role === "user" ? (
-                        <SlashHighlightedText
-                          text={m.text}
-                          skills={skillCatalog}
-                          commands={commandCatalog}
-                          className="md-body user-text-with-slash"
-                          markdownFallback
-                        />
-                      ) : (
-                        <AssistantText text={m.text} steps={m.steps} />
-                      )
-                    ) : null}
-                    {m.role === "assistant" &&
+                visibleMessages.map((m) => {
+                  const roleLabel =
+                    m.role === "user"
+                      ? "Du"
+                      : m.role === "assistant"
+                        ? agentLabel
+                        : m.role === "thought"
+                          ? "Thinking"
+                          : m.role === "system"
+                            ? "System"
+                            : "Tool";
+                  const showCopy =
+                    (m.role === "user" || m.role === "assistant") &&
                     !m.streaming &&
-                    m.text?.trim() ? (
-                      <div
-                        className="msg-bottom-actions"
-                        role="group"
-                        aria-label="Antwortaktionen"
-                      >
-                        <button
-                          type="button"
-                          className={`msg-action-btn msg-bottom-btn${
-                            copiedId === m.id ? " is-copied" : ""
-                          }`}
-                          title={
-                            copiedId === m.id
-                              ? "Kopiert"
+                    Boolean(m.text?.trim());
+                  const copyActions = showCopy ? (
+                    <div
+                      className="msg-bottom-actions"
+                      role="group"
+                      aria-label={
+                        m.role === "user"
+                          ? "Nachrichtaktionen"
+                          : "Antwortaktionen"
+                      }
+                    >
+                      <button
+                        type="button"
+                        className={`msg-action-btn msg-bottom-btn${
+                          copiedId === m.id ? " is-copied" : ""
+                        }`}
+                        title={
+                          copiedId === m.id
+                            ? "Kopiert"
+                            : m.role === "user"
+                              ? "Nachricht kopieren"
                               : "Antwort kopieren"
-                          }
-                          aria-label={
-                            copiedId === m.id ? "Kopiert" : "Antwort kopieren"
-                          }
-                          onClick={() => void copyMessage(m.id, m.text)}
-                        >
-                          {copiedId === m.id ? (
-                            <IconCheck size={18} />
-                          ) : (
-                            <IconCopy size={18} />
-                          )}
-                        </button>
+                        }
+                        aria-label={
+                          copiedId === m.id
+                            ? "Kopiert"
+                            : m.role === "user"
+                              ? "Nachricht kopieren"
+                              : "Antwort kopieren"
+                        }
+                        onClick={() => void copyMessage(m.id, m.text)}
+                      >
+                        {copiedId === m.id ? (
+                          <IconCheck size={18} />
+                        ) : (
+                          <IconCopy size={18} />
+                        )}
+                      </button>
+                      {m.role === "assistant" ? (
                         <button
                           type="button"
                           className={`msg-action-btn msg-bottom-btn msg-speak-btn${
@@ -2476,9 +2468,7 @@ export default function App() {
                               ? "Vorlesen stoppen"
                               : "Antwort vorlesen"
                           }
-                          disabled={Boolean(
-                            ttsBusyId && ttsBusyId !== m.id,
-                          )}
+                          disabled={Boolean(ttsBusyId && ttsBusyId !== m.id)}
                           onClick={() => void speakText(m.id, m.text)}
                         >
                           {speakingId === m.id ? (
@@ -2487,11 +2477,73 @@ export default function App() {
                             <IconSpeaker size={18} />
                           )}
                         </button>
-                      </div>
-                    ) : null}
-                    {m.trace ? <AssistantMeta trace={m.trace} /> : null}
-                  </article>
-                ))
+                      ) : null}
+                    </div>
+                  ) : null;
+
+                  return (
+                    <article key={m.id} className={`msg msg-${m.role}`}>
+                      {m.role === "user" ? (
+                        <>
+                          {/* Bubble shell only around text — copy stays outside the rim */}
+                          <div className="msg-user-bubble">
+                            <div className="role role-row">
+                              <span>{roleLabel}</span>
+                            </div>
+                            {m.attachments?.length ? (
+                              <ul
+                                className="msg-attachments"
+                                aria-label="Anhänge"
+                              >
+                                {m.attachments.map((a) => (
+                                  <li
+                                    key={a.id || a.path || a.name}
+                                    className="msg-attach-chip"
+                                    title={a.name}
+                                  >
+                                    <span
+                                      className="msg-attach-icon"
+                                      aria-hidden="true"
+                                    >
+                                      {isImageMime(a.mimeType) ? "🖼" : "📄"}
+                                    </span>
+                                    <span className="msg-attach-name">
+                                      {a.name}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            {m.text ? (
+                              <SlashHighlightedText
+                                text={m.text}
+                                skills={skillCatalog}
+                                commands={commandCatalog}
+                                className="md-body user-text-with-slash"
+                                markdownFallback
+                              />
+                            ) : null}
+                          </div>
+                          {copyActions}
+                        </>
+                      ) : (
+                        <>
+                          <div className="role role-row">
+                            <span>
+                              {roleLabel}
+                              {m.streaming ? " …" : ""}
+                            </span>
+                          </div>
+                          {m.text || m.steps?.length ? (
+                            <AssistantText text={m.text} steps={m.steps} />
+                          ) : null}
+                          {copyActions}
+                          {m.trace ? <AssistantMeta trace={m.trace} /> : null}
+                        </>
+                      )}
+                    </article>
+                  );
+                })
               )}
             </div>
             {dropActive ? (

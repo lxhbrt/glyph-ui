@@ -17,12 +17,39 @@ export function toolMessageId(toolCallId, now = Date.now) {
 }
 
 /**
+ * Opaque ACP ids that must never be shown as the tool label.
+ * @param {unknown} s
+ */
+export function isOpaqueToolId(s) {
+  if (s == null) return true;
+  const t = String(s).trim();
+  if (!t) return true;
+  if (/^call[-_]/i.test(t)) return true;
+  if (/^tool[-_]?[0-9a-f-]{8,}/i.test(t)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Format tool row text: "Read file · completed"
  *
- * @param {{ title?: string, status?: string }} msg
+ * @param {{ title?: string, status?: string, kind?: string }} msg
+ * @param {string} [prevText] prior row text — keep a good title when status-only updates land
  */
-export function formatToolText(msg) {
-  const title = msg?.title || "tool";
+export function formatToolText(msg, prevText = "") {
+  let title = msg?.title || msg?.kind || "tool";
+  if (isOpaqueToolId(title)) {
+    const prevTitle = String(prevText || "").split(" · ")[0]?.trim();
+    if (prevTitle && !isOpaqueToolId(prevTitle)) {
+      title = prevTitle;
+    } else if (msg?.kind && !isOpaqueToolId(msg.kind)) {
+      title = String(msg.kind);
+    } else {
+      title = "tool";
+    }
+  }
   const status = msg?.status;
   return status ? `${title} · ${status}` : title;
 }
@@ -33,29 +60,38 @@ export function formatToolText(msg) {
  * with the same toolCallId — we keep one row and update its status.
  *
  * @param {Array<{ id: string, role: string, text: string, streaming?: boolean, toolCallId?: string }>} prev
- * @param {{ toolCallId?: string, title?: string, status?: string }} msg
+ * @param {{ toolCallId?: string, title?: string, status?: string, kind?: string }} msg
  * @param {() => number} [now]
  * @returns {typeof prev}
  */
 export function upsertToolMessage(prev, msg, now = Date.now) {
   const toolCallId = msg?.toolCallId || "";
   const id = toolMessageId(toolCallId || null, now);
-  const text = formatToolText(msg);
-  const entry = {
-    id,
-    role: "tool",
-    text,
-    streaming: false,
-    ...(toolCallId ? { toolCallId } : {}),
-  };
 
   if (!toolCallId) {
-    return [...prev, entry];
+    return [
+      ...prev,
+      {
+        id,
+        role: "tool",
+        text: formatToolText(msg),
+        streaming: false,
+      },
+    ];
   }
 
   const idx = prev.findIndex(
     (m) => m.id === id || m.toolCallId === toolCallId,
   );
+  const prevText = idx >= 0 ? prev[idx].text : "";
+  const entry = {
+    id,
+    role: "tool",
+    text: formatToolText(msg, prevText),
+    streaming: false,
+    toolCallId,
+  };
+
   if (idx < 0) {
     return [...prev, entry];
   }

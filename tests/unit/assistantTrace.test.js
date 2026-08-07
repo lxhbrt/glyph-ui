@@ -6,7 +6,15 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildCompact, formatSteps, modelLabel } from "../../client/src/utils/assistantTrace.js";
+import {
+  buildCompact,
+  cleanAssistantAnswer,
+  formatSteps,
+  modelLabel,
+  splitStepBanner,
+  STEP_BANNER_SENTINEL,
+  stripLeakedToolCalls,
+} from "../../client/src/utils/assistantTrace.js";
 
 describe("modelLabel", () => {
   it("returns 'unbekannt' for missing/empty model", () => {
@@ -229,5 +237,53 @@ describe("formatSteps + buildCompact steps chain", () => {
     });
     assert.ok(line.includes("VaultFind → WebSearch → LLM → answer"));
     assert.ok(line.includes("openrouter"));
+  });
+});
+
+describe("stripLeakedToolCalls", () => {
+  it("removes inline {\"tool\":…,\"args\":…} dumps between prose", () => {
+    const raw =
+      'Ich prüfe die Font-Definitionen.{"tool": "Grep", "args": {"pattern": "font", "path": ".", "max_hits": 30}}Ich prüfe die Klassen.';
+    const cleaned = stripLeakedToolCalls(raw);
+    assert.ok(!cleaned.includes('"tool"'));
+    assert.ok(cleaned.includes("Ich prüfe die Font-Definitionen."));
+    assert.ok(cleaned.includes("Ich prüfe die Klassen."));
+  });
+
+  it("removes name/arguments tool shape", () => {
+    const raw =
+      'Done.{"name":"ReadFile","arguments":{"path":"client/src/styles.css","offset":950}}Schrift: IBM Plex.';
+    const cleaned = stripLeakedToolCalls(raw);
+    assert.ok(!cleaned.includes("ReadFile"));
+    assert.ok(cleaned.includes("Done."));
+    assert.ok(cleaned.includes("Schrift: IBM Plex."));
+  });
+
+  it("keeps normal JSON without tool keys", () => {
+    const raw = 'Config: {"theme":"dark","font":"Plex"} bleibt.';
+    assert.equal(stripLeakedToolCalls(raw), raw);
+  });
+
+  it("leaves incomplete streaming objects alone", () => {
+    const raw = 'Start {"tool": "Grep", "args": {"pattern": "foo"';
+    assert.equal(stripLeakedToolCalls(raw), raw);
+  });
+});
+
+describe("cleanAssistantAnswer", () => {
+  it("splits banner and strips tool dumps from answer", () => {
+    const raw =
+      `Tool · Grep — erledigt\n${STEP_BANNER_SENTINEL}\n` +
+      'Prosa.{"tool":"Grep","args":{"path":"."}}Weiterer Text.';
+    const { banner, answer } = cleanAssistantAnswer(raw);
+    assert.ok(banner.includes("Grep"));
+    assert.ok(!answer.includes('"tool"'));
+    assert.ok(answer.includes("Prosa."));
+    assert.ok(answer.includes("Weiterer Text."));
+  });
+
+  it("matches splitStepBanner when no dumps", () => {
+    const raw = `a\n${STEP_BANNER_SENTINEL}\nb`;
+    assert.deepEqual(cleanAssistantAnswer(raw), splitStepBanner(raw));
   });
 });

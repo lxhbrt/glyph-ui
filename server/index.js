@@ -70,6 +70,7 @@ import {
   resolveContextDefaults,
 } from "./sessions.js";
 import { buildActivity } from "./activity.js";
+import { resolveToolDisplayTitle } from "./toolTitle.mjs";
 import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
 import {
   buildFileName,
@@ -1915,6 +1916,17 @@ class GrokBridge {
     const kind = update?.sessionUpdate;
     if (!kind) return;
 
+    // Effective server trace via ACP _meta (glyph-agent adapter) or legacy
+    // agent_message_complete (pre-fix). Prefer _meta — complete is not in schema.
+    const glyphMeta =
+      params?._meta?.glyph ||
+      update?._meta?.glyph ||
+      update?.message?.metadata ||
+      null;
+    if (glyphMeta?.trace && typeof glyphMeta.trace === "object") {
+      this.broadcast({ type: "assistant_meta", trace: glyphMeta.trace });
+    }
+
     if (kind === "agent_message_chunk") {
       const text = update.content?.text || update.text || "";
       if (!text) return;
@@ -1933,13 +1945,9 @@ class GrokBridge {
       this.broadcast({ type: "assistant_chunk", text });
       return;
     }
-    // agent_message_complete: effektiven Trace (falls vom glyph-agent-Adapter geliefert)
-    // an die UI senden, damit Provider/Modell/Tool-Status aus dem ECHTEN Server stammen.
+    // Legacy: ignore invalid agent_message_complete if it ever reaches here
+    // (SDK usually rejects it before this handler).
     if (kind === "agent_message_complete") {
-      const metaTrace = update.message?.metadata?.trace;
-      if (metaTrace && typeof metaTrace === "object") {
-        this.broadcast({ type: "assistant_meta", trace: metaTrace });
-      }
       return;
     }
     if (kind === "agent_thought_chunk") {
@@ -1951,8 +1959,12 @@ class GrokBridge {
       const toolCallId = update.toolCallId || "";
       const status =
         update.status || (kind === "tool_call" ? "pending" : "in_progress");
-      const title = update.title || toolCallId || "tool";
-      const toolKind = update.kind || "";
+      const prev = toolCallId
+        ? this.activeTools.get(toolCallId) || {}
+        : {};
+      // Prefer title → name → kind/path — never dump opaque call-… UUIDs in the UI
+      const title = resolveToolDisplayTitle(update, prev);
+      const toolKind = update.kind || prev.kind || "";
 
       if (toolCallId) {
         const done =
@@ -1962,11 +1974,14 @@ class GrokBridge {
         if (done) {
           this.activeTools.delete(toolCallId);
         } else {
-          const prev = this.activeTools.get(toolCallId) || {};
           this.activeTools.set(toolCallId, {
-            title: title || prev.title || toolCallId,
-            kind: toolKind || prev.kind || "",
+            title,
+            name: update.name || prev.name || "",
+            kind: toolKind,
             status,
+            locations: update.locations || prev.locations,
+            rawInput:
+              update.rawInput !== undefined ? update.rawInput : prev.rawInput,
           });
         }
       }
