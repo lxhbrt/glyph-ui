@@ -1,5 +1,5 @@
 /**
- * Glyph UI — ACP browser UI (Grok, ^_Code, glyph-agent)
+ * Glyph UI — ACP browser UI (Grok, ^_Code, °_Agent)
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
@@ -31,12 +31,16 @@ import {
   IconWorkspace,
   IconTheme,
   IconMic,
+  IconPlus,
   IconSpeaker,
   IconSpeakerOff,
   IconCopy,
   IconCheck,
   IconRefresh,
 } from "./components/icons.jsx";
+
+/** Composer textarea grows down to this max height (px). */
+const COMPOSER_MAX_H = 180;
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
 import {
   MAX_ATTACHMENTS_PER_MSG,
@@ -127,6 +131,10 @@ export default function App() {
     }
     return "chat";
   });
+  /** Compact mode dropdown (Chat | Deep Search | Fork). */
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const modeMenuRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("gbt-theme") === "light" ? "light" : "dark";
@@ -2002,6 +2010,57 @@ export default function App() {
     setSlashIndex((i) => Math.min(Math.max(0, i), slashItems.length - 1));
   }, [slashOpen, slashItems.length, slashQuery]);
 
+  /** SuperGrok-style: 1-line default, grow downward up to COMPOSER_MAX_H.
+   *  Textarea defines wrap height; absolute mirror follows via CSS inset:0.
+   *  Only scrollTop/Left need JS sync (not height — that desynced caret vs text). */
+  const resizeComposer = useCallback(() => {
+    const ta = composerRef.current;
+    if (!ta) return;
+    const mirror = ta.previousElementSibling?.classList?.contains(
+      "composer-highlight",
+    )
+      ? ta.previousElementSibling
+      : null;
+
+    ta.style.height = "auto";
+    ta.style.minHeight = "";
+
+    const h = Math.min(ta.scrollHeight, COMPOSER_MAX_H);
+    ta.style.height = `${h}px`;
+    ta.style.minHeight = `${h}px`;
+
+    if (mirror) {
+      // Clear any leftover inline sizes from older builds
+      mirror.style.height = "";
+      mirror.style.minHeight = "";
+      mirror.scrollTop = ta.scrollTop;
+      mirror.scrollLeft = ta.scrollLeft;
+    }
+  }, []);
+
+  useEffect(() => {
+    resizeComposer();
+  }, [input, resizeComposer]);
+
+  /* Close mode menu on outside click / Escape. */
+  useEffect(() => {
+    if (!modeMenuOpen) return;
+    const onDown = (e) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target)) {
+        setModeMenuOpen(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setModeMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [modeMenuOpen]);
+
   const applySlashInsert = useCallback(
     (name) => {
       const el = composerRef.current;
@@ -2023,9 +2082,10 @@ export default function App() {
         } catch {
           /* ignore */
         }
+        resizeComposer();
       });
     },
-    [input],
+    [input, resizeComposer],
   );
 
   const syncSlashFromComposer = useCallback((text, cursor) => {
@@ -2070,6 +2130,20 @@ export default function App() {
         <button
           type="button"
           className="side-rail-btn"
+          onClick={() => setShowCalendar(true)}
+          disabled={!canSeeActivity}
+          title={
+            canSeeActivity
+              ? "Aktivitäts-Kalender"
+              : unavailableFor("Der Aktivitäts-Kalender")
+          }
+          aria-label="Kalender"
+        >
+          <IconCalendar />
+        </button>
+        <button
+          type="button"
+          className="side-rail-btn"
           onClick={() => setShowOverview(true)}
           disabled={!canBrowseSessions}
           title={
@@ -2099,20 +2173,6 @@ export default function App() {
           aria-label="Befehle und Skills"
         >
           <IconCommands />
-        </button>
-        <button
-          type="button"
-          className="side-rail-btn"
-          onClick={() => setShowCalendar(true)}
-          disabled={!canSeeActivity}
-          title={
-            canSeeActivity
-              ? "Aktivitäts-Kalender"
-              : unavailableFor("Der Aktivitäts-Kalender")
-          }
-          aria-label="Kalender"
-        >
-          <IconCalendar />
         </button>
         <span className="side-rail-sep" aria-hidden="true" />
         <button
@@ -2558,187 +2618,224 @@ export default function App() {
                 ) : null}
               </div>
             ) : null}
-            <div className="composer-input-wrap">
-              <SlashPopup
-                open={slashOpen}
-                items={slashItems}
-                selectedIndex={slashIndex}
-                query={slashQuery}
-                onSelectIndex={setSlashIndex}
-                onClose={() => setSlashOpen(false)}
-                onPick={(item) => applySlashInsert(item.name)}
-              />
-              <SlashHighlightedText
-                text={input}
-                skills={skillCatalog}
-                commands={commandCatalog}
-                className="composer-highlight"
-              />
-              <textarea
-                ref={composerRef}
-                className="composer-textarea--overlay"
-                value={input}
+            {/* SuperGrok pill: [+] [textarea] [Mode ▾] [🎤] [↵] */}
+            <div className="composer-row">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                multiple
+                tabIndex={-1}
+                aria-hidden="true"
                 onChange={(e) => {
-                  const v = e.target.value;
-                  setInput(v);
-                  syncSlashFromComposer(v, e.target.selectionStart ?? v.length);
+                  const files = Array.from(e.target.files || []);
+                  e.target.value = "";
+                  if (files.length) void addFiles(files);
                 }}
-                onScroll={(e) => {
-                  const mirror = e.currentTarget.previousElementSibling;
-                  if (
-                    mirror &&
-                    mirror.classList.contains("composer-highlight")
-                  ) {
-                    mirror.scrollTop = e.currentTarget.scrollTop;
-                    mirror.scrollLeft = e.currentTarget.scrollLeft;
-                  }
-                }}
-                onClick={(e) => {
-                  syncSlashFromComposer(
-                    e.currentTarget.value,
-                    e.currentTarget.selectionStart ?? 0,
-                  );
-                }}
-                onSelect={(e) => {
-                  syncSlashFromComposer(
-                    e.currentTarget.value,
-                    e.currentTarget.selectionStart ?? 0,
-                  );
-                }}
-                placeholder={composerPlaceholder}
-                rows={3}
-                onKeyDown={(e) => {
-                  if (slashOpen) {
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      setSlashOpen(false);
-                      return;
+              />
+              <button
+                type="button"
+                className="composer-plus-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={attachBusy}
+                title="Datei anhängen"
+                aria-label="Datei anhängen"
+              >
+                <IconPlus size={18} />
+              </button>
+              <div className="composer-input-wrap">
+                <SlashPopup
+                  open={slashOpen}
+                  items={slashItems}
+                  selectedIndex={slashIndex}
+                  query={slashQuery}
+                  onSelectIndex={setSlashIndex}
+                  onClose={() => setSlashOpen(false)}
+                  onPick={(item) => applySlashInsert(item.name)}
+                />
+                <SlashHighlightedText
+                  text={input}
+                  skills={skillCatalog}
+                  commands={commandCatalog}
+                  className="composer-highlight"
+                />
+                <textarea
+                  ref={composerRef}
+                  className="composer-textarea--overlay"
+                  value={input}
+                  rows={1}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setInput(v);
+                    syncSlashFromComposer(v, e.target.selectionStart ?? v.length);
+                    requestAnimationFrame(resizeComposer);
+                  }}
+                  onScroll={(e) => {
+                    const mirror = e.currentTarget.previousElementSibling;
+                    if (
+                      mirror &&
+                      mirror.classList.contains("composer-highlight")
+                    ) {
+                      mirror.scrollTop = e.currentTarget.scrollTop;
+                      mirror.scrollLeft = e.currentTarget.scrollLeft;
                     }
-                    if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setSlashIndex((i) =>
-                        Math.min(i + 1, Math.max(0, slashItems.length - 1)),
-                      );
-                      return;
-                    }
-                    if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setSlashIndex((i) => Math.max(i - 1, 0));
-                      return;
+                  }}
+                  onClick={(e) => {
+                    syncSlashFromComposer(
+                      e.currentTarget.value,
+                      e.currentTarget.selectionStart ?? 0,
+                    );
+                  }}
+                  onSelect={(e) => {
+                    syncSlashFromComposer(
+                      e.currentTarget.value,
+                      e.currentTarget.selectionStart ?? 0,
+                    );
+                  }}
+                  placeholder={composerPlaceholder}
+                  onKeyDown={(e) => {
+                    if (slashOpen) {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setSlashOpen(false);
+                        return;
+                      }
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSlashIndex((i) =>
+                          Math.min(i + 1, Math.max(0, slashItems.length - 1)),
+                        );
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSlashIndex((i) => Math.max(i - 1, 0));
+                        return;
+                      }
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        const item = slashItems[slashIndex];
+                        if (item) applySlashInsert(item.name);
+                        return;
+                      }
+                      if (e.key === "Tab" && slashItems[slashIndex]) {
+                        e.preventDefault();
+                        applySlashInsert(slashItems[slashIndex].name);
+                        return;
+                      }
                     }
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      const item = slashItems[slashIndex];
-                      if (item) applySlashInsert(item.name);
-                      return;
+                      if (connected) send();
                     }
-                    if (e.key === "Tab" && slashItems[slashIndex]) {
-                      e.preventDefault();
-                      applySlashInsert(slashItems[slashIndex].name);
-                      return;
-                    }
-                  }
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (connected) send();
-                  }
-                }}
-              />
-            </div>
-            <div className="composer-toolbar">
-              <div className="composer-tools">
-                <div
-                  className="action-picker"
-                  role="radiogroup"
-                  aria-label="Aktion"
-                >
-                  {[
-                    {
-                      id: "chat",
-                      label: "Chat",
-                      title: `Normale Nachricht an ${agentLabel}`,
-                    },
-                    {
-                      id: "deep-search",
-                      label: "Deep Search",
-                      title:
-                        "TUI /deep-research — Hintergrund-Recherche mit Quellen",
-                    },
-                    {
-                      id: "fork",
-                      label: "Fork",
-                      title:
-                        "Session branchen (TUI /fork). Text = optionale Directive",
-                    },
-                  ].map((opt) => {
-                    const blocked = opt.id === "deep-search" && !canDeepSearch;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={sendAction === opt.id}
-                        className={`action-picker-btn${
-                          sendAction === opt.id
-                            ? " action-picker-btn--active"
-                            : ""
-                        }${blocked ? " action-picker-btn--blocked" : ""}`}
-                        title={blocked ? unavailableFor("Deep Search") : opt.title}
-                        disabled={!connected || blocked}
-                        onClick={() => setSendAction(opt.id)}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="voice-controls" aria-label="Sprache">
-                  <button
-                    type="button"
-                    className={`voice-mic-btn${recording ? " is-recording" : ""}${
-                      sttBusy ? " is-busy" : ""
-                    }`}
-                    title={
-                      recording
-                        ? "Aufnahme stoppen (Grok STT)"
-                        : sttBusy
-                          ? "Transkript wird erstellt…"
-                          : voiceAvailable
-                            ? "Diktieren mit Grok STT"
-                            : voiceHint || "STT: XAI_API_KEY setzen"
-                    }
-                    aria-label={recording ? "Aufnahme stoppen" : "Diktieren"}
-                    aria-pressed={recording}
-                    disabled={sttBusy}
-                    onClick={toggleRecording}
-                  >
-                    <IconMic size={18} />
-                    <span className="voice-mic-label">
-                      {recording ? "Stop" : sttBusy ? "…" : "Mic"}
-                    </span>
-                  </button>
-                  <label className="voice-select-wrap" title="TTS-Stimme">
-                    <span className="sr-only">Stimme</span>
-                    <select
-                      className="voice-select"
-                      value={voiceId}
-                      onChange={(e) => setVoiceId(e.target.value)}
-                      disabled={Boolean(ttsBusyId) || Boolean(speakingId)}
-                      aria-label="TTS-Stimme"
-                    >
-                      {voiceList.map((v) => {
-                        const id = v.voice_id || v.id || v.name;
-                        const label = v.name || id;
-                        return (
-                          <option key={id} value={id}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </label>
-                </div>
+                  }}
+                />
               </div>
+              <div className="composer-mode-wrap" ref={modeMenuRef}>
+                <button
+                  type="button"
+                  className={`composer-mode-btn${modeMenuOpen ? " is-open" : ""}`}
+                  aria-haspopup="listbox"
+                  aria-expanded={modeMenuOpen}
+                  aria-label={`Modus: ${
+                    sendAction === "deep-search"
+                      ? "Deep Search"
+                      : sendAction === "fork"
+                        ? "Fork"
+                        : "Chat"
+                  }`}
+                  title="Sendemodus"
+                  disabled={!connected}
+                  onClick={() => setModeMenuOpen((o) => !o)}
+                >
+                  <span className="composer-mode-label">
+                    {sendAction === "deep-search"
+                      ? "Deep Search"
+                      : sendAction === "fork"
+                        ? "Fork"
+                        : "Chat"}
+                  </span>
+                  <span className="composer-mode-chevron" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+                {modeMenuOpen ? (
+                  <div
+                    className="composer-mode-menu"
+                    role="listbox"
+                    aria-label="Sendemodus"
+                  >
+                    {[
+                      {
+                        id: "chat",
+                        label: "Chat",
+                        title: `Normale Nachricht an ${agentLabel}`,
+                      },
+                      {
+                        id: "deep-search",
+                        label: "Deep Search",
+                        title:
+                          "TUI /deep-research — Hintergrund-Recherche mit Quellen",
+                      },
+                      {
+                        id: "fork",
+                        label: "Fork",
+                        title:
+                          "Session branchen (TUI /fork). Text = optionale Directive",
+                      },
+                    ].map((opt) => {
+                      const blocked =
+                        opt.id === "deep-search" && !canDeepSearch;
+                      const active = sendAction === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          className={`composer-mode-option${
+                            active ? " is-active" : ""
+                          }${blocked ? " is-blocked" : ""}`}
+                          title={
+                            blocked
+                              ? unavailableFor("Deep Search")
+                              : opt.title
+                          }
+                          disabled={!connected || blocked}
+                          onClick={() => {
+                            if (blocked) return;
+                            setSendAction(opt.id);
+                            setModeMenuOpen(false);
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className={`voice-mic-btn${recording ? " is-recording" : ""}${
+                  sttBusy ? " is-busy" : ""
+                }`}
+                title={
+                  recording
+                    ? "Aufnahme stoppen (Grok STT)"
+                    : sttBusy
+                      ? "Transkript wird erstellt…"
+                      : voiceAvailable
+                        ? "Diktieren mit Grok STT"
+                        : voiceHint || "STT: XAI_API_KEY setzen"
+                }
+                aria-label={recording ? "Aufnahme stoppen" : "Diktieren"}
+                aria-pressed={recording}
+                disabled={sttBusy}
+                onClick={toggleRecording}
+              >
+                <IconMic size={18} />
+              </button>
               <button
                 type="button"
                 className={`send${showWorking ? " send--working" : " send--idle"}${

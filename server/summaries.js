@@ -28,6 +28,10 @@ export const AGENT_SLUGS = {
   // openrouter: nur Legacy-Alias für alte Summary-Dateinamen (kein UI-Profil mehr)
   openrouter: "Glyph-Agent",
   "glyph-agent": "Glyph-Agent",
+  // UI-Label °_Agent (id bleibt glyph-agent)
+  "-_agent": "Glyph-Agent",
+  _agent: "Glyph-Agent",
+  agent: "Glyph-Agent",
 };
 
 /** Standard-Alias (Fallback, wenn Profil unbekannt). */

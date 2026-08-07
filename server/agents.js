@@ -10,7 +10,7 @@
  * Rollen (C′ 2026-08-07):
  *   Grok         = Build (XAI/Grok Binary)
  *   ^_Code       = Code (DeepSeek V4 Flash via OpenRouter, glyph-agent MODE=code)
- *   glyph-agent  = Vault/Tools + Cloud-Antwort (MODE=agent, kein Shell)
+ *   °_Agent      = Vault/Tools + Cloud-Antwort (id glyph-agent, MODE=agent, kein Shell)
  *
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
@@ -113,7 +113,7 @@ export function resolveClaudeCommand(env = process.env) {
  * @returns {AgentProfile[]}
  */
 export function buildAgentProfiles(env = process.env) {
-  // Drei Profile: Grok (Build), ^_Code (DeepSeek-Code), glyph-agent (Vault).
+  // Drei Profile: Grok (Build), ^_Code (DeepSeek-Code), °_Agent (Vault; id glyph-agent).
   // Claude OAuth entfernt — Code läuft über glyph-agent MODE=code + OpenRouter DeepSeek.
   return [
     {
@@ -136,20 +136,20 @@ export function buildAgentProfiles(env = process.env) {
         GLYPH_AGENT_MODE: "code",
         GLYPH_AGENT_ACP_NAME: "^_Code",
       },
-      hint: "DeepSeek V4 Flash 0731 via OpenRouter · Read/Write/Shell (Whitelist) · Genehmigung in Glyph",
+      hint: "DeepSeek V4 Flash · Grep/SearchReplace/Read/Write/Shell (Whitelist) · Roots: glyph-ui/agent/openclaw · Genehmigung in Glyph",
       capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
     {
       id: "glyph-agent",
-      label: "glyph-agent",
+      label: "°_Agent",
       bin: process.execPath,
       args: [GLYPH_AGENT_ACP_FILE], // dünne Brücke zu glyph-agent (Tools: Vault, Recherche)
       via: "bin",
       env: {
         GLYPH_AGENT_MODE: "agent",
-        GLYPH_AGENT_ACP_NAME: "glyph-agent",
+        GLYPH_AGENT_ACP_NAME: "°_Agent",
       },
-      hint: "B+: VaultFind (Hybrid) + Web (Exa/TinyFish) + Cloud-Antwort. Diff+Backup. Dienst :18899.",
+      hint: "B+: VaultFind/Wiki + Web/BrowseUrl + ReadPdf/Mail · Cloud-Antwort · kein Shell · Diff+Backup · :18899",
       // Kein persistentes Session-Listing, aber aktiver In-Memory-Verlauf (session/history) → summarize.
       capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
@@ -174,10 +174,19 @@ export function findAgent(profiles, id) {
  * @returns {AgentProfile}
  */
 export function resolveAgent(profiles, id) {
-  // Alias: alte UI-IDs / Tippfehler
+  // Alias: alte UI-IDs / Anzeige-Labels / Tippfehler
   const raw = id == null ? "" : String(id);
-  const normalized =
-    raw === "claude" || raw === "code" || raw === "^_Code" ? "_code" : raw;
+  let normalized = raw;
+  if (raw === "claude" || raw === "code" || raw === "^_Code") {
+    normalized = "_code";
+  } else if (
+    raw === "°_Agent" ||
+    raw === "-_Agent" || // legacy label
+    raw === "_agent" ||
+    raw === "agent"
+  ) {
+    normalized = "glyph-agent";
+  }
   return (
     findAgent(profiles, normalized) ||
     findAgent(profiles, DEFAULT_AGENT_ID) ||
@@ -227,7 +236,7 @@ export function summarizeCapabilities(profile) {
   return {
     // Lupe (persistente Session-Liste) braucht List + History + Summarize → nur Grok.
     lupeSummarize: sessionList && sessionHistory && summarize,
-    // Aktiver In-Memory-Chat (glyph-agent / ^_Code): History + Summarize, ohne List.
+    // Aktiver In-Memory-Chat (°_Agent / ^_Code): History + Summarize, ohne List.
     activeSession: sessionHistory && summarize,
   };
 }

@@ -2,7 +2,7 @@
 
 **Offene Browser-UI für mehrere lokale & Cloud-Agenten** über ACP (Agent Client Protocol).
 *Ursprünglich als „Build Term for Grok“ gestartet — heute ein profilneutrales Gesicht für
-grok, ^_Code und glyph-agent.*
+grok, ^_Code und °_Agent.*
 
 **Erstellt von [Lx Hbrt](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
 
@@ -12,7 +12,7 @@ grok, ^_Code und glyph-agent.*
 
 ```
 Browser (React)  --WebSocket-->  Node Bridge  --stdio ACP-->  Agent-Profil
-                                                               (grok | claude | glyph-agent)
+                                                               (grok | ^_Code | °_Agent)
 ```
 
 ## Von Grok zu einer offenen UI
@@ -26,7 +26,7 @@ nach je ein weiteres Profil hinzu:
 |---------|--------|-------|
 | Start | **grok** | Browser-Oberfläche für die lokale Grok-CLI (OAuth) |
 | +1 | **^_Code** | DeepSeek V4 Flash (OpenRouter) · Workspace Read/Write/Shell · Genehmigung in Glyph |
-| +2 | **glyph-agent** | Vault/Tools + Cloud-Antwort intern (B+, Engine) |
+| +2 | **°_Agent** | Vault/Tools + Cloud-Antwort intern (B+, Engine; id `glyph-agent`) |
 
 Heute ist grok **nur noch das Standard-Profil**, nicht das Produkt. Alle Profile teilen
 dieselbe Bedienung; Grok-spezifische Extras (Deep Search, Voice, Session-Liste) sind pro
@@ -112,7 +112,7 @@ Auf `main` und bei Pull Requests läuft dasselbe über GitHub Actions (Node 22 �
 
 Details: [HANDBUCH.md](./HANDBUCH.md)
 
-## Agent-Profile & glyph-agent
+## Agent-Profile & °_Agent
 
 Glyph ist ein **ACP-Client** (kein Modell-Client): Das aktive Profil spawnet ein anderes
 Binary/adapter, statt auf eine andere API zu zeigen. Profile in `server/agents.js`,
@@ -122,9 +122,9 @@ Auswahl in der UI (Header), Start-Profil via `GLYPH_AGENT` (Default `grok`).
 |--------|--------|---------|
 | **grok** (Default) | `grok agent --always-approve --no-leader stdio` | Volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
 | **^_Code** | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | DeepSeek CODE · Write/Shell mit Glyph-Freigabe |
-| **glyph-agent** | `node server/glyph-agent-acp.mjs` | Dünne Brücke zum lokalen glyph-agent-Dienst (Vault/Tools + Cloud-Antwort) |
+| **°_Agent** (id `glyph-agent`) | `node server/glyph-agent-acp.mjs` | Dünne Brücke zum lokalen glyph-agent-Dienst (Vault/Tools + Cloud-Antwort) |
 
-**glyph-agent** (separate Codebasis `~/glyph-agent/`) ist die lokale Tool-/Recherche-Schicht:
+**°_Agent** nutzt die Engine `~/glyph-agent/` — lokale Tool-/Recherche-Schicht:
 HTTP-Dienst (`server.py`, localhost**:18899**) mit kontrolliertem Tool-Loop, Cloud-Denker
 und Vault-/Recherche-Tools. Die Brücke `server/glyph-agent-acp.mjs` übersetzt ACP ↔ HTTP
 und streamt die Antwort als Chunks zurück. Spielregeln: `glyph-agent/CONSTITUTION.md`.
@@ -150,7 +150,7 @@ hängt vom aktiven Profil ab.
 |--------|-------------|--------|---------|
 | **grok** | ✅ | ✅ | native ACP-Unterstützung gemäß Grok-Profil |
 | **^_Code** | ✅ | ❌ | Textanhänge ja; Write/Shell brauchen Genehmigung |
-| **glyph-agent** | ✅ | ❌ | Bilder werden NICHT an das Modell übertragen (Stufe-1-Hinweis) |
+| **°_Agent** | ✅ | ❌ | Bilder werden NICHT an das Modell übertragen (Stufe-1-Hinweis) |
 
 ### Erlaubte Formate & Limits
 

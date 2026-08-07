@@ -41,19 +41,23 @@ Ein entdeckbarer, benennbarer Prompt-/Workflow-Eintrag (z. B. aus `~/.grok/skill
 _Avoid_: Plugin, Hook, Agent-Command
 
 **Agent-Profil**:
-Eines der wählbaren ACP-Agenten in Glyph: **grok**, **`^_Code`** (`_code`), **glyph-agent**. Glyph spawnt ein anderes Binary/Env, nicht „ein anderes Modell“.
+Eines der wählbaren ACP-Agenten in Glyph: **grok**, **`^_Code`** (`_code`), **`°_Agent`** (id `glyph-agent`). Glyph spawnt ein anderes Binary/Env, nicht „ein anderes Modell“.
 _Avoid_: OpenRouter (kein UI-Profil mehr), Claude (ersetzt durch ^_Code), Provider, Modell (als Profilname)
 
 **^_Code**:
-Code-Profil (id `_code`): DeepSeek V4 Flash via OpenRouter, Workspace-Tools, Genehmigung in Glyph. Nutzt dieselbe ACP-Brücke wie glyph-agent mit `GLYPH_AGENT_MODE=code`.
+Code-Profil (id `_code`): DeepSeek V4 Flash via OpenRouter, Workspace-Tools, Genehmigung in Glyph. Nutzt dieselbe ACP-Brücke wie `°_Agent` mit `GLYPH_AGENT_MODE=code`.
 _Avoid_: Claude-Profil, Anthropic-OAuth
 
-**glyph-agent (Profil)**:
-UI-Profil, das die lokale Engine `~/glyph-agent` anbindet (Vault/Tools + Cloud-Antwort). Engine-Vokabular lebt in `glyph-agent/CONTEXT.md`.
-_Avoid_: OpenRouter-Profil, openrouter (als Profil-ID)
+**°_Agent**:
+UI-Label des Vault/Tools-Profils (id bleibt **`glyph-agent`**). Bindet die lokale Engine `~/glyph-agent` an (Vault/Tools + Cloud-Antwort). Engine-Vokabular lebt in `glyph-agent/CONTEXT.md`.
+_Avoid_: OpenRouter-Profil, openrouter (als Profil-ID); UI-String „glyph-agent“ (nur id/Technik/Pfad)
+
+**glyph-agent (Engine / id)**:
+Technischer Name: Repo `~/glyph-agent`, Profil-id `glyph-agent`, HTTP-Dienst. In der UI heißt das Profil **`°_Agent`**.
+_Avoid_: als sichtbares Dropdown-Label
 
 **Cloud-Antwort**:
-Nutzer-tauglicher Name für die Cloud-formulierte Antwort hinter dem Profil glyph-agent. Technik-Detail „OpenRouter“ gehört nicht in UI-Labels.
+Nutzer-tauglicher Name für die Cloud-formulierte Antwort hinter dem Profil `°_Agent`. Technik-Detail „OpenRouter“ gehört nicht in UI-Labels.
 _Avoid_: OpenRouter-Antwort in UI-Strings
 
 ## Settled decisions (grill 2026-08-05)
@@ -78,8 +82,9 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - **Fertig-Definition (Q1=C):** Live-Test glyph-agent (Antwort + Trace/Steps) **plus** Doku ohne OpenRouter-Profil-Reste **plus** kein OpenClaw-Rückimport heikler Privat-Inhalte.
 - **Bundle (Q2/Q7=A):** `service:install` + UI prüfen (Orchestrator); danach E2E.
 - **OpenClaw (Q3=A):** `unsafeLocal.paths` ohne Privat/Behörden-Pfade (Backup + 7 Pfade entfernt).
-- **Sprache (Q4):** UI „glyph-agent / Cloud-Antwort“; „OpenRouter“ nur Config/CONSTITUTION/Technik.
+- **Sprache (Q4):** UI „°_Agent / Cloud-Antwort“; „OpenRouter“ nur Config/CONSTITUTION/Technik; id/Pfad weiter `glyph-agent`.
 - **Kontexte (Q5=B):** `glyph-ui/CONTEXT.md` = UI; `glyph-agent/CONTEXT.md` = Engine. Kein Vermischen.
 - **Doku-Purge (Q6=A):** sichtbare UI-Strings + HANDBUCH/README (kein OpenRouter-Profil). Code-Zweige = Folge-PR (B).
-- **Live-Test grün (Q8=B):** Profil glyph-agent → Antwort + Meta Schritte **und** VaultFind erkennbar.
+- **Live-Test grün (Q8=B):** Profil `°_Agent` → Antwort + Meta Schritte **und** VaultFind erkennbar.
+- **UI-Label (2026-08-07):** Profil-Label `glyph-agent` → **`°_Agent`** (analog `^_Code`); id `glyph-agent` unverändert. Früher `-_Agent`; Alias `-_Agent` bleibt in `resolveAgent` gültig.
 - **ADR (Q9=C):** kein ADR; CONTEXT reicht.

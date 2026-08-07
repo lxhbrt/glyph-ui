@@ -26,7 +26,7 @@ const PROTOCOL_VERSION = acp.PROTOCOL_VERSION;
 const AGENT_MODE = String(process.env.GLYPH_AGENT_MODE || "agent").toLowerCase();
 const AGENT_NAME =
   process.env.GLYPH_AGENT_ACP_NAME ||
-  (AGENT_MODE === "code" ? "^_Code" : "glyph-agent");
+  (AGENT_MODE === "code" ? "^_Code" : "°_Agent");
 const IS_CODE = AGENT_MODE === "code";
 const TIMEOUT_MS = Number(
   process.env.GLYPH_AGENT_TIMEOUT || (IS_CODE ? 480000 : 300000),
@@ -78,9 +78,18 @@ const STEP_MARKERS = {
   VaultFind: ["SearchVault", "suche im Obsidian-Vault (Arbeitssicherheit/HSEQ)"],
   VaultRecall: ["SearchVault", "suche im Obsidian-Vault (alias)"],
   VaultSearch: ["SearchVault", "suche im Obsidian-Vault (alias)"],
+  WikiSearch: ["SearchVault", "suche im Vault/Wiki (alias)"],
+  WikiGet: ["ReadNote", "liest Wiki-Notiz (alias)"],
+  WikiApply: ["WriteNote", "wendet Wiki-Änderung an (alias)"],
+  WikiStatus: ["WikiStatus", "Wiki-Status (agent-digest)"],
   WebSearch: ["SearchWeb", "suche im Internet (Exa, grob)"],
   ExtractUrl: ["Fetch", "rufe konkrete URL ab (TinyFish, fein)"],
   FetchUrl: ["Fetch", "rufe konkrete URL ab (TinyFish, fein)"],
+  BrowseUrl: ["Browse", "URL-Zusammenfassung (TinyFish)"],
+  ReadPdf: ["ReadPdf", "liest PDF aus dem Vault"],
+  MailList: ["Mail", "listet E-Mails (himalaya)"],
+  MailRead: ["Mail", "liest E-Mail (himalaya)"],
+  MessageSend: ["MessageSend", "sendet Nachricht (openclaw)"],
   OpenRouter: [
     "Think",
     IS_CODE ? "DeepSeek CODE (OpenRouter)" : "Cloud-Denker (OpenRouter)",
@@ -89,8 +98,11 @@ const STEP_MARKERS = {
   Summarize: ["Summarize", "fasst Notiz zusammen"],
   CreateNote: ["WriteNote", "erstellt Notiz"],
   EditNote: ["WriteNote", "ändert Notiz"],
+  ApplyEdit: ["WriteNote", "wendet Vault-Änderung an"],
   ListDir: ["ListDir", "listet Workspace-Verzeichnis"],
   ReadFile: ["ReadFile", "liest Datei im Workspace"],
+  Grep: ["Grep", "sucht in Workspace-Dateien"],
+  SearchReplace: ["SearchReplace", "ersetzt Text in Datei (1 Treffer)"],
   WriteFile: ["WriteFile", "schreibt Datei (Diff+Backup)"],
   RunCommand: ["RunCommand", "Shell (Whitelist)"],
 };

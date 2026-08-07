@@ -5,7 +5,7 @@
 deiner Wahl (Standard: **grok**).
 
 **Entwicklung:** Glyph startete als reine Grok-Oberfläche („Build Term for Grok“) und hat sich
-zu einer **offenen Multi-Agenten-UI** entwickelt (grok · claude · glyph-agent).
+zu einer **offenen Multi-Agenten-UI** entwickelt (grok · ^_Code · °_Agent).
 Daher nennen manche Kapitel noch „Grok“ — die Bedienung gilt aber für **alle** Profile gleich;
 wo ein Bereich nur für ein bestimmtes Profil gilt (z. B. Voice = nur grok), ist es markiert.
 
@@ -14,7 +14,7 @@ wo ein Bereich nur für ein bestimmtes Profil gilt (z. B. Voice = nur grok), ist
 
 ```
 Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►  Agent-Profil
-                                                              (grok | claude | glyph-agent)
+                                                              (grok | ^_Code | °_Agent)
 ```
 
 ### Agent-Profile im Überblick
@@ -22,8 +22,8 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 | Profil | Typ | Auth | Fähigkeiten (in Glyph) |
 |--------|-----|------|-------------------------|
 | **grok** (Standard) | Cloud | OAuth | Sessions ✅ · Deep Search ✅ · Aktivität ✅ · Voice ✅ |
-| **claude** | Cloud | OAuth | Chat (Sessions liegen unter `~/.claude/projects`, nicht in Glyph gelistet) |
-| **glyph-agent** | Lokal + Cloud-Antwort | — | VaultFind, Web-Recherche, Cloud-Antwort (Engine); Trace/Steps in der UI |
+| **^_Code** | Lokal + Cloud (DeepSeek) | OpenRouter | Read/Write/Shell mit Genehmigung in Glyph |
+| **°_Agent** (id `glyph-agent`) | Lokal + Cloud-Antwort | — | VaultFind, Web-Recherche, Cloud-Antwort (Engine); Trace/Steps in der UI |
 
 > 📊 Grafische Abläufe (warum + wie jedes Profil): `docs/glyph-profile-diagrams.html`
 > · Volltext der Bedienung unten; die Kapitel dieses Handbuchs gelten profilunabhängig,
@@ -42,7 +42,7 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 |--------|---------------|
 | **grok** (Default) | `grok` im PATH + eingeloggt (`grok login` / `~/.grok/auth.json`) |
 | **claude** | `claude` CLI mit OAuth-Login (`~/.claude`); ACP-Adapter via `npx` (auto) oder global `npm i -g @agentclientprotocol/claude-agent-acp` |
-| **glyph-agent** | Lokaler Dienst `server.py` auf `127.0.0.1:18899` (`~/glyph-agent`) |
+| **°_Agent** | Lokaler Dienst `server.py` auf `127.0.0.1:18899` (`~/glyph-agent`) |
 
 ### Entwicklung starten
 
@@ -329,17 +329,18 @@ Workspace steuert, wo der Agent Dateien liest/schreibt (Standard oft Home oder `
 
 ## 10. Was der Agent in dieser UI kann
 
-Gilt für alle Profile; **grok** hat als einziges alle Fähigkeiten (Sessions, Deep Search, Aktivität).
+**Nicht alle Fähigkeiten gelten für alle Profile.** **grok** hat als einziges Sessions-Liste, Deep Search und Aktivitäts-Kalender. Terminal/Shell und freies Workspace-Schreiben sind **nicht** bei °_Agent.
 
 | Bereich | Beispiele | Profile |
 |---------|-----------|---------|
-| Code & Dateien | Lesen, schreiben, refaktorieren im Workspace | alle |
-| Terminal | Shell, Builds, Tests, Git | alle |
-| Recherche | Web/Docs; Deep Search für tiefergehende Quellenarbeit | **grok** (Deep Search); Recherche-Tools auch glyph-agent |
+| Code & Dateien | Lesen, schreiben, refaktorieren im Workspace (Grep/SearchReplace/…) | **grok**, **^_Code** (nur `CODE_WORKSPACE_ROOTS`) |
+| Terminal / Shell | Builds, Tests, Git (Whitelist bei ^_Code; kein `rm`/`push`) | **grok**, **^_Code** — **nicht** °_Agent |
+| Recherche | Web/Docs; Deep Search für tiefergehende Quellenarbeit | **grok** (Deep Search); **°_Agent** (Exa/TinyFish/BrowseUrl) |
 | Medien | Bilder/Video oft als Freitext; TUI: `/imagine`, `/imagine-video` | **grok** |
-| Erweiterungen | Skills, Workflows, Subagents, MCPs (je nach Installation) | grok · claude |
-| Vault & Notizen | Obsidian-Vault-Suche, Notizen lesen/bearbeiten (Diff+Backup) | **glyph-agent** |
-| Cloud-Modelle | viele Modelle zum Testen/Anbinden über eine API 
+| Erweiterungen | Skills, Workflows, Subagents, MCPs (je nach Installation) | **grok** |
+| Vault & Notizen | Obsidian-Vault-Suche, Wiki-Aliase, PDF, Mail, Diff+Backup | **°_Agent** |
+| Cloud-Modelle | viele Modelle zum Testen/Anbinden über eine API | **grok** |
+
 ---
 
 ## 11. Slash-Befehle (Überblick)
@@ -382,9 +383,9 @@ In der App: Symbol **Befehle** (filterbare Legende).
 | `GLYPH_UI_CWD` | Startverzeichnis | Workspace für neue Sessions |
 | `GROK_BIN` | `grok` | Pfad zur CLI |
 | `GROK_HOME` | `~/.grok` | Sessions & Auth |
-| `GLYPH_AGENT` | `grok` | Agent-Profil beim Start (grok \| claude \| glyph-agent) |
-| `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil glyph-agent) |
-| `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für glyph-agent-Antwort |
+| `GLYPH_AGENT` | `grok` | Agent-Profil beim Start (grok \| _code \| glyph-agent) |
+| `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil °_Agent) |
+| `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für °_Agent-Antwort |
 | `OPENCLAW_WIKI_PATH` | `~/.glyph-ui/wiki` | Wiki-Archiv (optional Obsidian-Vault o. Ä.) |
 | `GLYPH_UI_STATE_DIR` | `~/.glyph-ui` | UI-State (z. B. Closed-Log) |
 
@@ -447,7 +448,7 @@ Diagnose im TUI: **`/doctor`**.
 |------|--------|
 | `client/` | React-UI (Vite) |
 | `server/index.js` | Express + WebSocket, spawnt das aktive Agent-Profil … stdio, ACP-Bridge |
-| `server/agents.js` | Agent-Profile (grok, claude, glyph-agent) + Auflösung |
+| `server/agents.js` | Agent-Profile (grok, ^_Code, °_Agent) + Auflösung |
 | `server/sessions.js` | Session-Liste, Close, Transcript |
 | `server/activity.js` | Heatmap aus `events.jsonl` |
 | `server/wiki-archive.js` | Wiki-Seiten beim Schließen |
@@ -460,7 +461,7 @@ Laufzeit zu scheitern.
 
 ---
 
-## 15b. Agent-Profile & glyph-agent
+## 15b. Agent-Profile & °_Agent
 
 Glyph kennt mehrere **Agent-Profile** (Auswahl üblicherweise oben in der Status-/Header-Zeile).
 Aktives Profil wird beim Start aus `GLYPH_AGENT` übernommen (Default: `grok`).
@@ -468,24 +469,24 @@ Aktives Profil wird beim Start aus `GLYPH_AGENT` übernommen (Default: `grok`).
 | Profil | Spawnt | Hinweis |
 |--------|--------|---------|
 | **grok** (Default) | `grok agent --always-approve --no-leader stdio` | `GROK_BIN`; volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
-| **claude** | `claude-agent-acp` (oder `npx -y @agentclientprotocol/claude-agent-acp`) | `GLYPH_CLAUDE_BIN`/`GLYPH_CLAUDE_ARGS`; Sessions liegen unter `~/.claude/projects` (in Glyph nicht gelistet) |
-| **glyph-agent** | `node server/glyph-agent-acp.mjs` | Lokaler Agent (glyph-agent); Dünne ACP-Brücke zum lokalen Dienst auf `127.0.0.1:18899` |
+| **^_Code** (id `_code`) | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | DeepSeek CODE · Write/Shell mit Glyph-Freigabe |
+| **°_Agent** (id `glyph-agent`) | `node server/glyph-agent-acp.mjs` | Vault/Tools + Cloud-Antwort; dünne ACP-Brücke zum lokalen Dienst auf `127.0.0.1:18899` |
 
-### glyph-agent (Vault/Tools + Cloud-Antwort)
+### °_Agent (Vault/Tools + Cloud-Antwort)
 
 > 📊 **Diagramme:** `docs/glyph-profile-diagrams.html` zeigt für jedes Profil ein
 grafisches Ablauf-/Architektur-Diagramm (*warum hinzugefügt* + *wie es funktioniert*).
 > Im Browser öffnen oder direkt in die App einbetten.
 
-Das Profil **glyph-agent** verbindet Glyph mit der separaten **glyph-agent**-Codebasis
-(`~/glyph-agent/`): ein lokaler HTTP-Dienst (`server.py`, Port **18899**, localhost-only) mit
-kontrolliertem Tool-Loop (**B+**). Lokal: VaultFind (Embedding + Keyword) und Tools;
-Web nur bei Bedarf; die **Cloud-Antwort** formuliert der Cloud-Denker in der Engine
+Das Profil **°_Agent** (interne id `glyph-agent`) verbindet Glyph mit der separaten
+**glyph-agent**-Engine (`~/glyph-agent/`): ein lokaler HTTP-Dienst (`server.py`, Port **18899**,
+localhost-only) mit kontrolliertem Tool-Loop (**B+**). Lokal: VaultFind (Embedding + Keyword)
+und Tools; Web nur bei Bedarf; die **Cloud-Antwort** formuliert der Cloud-Denker in der Engine
 (Technik-Provider nur in Config/CONSTITUTION — kein separates UI-Profil).
 
 Dünne Brücke (`glyph-agent-acp.mjs`) — **keine Agentenlogik**: Sie übersetzt ACP ↔ HTTP und
 streamt die Antwort als Text-Chunks zurück an Glyph. Tool-Schicht und Cloud-Antwort bleiben in
-`glyph-agent` gekapselt.
+der Engine gekapselt.
 
 **Fähigkeiten (Tool-Schicht):**
 
@@ -514,8 +515,8 @@ Nur localhost gebunden; keine Internet-Exposition. Die UI zeigt Trace/Steps (z.�
 | `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für die Antwort |
 
 **Warum die Mischung:** Drei unabhängige Bestandsquellen, damit kein einzelner Anbieter zum
-Blockierer wird. Vault/Recherche → **glyph-agent**; breite Kontextarbeit/Sessions → **grok**
-oder **claude**. Grafische Abläufe: `docs/glyph-profile-diagrams.html`.
+Blockierer wird. Vault/Recherche → **°_Agent**; breite Kontextarbeit/Sessions → **grok**
+oder **^_Code**. Grafische Abläufe: `docs/glyph-profile-diagrams.html`.
 
 ---
 
@@ -526,15 +527,15 @@ je nach Profil verarbeitet:
 
 | Profil | Textanhänge | Bilder |
 |--------|-------------|--------|
-| **glyph-agent** | ✅ | ❌ (Stufe-1-Hinweis) |
+| **°_Agent** | ✅ | ❌ (Stufe-1-Hinweis) |
 | **grok** | ✅ | ✅ native ACP |
 
 - **Textformate:** `.txt` `.md` `.csv` `.json` `.xml` `.yaml` `.log` `.html` · max. **2 MiB**
-- **Bildformate (grok u. a., nicht glyph-agent):** PNG, JPEG, WebP, GIF · max. **4 MiB**
+- **Bildformate (grok u. a., nicht °_Agent):** PNG, JPEG, WebP, GIF · max. **4 MiB**
 - **Limit:** max. **8 Anhänge** / max. **12 MiB** pro Datei
 - **Fehler:** ungültiger Typ / kaputtes Base64 / zu groß → blockiert mit klarer Meldung,
   nie still verworfen und nie an das Modell gesendet.
-- **glyph-agent + Bild:** wird **nicht** an das Modell übertragen → sichtbarer Hinweis.
+- **°_Agent + Bild:** wird **nicht** an das Modell übertragen → sichtbarer Hinweis.
 - **Datenschutz:** Bilder können den Rechner verlassen (Cloud-Profile). Keys nur in
   geschützten Env/.env (gitignored), nie in Dateien/Logs/Commits. Sensible Uploads nicht
   ungeprüft an externe Modelle; dafür bleibt `glyph-agent` (lokal).
@@ -548,8 +549,8 @@ Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
 - [ ] Mindestens ein Profil verfügbar (Default `grok` eingeloggt)  
 - [ ] UI offen, Status **verbunden**  
 - [ ] Aktives Profil passt (Header / `GLYPH_AGENT`)  
-- [ ] glyph-agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
-- [ ] glyph-agent Cloud-Antwort: `OPENROUTER_API_KEY` in der glyph-agent-Umgebung (Technik)  
+- [ ] °_Agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
+- [ ] °_Agent Cloud-Antwort: `OPENROUTER_API_KEY` in der glyph-agent-Umgebung (Technik)  
 - [ ] Workspace passt (Header-Pfad / `GLYPH_UI_CWD`)  
 - [ ] Enter = senden, Shift+Enter = Zeile  
 - [ ] Während Arbeit: Text → Queue, leer → Stop  

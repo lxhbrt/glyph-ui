@@ -132,6 +132,13 @@ test("resolveAgent", async (t) => {
     assert.equal(resolveAgent(profiles, "^_Code").id, "_code");
   });
 
+  await t.test("maps °_Agent / legacy -_Agent / agent aliases to glyph-agent", () => {
+    assert.equal(resolveAgent(profiles, "°_Agent").id, "glyph-agent");
+    assert.equal(resolveAgent(profiles, "-_Agent").id, "glyph-agent");
+    assert.equal(resolveAgent(profiles, "_agent").id, "glyph-agent");
+    assert.equal(resolveAgent(profiles, "agent").id, "glyph-agent");
+  });
+
   await t.test("unknown or missing id falls back to the default", () => {
     assert.equal(resolveAgent(profiles, "gpt").id, DEFAULT_AGENT_ID);
     assert.equal(resolveAgent(profiles, undefined).id, DEFAULT_AGENT_ID);
@@ -154,6 +161,12 @@ test("publicAgent", async (t) => {
     assert.ok(wire.command.includes("glyph-agent-acp"));
     assert.equal(typeof wire.hint, "string");
     assert.ok(wire.hint.toLowerCase().includes("deepseek"));
+  });
+
+  await t.test("°_Agent is the public label for glyph-agent", () => {
+    const wire = publicAgent(findAgent(profiles, "glyph-agent"));
+    assert.equal(wire.id, "glyph-agent");
+    assert.equal(wire.label, "°_Agent");
   });
 
   await t.test("copies capabilities instead of sharing them", () => {
