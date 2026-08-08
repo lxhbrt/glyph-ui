@@ -4,9 +4,9 @@
  * Provider → verfügbare Einstiege:
  *   Grok        : Lupe(Summarize) + aktive Session (sessionList + sessionHistory + summarize)
  *   glyph-agent : nur aktive Session (sessionHistory + summarize, KEINE Lupe)
- *   claude      : keiner (alle false)
+ *   _code       : activeSession true (sessionHistory+summarize), Lupe false
  *
- * (OpenRouter-UI-Profil entfernt B+ 2026-08-05 — Cloud nur in glyph-agent.)
+ * (OpenRouter-UI-Profil und Claude-OAuth entfernt — Code = ^_Code / _code.)
  * Kein irrtümlicher Einstieg bei fehlender Fähigkeit. Copyright (c) 2026 Alexander Hubert · MIT
  */
 import test from "node:test";
@@ -30,7 +30,7 @@ test("Capability-Testmatrix (Nutzer-Tabelle)", async (t) => {
   const cases = {
     grok:          { lupe: true,  active: true  },
     "glyph-agent": { lupe: false, active: true },
-    claude:        { lupe: false, active: false },
+    _code:         { lupe: false, active: true },
   };
 
   for (const [id, expected] of Object.entries(cases)) {
@@ -60,8 +60,8 @@ test("summarizeCapabilities-Helper", () => {
   const profiles = buildAgentProfiles({ PATH: "/x" });
   assert.equal(summarizeCapabilities(findAgent(profiles, "grok")).activeSession, true);
   assert.equal(summarizeCapabilities(findAgent(profiles, "grok")).lupeSummarize, true);
-  assert.equal(summarizeCapabilities(findAgent(profiles, "claude")).activeSession, false);
-  assert.equal(summarizeCapabilities(findAgent(profiles, "claude")).lupeSummarize, false);
+  assert.equal(summarizeCapabilities(findAgent(profiles, "_code")).activeSession, true);
+  assert.equal(summarizeCapabilities(findAgent(profiles, "_code")).lupeSummarize, false);
   assert.equal(summarizeCapabilities(findAgent(profiles, "glyph-agent")).activeSession, true);
   assert.equal(summarizeCapabilities(findAgent(profiles, "glyph-agent")).lupeSummarize, false);
   assert.equal(summarizeCapabilities(null).activeSession, false);

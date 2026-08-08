@@ -8,6 +8,32 @@
   - All other tints = color-mix of those bases with white/black/panel
     (lighter/darker only — never shift gold→orange or mint/blue side accents)
 */
+
+/*
+  Type scale — identical in Hell/Dunkel and every agent profile
+  (Grok / ^_Code / °_Agent) and Chat|Deep Search|Fork.
+  Themes may only change colors; never re-size type per mode.
+  Desktop composer matches chat size; iOS media query floors at 16px
+  so Safari never auto-zooms the focused textarea.
+*/
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --type-chat: 0.85rem;
+  --type-chat-leading: 1.48;
+  --type-user: 0.85rem;
+  --type-user-leading: 1.42;
+  --type-secondary: 0.72rem;
+  --type-secondary-leading: 1.38;
+  --composer-font-size: 0.85rem;
+  --composer-line-height: 1.42;
+  --composer-letter-spacing: normal;
+  --composer-tab-size: 4;
+  --composer-pad-y: 5px;
+  --composer-pad-x: 8px;
+  --composer-min-h: 2rem;
+  --composer-max-h: 180px;
+}
+
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -59,8 +85,6 @@
   /* Shared stone size (matches Enter SnackBoard cell 10 / gap 0.14 → 8px) */
   --snack-pixel: 8px;
   --snack-pixel-gap: 2px;
-
-  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
 :root[data-theme="light"] {
@@ -1024,7 +1048,8 @@ button.send.send--stuffed .send-snack {
   flex: 1 1 auto;
   min-height: 0; /* critical: allow flex child to scroll */
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 14px;
   /* Same surface as page — only the rim separates the pane */
@@ -1032,17 +1057,18 @@ button.send.send--stuffed .send-snack {
   padding: 14px;
   position: relative;
   z-index: 1;
-  /* Native scrollbar — LVL bar owns the snack hunt metaphor */
+  /* Native scrollbar only when content overflows — LVL bar owns snack metaphor */
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--gold) 45%, var(--border)) transparent;
 }
 
-/* Inner column — height changes observed for stick-to-bottom */
+/* Inner column — full height when empty (center hint), grows with messages */
 .messages-content {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-height: min-content;
+  gap: 12px;
+  box-sizing: border-box;
+  min-height: 100%;
 }
 
 /* Seamless answer area — same black as page chrome (--bg) */
@@ -1055,10 +1081,12 @@ button.send.send--stuffed .send-snack {
 
 .empty {
   color: var(--muted);
-  margin: auto;
+  margin: auto 0;
+  align-self: center;
   text-align: center;
   max-width: 28rem;
-  line-height: 1.5;
+  font-size: var(--type-chat);
+  line-height: var(--type-chat-leading);
 }
 
 /*
@@ -1112,18 +1140,24 @@ button.send.send--stuffed .send-snack {
   box-shadow: none;
 }
 
-/* Copy under user bubble: outside the rim, right-aligned, hover-only */
+/* Message actions (copy / speak): hidden until the message is tapped.
+   Layout space is reserved; pointer-events off so invisible buttons are not hit. */
+.msg .msg-bottom-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.msg.is-actions-open .msg-bottom-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Copy under user bubble: outside the rim, right-aligned */
 .msg-user .msg-bottom-actions {
   justify-content: flex-end;
   margin-top: 4px;
   padding-top: 0;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-
-.msg-user:hover .msg-bottom-actions,
-.msg-user:focus-within .msg-bottom-actions {
-  opacity: 1;
 }
 
 .msg-user .role {
@@ -1132,8 +1166,8 @@ button.send.send--stuffed .send-snack {
 
 .msg-user .body,
 .msg-user .md-body {
-  font-size: 0.97rem;
-  line-height: 1.45;
+  font-size: var(--type-user);
+  line-height: var(--type-user-leading);
 }
 
 /*
@@ -1167,11 +1201,11 @@ button.send.send--stuffed .send-snack {
   color: var(--text);
 }
 
-/* Primary reading size — slightly larger than secondary chrome */
+/* Primary reading size — same token as user + composer (all modes) */
 .msg-assistant .md-body {
   font-weight: 400;
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: var(--type-chat);
+  line-height: var(--type-chat-leading);
   letter-spacing: 0.005em;
 }
 
@@ -1204,8 +1238,8 @@ button.send.send--stuffed .send-snack {
   padding: 2px 6px 8px 2px;
   opacity: 1;
   color: var(--muted);
-  font-size: 0.8rem;
-  line-height: 1.42;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
   font-weight: 400;
   border: none;
   border-left: none;
@@ -1281,7 +1315,7 @@ button.send.send--stuffed .send-snack {
 }
 
 .msg-tool {
-  font-size: 0.8rem;
+  font-size: var(--type-secondary);
 }
 
 /* Step banners / live rail: muted mono secondary track */
@@ -1483,8 +1517,8 @@ button.send.send--stuffed .send-snack {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: inherit;
-  line-height: 1.45;
-  font-size: 0.98rem;
+  line-height: var(--type-chat-leading);
+  font-size: var(--type-chat);
 }
 
 /* Rendered Markdown in chat bubbles — no raw **markers** */
@@ -1492,8 +1526,8 @@ button.send.send--stuffed .send-snack {
   margin: 0;
   word-break: break-word;
   font-family: inherit;
-  line-height: 1.5;
-  font-size: 0.98rem;
+  line-height: var(--type-chat-leading);
+  font-size: var(--type-chat);
   color: var(--text);
 }
 
@@ -1518,15 +1552,15 @@ button.send.send--stuffed .send-snack {
 }
 
 .md-h {
-  margin: 0.85em 0 0.4em;
-  font-size: 1.05rem;
+  margin: 0.7em 0 0.3em;
+  font-size: 0.92rem;
   font-weight: 650;
   letter-spacing: 0.01em;
   color: var(--text);
 }
 
 .md-h--sm {
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .md-list {
@@ -2049,18 +2083,11 @@ button.send.send--stuffed .send-snack {
   min-width: 0;
   /*
     Shared text metrics — mirror + textarea must occupy the SAME box.
+    Font/line/pad tokens live on :root so Hell/Dunkel and all profiles
+    share one scale; only layout may override pads on small screens.
     Mirror width is set in JS to textarea.clientWidth so wrap points
     match the caret (scrollbar must not widen the visible text layer).
   */
-  --composer-pad-y: 7px;
-  --composer-pad-x: 8px;
-  --composer-font-size: 0.95rem;
-  --composer-line-height: 1.4;
-  --composer-letter-spacing: normal;
-  --composer-tab-size: 4;
-  /* Match circular controls (2.25rem) so 1-line text sits optically level */
-  --composer-min-h: 2.25rem;
-  --composer-max-h: 180px;
 }
 
 /* SuperGrok pill row: [+] [textarea] [Mode] [mic] [send] */
@@ -2828,9 +2855,10 @@ button.send.send--stuffed .send-snack {
 
 .empty-soft {
   display: inline-block;
-  margin-top: 10px;
+  margin-top: 8px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
 }
 
 button.ghost {
@@ -3577,10 +3605,10 @@ button.cal-cell {
 }
 
 /*
-  Mobile scale pass (≤640px / iPhone PWA via Tailscale):
+  Mobile layout pass (≤640px / iPhone PWA via Tailscale):
   - Safe areas (notch / home indicator) for standalone
-  - Composer ≥16px so iOS does not auto-zoom on focus
-  - Compact chrome, larger touch targets, readable chat
+  - Compact chrome, larger touch targets
+  - Type scale is NOT re-sized here — same tokens as desktop/all modes
 */
 @media (max-width: 640px) {
   .app {
@@ -3653,7 +3681,7 @@ button.cal-cell {
   }
 
   .sub.sub--inline {
-    font-size: 0.65rem;
+    /* Same type size as desktop — only layout width changes on phone */
     margin-top: 0;
     max-width: 100%;
   }
@@ -3683,13 +3711,7 @@ button.cal-cell {
     padding: 0;
   }
 
-  /* Chat body: phone-readable without feeling desktop-cramped */
-  .body,
-  .md-body {
-    font-size: 1rem;
-    line-height: 1.5;
-  }
-
+  /* Chat type scale stays on :root tokens (same as desktop / all modes) */
   .msg-user {
     max-width: 92%;
   }
@@ -3719,8 +3741,8 @@ button.cal-cell {
   }
 
   /*
-    Composer (phone):
-    - 16px min → iOS does not auto-zoom on focus
+    Composer (phone) — layout + iOS zoom floor:
+    - Font size floored at 16px so iOS Safari never auto-zooms on focus
     - Row 1: textarea full width (no crushed placeholder)
     - Row 2: [+] [Chat] …… [mic] [send]
   */
@@ -3781,15 +3803,13 @@ button.cal-cell {
     min-height: 3rem;
   }
 
-  /* Empty chat: less floaty void on tall phones */
+  /* Empty chat: less floaty void on tall phones — tokens stay :root scale */
   .empty {
     max-width: 22rem;
     padding: 0 12px;
-    font-size: 0.95rem;
   }
 
   .empty-soft {
-    font-size: 0.82rem;
     margin-top: 8px;
   }
 
@@ -3833,6 +3853,193 @@ button.cal-cell {
     max-height: min(86dvh, 100%);
     border-radius: 16px 16px 12px 12px;
   }
+}
+
+/* ---------- BindingsPanel (Anbindung / Keys, Tab im Buch) ---------- */
+.bindings-scroll {
+  padding-bottom: 20px;
+}
+.bindings-panel {
+  padding: 4px 2px 12px;
+}
+.bindings-panel .summarize-input {
+  width: 100%;
+  background: var(--bg, #0f0f0f);
+  color: var(--fg, #eee);
+  border: 1px solid var(--line, #333);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  box-sizing: border-box;
+}
+.bindings-panel .summarize-label {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 10px 0 4px;
+}
+.bindings-panel .summarize-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.bindings-panel .summarize-status {
+  opacity: 0.7;
+  font-size: 13px;
+}
+.bindings-panel .summarize-error {
+  color: #ff6b6b;
+  font-size: 13px;
+}
+.bindings-panel .summarize-success {
+  color: #4ade80;
+  font-size: 13px;
+}
+.bindings-lead {
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.85;
+  margin: 0 0 14px;
+}
+.bindings-lead code {
+  font-size: 11px;
+  opacity: 0.9;
+}
+.bindings-section {
+  margin-bottom: 16px;
+}
+.bindings-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+.bindings-profile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bindings-profile {
+  border: 1px solid var(--line, #333);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg, #0f0f0f);
+}
+.bindings-profile.is-ok {
+  border-color: rgba(74, 222, 128, 0.35);
+}
+.bindings-profile.is-bad {
+  border-color: rgba(255, 107, 107, 0.35);
+}
+.bindings-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.bindings-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  flex-shrink: 0;
+}
+.bindings-profile.is-ok .bindings-dot {
+  background: #4ade80;
+}
+.bindings-auth {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bindings-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.bindings-checks li {
+  display: flex;
+  gap: 6px;
+  opacity: 0.85;
+  margin: 2px 0;
+}
+.bindings-checks li.ok {
+  opacity: 0.9;
+}
+.bindings-checks li.bad {
+  opacity: 0.75;
+}
+.bindings-check-mark {
+  width: 1em;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.bindings-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  opacity: 0.6;
+  line-height: 1.35;
+}
+.bindings-voice {
+  margin: 10px 0 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+.bindings-voice.ok {
+  color: #4ade80;
+}
+.bindings-voice.bad {
+  color: #fbbf24;
+}
+.bindings-form .summarize-label {
+  margin-top: 12px;
+}
+.bindings-masked {
+  font-weight: 400;
+  opacity: 0.65;
+  font-size: 11px;
+}
+.bindings-clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.bindings-clear input {
+  margin: 0;
+}
+.bindings-oauth-box {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #333);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.bindings-oauth-box p {
+  margin: 6px 0 0;
+  opacity: 0.8;
+}
+.bindings-oauth-box code {
+  font-size: 11px;
+}
+.bindings-footer {
+  margin: 14px 0 0;
+  font-size: 11px;
+  opacity: 0.5;
+  word-break: break-all;
 }
 
 /* ---------- SummarizeDialog (Session-Zusammenfassung) ---------- */

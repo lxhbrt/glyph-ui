@@ -33,16 +33,57 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 
 ## 1. Voraussetzungen & Start
 
+### Was Glyph ist (und nicht ist)
+
+**Glyph ist keine KI.** Es ist eine Browser-Hülle (ACP-Client) für Agenten, die du selbst mitbringst:
+Grok (OAuth/CLI), **^_Code** und **°_Agent** (lokale Engine + Keys). Chat, Streaming und Tools
+laufen in Glyph — die „Intelligenz“ steckt im gewählten Agenten.
+
+Für Power-User mit lokalem Zugriff auf eigene Dateien (z. B. Mac Mini). Kein Cloud-Hosting von Glyph.
+
+In der App: **Buch** → Tabs **Handbuch** · **Befehle** · **Anbindung** (kein extra Leisten-Icon).
+
 ### Brauchst du
 
-- **Node.js 22+**
+- **Node.js 22+** (Mac, Windows, Linux)
 - Mindestens **ein** Agent-Profil (Standard `grok` unten). Weitere Profile sind optional.
 
 | Profil | Voraussetzung |
 |--------|---------------|
 | **grok** (Default) | `grok` im PATH + eingeloggt (`grok login` / `~/.grok/auth.json`) |
-| **claude** | `claude` CLI mit OAuth-Login (`~/.claude`); ACP-Adapter via `npx` (auto) oder global `npm i -g @agentclientprotocol/claude-agent-acp` |
-| **°_Agent** | Lokaler Dienst `server.py` auf `127.0.0.1:18899` (`~/glyph-agent`) |
+| **^_Code** | `OPENROUTER_API_KEY` + glyph-agent-Dienst (`:18899`) |
+| **°_Agent** | Lokaler Dienst `server.py` auf `127.0.0.1:18899` (`~/glyph-agent`); OpenRouter für Cloud-Antwort |
+
+### Erster Start (Mac & Windows)
+
+```bash
+git clone https://github.com/lxhbrt/glyph-ui.git
+cd glyph-ui
+npm install
+npm run build
+npm start
+```
+
+Browser: **http://127.0.0.1:5174**
+
+1. **Buch → Anbindung**: Status der Profile, Keys speichern.
+2. **Grok:** im Terminal `grok login` (OAuth — nicht in der Maske).
+3. **^_Code / °_Agent:** OpenRouter-Key im Tab Anbindung (oder `.env`); Engine starten.
+4. Header: Profil wählen → **Kette** verbinden → chatten.
+
+**Windows:** gleich mit Node + npm. macOS-only: LaunchAgent, Dock-Icon, `Open Glyph.command` — weglassen.
+Firewall: localhost/Node erlauben, falls der Browser die UI nicht erreicht.
+
+### Anbindung (Keys & OAuth)
+
+| Was | Wo |
+|-----|-----|
+| Status Grok / Code / Agent | UI **Buch → Anbindung** |
+| `OPENROUTER_API_KEY`, `XAI_API_KEY` | Tab Anbindung speichert unter `~/.glyph-ui/bindings.json` (lokal, mode 0600) |
+| Grok OAuth | nur Terminal: `grok login` → `~/.grok/auth.json` |
+| Alternativ Keys | Repo-`.env` (siehe `.env.example`) — hat Vorrang vor leerem Store beim Start |
+
+API: `GET/PUT /api/bindings` (loopback). Rohe Secrets werden **nie** im GET zurückgegeben (nur maskiert).
 
 ### Entwicklung starten
 
@@ -163,7 +204,7 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 | **Lupe** | Sessions | Suche, öffnen; Schließen: Ja + Wiki · Löschen (`/delete`) |
 | **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
-| **Buch** (unten) | Handbuch | Kurzhandbuch ganz unten in der Leiste |
+| **Buch** (unten) | Handbuch | Tabs: Kurzhandbuch · Befehle · **Anbindung** (Keys/OAuth-Status) |
 | **4 Kästchen** | Kalender | Aktivitäts-Heatmap (wann / woran gearbeitet) |
 | **Wiki (i)** | Wiki | Öffnet den Wiki-Index (`.md`) in Obsidian / Standard-App |
 | **Workspace** | Ordner | Öffnet den aktuellen Arbeitsordner (`cwd`) im Finder |

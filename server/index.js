@@ -84,7 +84,13 @@ import {
   speechToText,
   textToSpeech,
   voiceStatus,
+  clearApiKeyCache,
 } from "./voice.js";
+import {
+  buildBindingsStatus,
+  loadBindingsIntoEnv,
+  updateBindings,
+} from "./bindings.js";
 import {
   getGlyphRoot,
   readGlyphBuild,
@@ -103,6 +109,8 @@ const AGENT_PROFILES = buildAgentProfiles();
 const STATE_DIR =
   process.env.GLYPH_UI_STATE_DIR ||
   path.join(os.homedir(), ".glyph-ui");
+/** Load UI-saved API keys into process.env (does not override existing env). */
+await loadBindingsIntoEnv(path.join(STATE_DIR, "bindings.json"));
 const UPLOAD_DIR = path.join(STATE_DIR, "uploads");
 const MAX_ATTACHMENT_BYTES = Number(
   process.env.GLYPH_UI_MAX_ATTACHMENT || 12 * 1024 * 1024,
@@ -977,6 +985,47 @@ app.get("/api/activity", async (req, res) => {
 app.get("/api/voice/status", async (_req, res) => {
   try {
     res.json(await voiceStatus());
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Connection bindings: OAuth/key status + local secret store (~/.glyph-ui/bindings.json).
+ * GET never returns raw secrets. PUT accepts OPENROUTER_API_KEY, XAI_API_KEY,
+ * GLYPH_AGENT_URL (empty string clears).
+ */
+app.get("/api/bindings", async (_req, res) => {
+  try {
+    res.json(
+      await buildBindingsStatus({
+        stateDir: STATE_DIR,
+        env: process.env,
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.put("/api/bindings", async (req, res) => {
+  try {
+    const body = req.body || {};
+    await updateBindings(body, {
+      stateDir: STATE_DIR,
+      env: process.env,
+    });
+    clearApiKeyCache();
+    res.json(
+      await buildBindingsStatus({
+        stateDir: STATE_DIR,
+        env: process.env,
+      }),
+    );
   } catch (err) {
     res.status(500).json({
       error: err instanceof Error ? err.message : String(err),

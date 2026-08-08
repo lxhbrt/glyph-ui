@@ -1,14 +1,14 @@
 # Glyph
 
-**Offene Browser-UI für mehrere lokale & Cloud-Agenten** über ACP (Agent Client Protocol).
-*Ursprünglich als „Build Term for Grok“ gestartet — heute ein profilneutrales Gesicht für
-grok, ^_Code und °_Agent.*
+**Browser-Hülle für Coding-Agenten** über ACP (Agent Client Protocol) — **keine eigene KI**.
+Du bringst Grok / ^_Code / °_Agent mit; Glyph streamt Chat, Tools und Status.
+Für lokale Power-User (z. B. Mac Mini). *Ursprung: „Build Term for Grok“.*
 
 **Erstellt von [Lx Hbrt](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
 
 > Unofficial / independent — **not affiliated with or endorsed by xAI**. „Grok“ und „Grok Build“ sind Marken der jeweiligen Rechteinhaber.
 
-**Anwendungshandbuch (DE):** [HANDBUCH.md](./HANDBUCH.md)
+**Anwendungshandbuch (DE):** [HANDBUCH.md](./HANDBUCH.md) · In der App: **Buch** → Handbuch · Befehle · **Anbindung** (Keys / OAuth-Status)
 
 ```
 Browser (React)  --WebSocket-->  Node Bridge  --stdio ACP-->  Agent-Profil
@@ -46,7 +46,15 @@ Profil deklariert und in der UI ausgegraut, wo sie nicht gelten.
 git clone https://github.com/lxhbrt/glyph-ui.git
 cd glyph-ui
 npm install
+npm run build
+npm start
+# → http://127.0.0.1:5174
 ```
+
+**Anbindung:** In der UI **Buch → Anbindung** → Keys (`OPENROUTER_API_KEY`, `XAI_API_KEY`) lokal speichern;
+Grok per Terminal `grok login`. Details: [HANDBUCH.md §1](./HANDBUCH.md).
+
+Mac & Windows (Node 22+). LaunchAgent/Dock nur macOS.
 
 ## Ports (ein Modell)
 

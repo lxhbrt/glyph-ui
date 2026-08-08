@@ -44,6 +44,10 @@ _Avoid_: Plugin, Hook, Agent-Command
 Eines der wählbaren ACP-Agenten in Glyph: **grok**, **`^_Code`** (`_code`), **`°_Agent`** (id `glyph-agent`). Glyph spawnt ein anderes Binary/Env, nicht „ein anderes Modell“.
 _Avoid_: OpenRouter (kein UI-Profil mehr), Claude (ersetzt durch ^_Code), Provider, Modell (als Profilname)
 
+**Anbindung**:
+Tab im **Buch**-Panel (Handbuch · Befehle · Anbindung) zum Prüfen von OAuth/Service-Status und Speichern von API-Keys (`OPENROUTER_API_KEY`, `XAI_API_KEY`) unter `~/.glyph-ui/bindings.json`. Kein eigenes Leisten-Icon. Grok-OAuth bleibt Terminal (`grok login`).
+_Avoid_: Settings (zu generisch), Login-Dialog (impliziert eingebettetes OAuth), Kalender (nur Grok-Aktivität, oft disabled)
+
 **^_Code**:
 Code-Profil (id `_code`): DeepSeek V4 Flash via OpenRouter, Workspace-Tools, Genehmigung in Glyph. Nutzt dieselbe ACP-Brücke wie `°_Agent` mit `GLYPH_AGENT_MODE=code`.
 _Avoid_: Claude-Profil, Anthropic-OAuth

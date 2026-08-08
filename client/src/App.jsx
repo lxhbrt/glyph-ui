@@ -125,6 +125,8 @@ export default function App() {
   /** Flash "copied" on message action button. */
   const [copiedId, setCopiedId] = useState(null);
   const copiedTimerRef = useRef(null);
+  /** Message id whose copy/speak actions are revealed (tap-to-show). */
+  const [actionsMsgId, setActionsMsgId] = useState(null);
   /** Composer action: chat | deep-search | fork (TUI-aligned, not thinking toggle). */
   const [sendAction, setSendAction] = useState(() => {
     try {
@@ -388,6 +390,38 @@ export default function App() {
     },
     [],
   );
+
+  /** Close message action bar when tapping outside that message. */
+  useEffect(() => {
+    if (!actionsMsgId) return undefined;
+    const onPointerDown = (e) => {
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      if (t.closest(`[data-msg-id="${CSS.escape(String(actionsMsgId))}"]`)) {
+        return;
+      }
+      setActionsMsgId(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [actionsMsgId]);
+
+  const revealMessageActions = useCallback((id, e) => {
+    // Keep open when using action buttons / links inside the message
+    if (e?.target instanceof Element) {
+      if (e.target.closest("button, a, input, textarea, select, label")) {
+        return;
+      }
+    }
+    // Don't steal a text selection gesture
+    try {
+      const sel = window.getSelection?.();
+      if (sel && !sel.isCollapsed && String(sel).trim()) return;
+    } catch {
+      /* ignore */
+    }
+    setActionsMsgId((cur) => (cur === id ? null : id));
+  }, []);
 
   const speakText = useCallback(
     async (id, rawText) => {
@@ -2278,8 +2312,8 @@ export default function App() {
             setLegendTab("handbook");
             setShowLegend(true);
           }}
-          title="Kurzhandbuch"
-          aria-label="Kurzhandbuch öffnen"
+          title="Kurzhandbuch · Befehle · Anbindung"
+          aria-label="Kurzhandbuch und Anbindung öffnen"
         >
           <IconBook />
         </button>
@@ -2528,8 +2562,24 @@ export default function App() {
                     </div>
                   ) : null;
 
+                  const actionsOpen =
+                    actionsMsgId === m.id ||
+                    speakingId === m.id ||
+                    ttsBusyId === m.id ||
+                    copiedId === m.id;
+
                   return (
-                    <article key={m.id} className={`msg msg-${m.role}`}>
+                    <article
+                      key={m.id}
+                      data-msg-id={m.id}
+                      className={`msg msg-${m.role}${
+                        actionsOpen ? " is-actions-open" : ""
+                      }`}
+                      onClick={(e) => {
+                        if (!showCopy) return;
+                        revealMessageActions(m.id, e);
+                      }}
+                    >
                       {m.role === "user" ? (
                         <>
                           {/* Bubble shell only around text — copy stays outside the rim */}
