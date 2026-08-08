@@ -382,12 +382,22 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
   }, TIMEOUT_MS);
 
   try {
+    // Multi-Turn: prior Turns mitschicken (store enthält die gerade gepushte
+    // user-message bereits — Server dedupliziert, slice(0,-1) ist trotzdem sauber).
+    const priorHistory = Array.isArray(store.messages)
+      ? store.messages.slice(0, -1).map((m) => ({
+          role: m?.role === "assistant" ? "assistant" : "user",
+          content: typeof m?.content === "string" ? m.content : String(m?.content || ""),
+        }))
+      : [];
     let body = {
       message: built.message,
       attachments: built.attachments,
       // OpenAI-style image_url parts (data: URLs) for vision models
       images: Array.isArray(built.images) ? built.images : [],
       mode: IS_CODE ? "code" : "agent",
+      // Chat-Verlauf → glyph-agent (ohne Historie startet jeder Turn bei null)
+      history: priorHistory,
     };
 
     let { answerText, stepBlocks, trace, final } = await streamChat(
