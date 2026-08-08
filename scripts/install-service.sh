@@ -110,6 +110,12 @@ cat > "$PLIST_DST" <<EOF
       <string>${GLYPH_UI_STATE_DIR}</string>
       <key>NODE_ENV</key>
       <string>production</string>
+      <key>GLYPH_ALLOW_TAILSCALE_ORIGIN</key>
+      <string>${GLYPH_ALLOW_TAILSCALE_ORIGIN:-0}</string>
+      <key>GLYPH_TAILSCALE_SERVE_PORTS</key>
+      <string>${GLYPH_TAILSCALE_SERVE_PORTS:-8443}</string>
+      <key>GLYPH_TAILSCALE_HOST</key>
+      <string>${GLYPH_TAILSCALE_HOST:-}</string>
     </dict>
 
     <key>StandardOutPath</key>

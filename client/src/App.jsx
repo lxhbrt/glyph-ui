@@ -1,5 +1,5 @@
 /**
- * Glyph UI — ACP browser UI (Grok, Claude)
+ * Glyph UI — ACP browser UI (Grok, ^_Code, °_Agent)
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
@@ -31,12 +31,20 @@ import {
   IconWorkspace,
   IconTheme,
   IconMic,
+  IconPlus,
   IconSpeaker,
   IconSpeakerOff,
   IconCopy,
   IconCheck,
   IconRefresh,
+  IconEnter,
+  IconLink,
+  IconLinkOff,
+  IconSummarize,
 } from "./components/icons.jsx";
+
+/** Composer textarea grows down to this max height (px). */
+const COMPOSER_MAX_H = 180;
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
 import {
   MAX_ATTACHMENTS_PER_MSG,
@@ -98,6 +106,8 @@ export default function App() {
   const [agent, setAgent] = useState(null);
   const [agents, setAgents] = useState([]);
   const [agentSwitching, setAgentSwitching] = useState(false);
+  /** ^_Code: Write/Shell-Genehmigung aus dem Bridge-Server */
+  const [permissionReq, setPermissionReq] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
@@ -115,6 +125,8 @@ export default function App() {
   /** Flash "copied" on message action button. */
   const [copiedId, setCopiedId] = useState(null);
   const copiedTimerRef = useRef(null);
+  /** Message id whose copy/speak actions are revealed (tap-to-show). */
+  const [actionsMsgId, setActionsMsgId] = useState(null);
   /** Composer action: chat | deep-search | fork (TUI-aligned, not thinking toggle). */
   const [sendAction, setSendAction] = useState(() => {
     try {
@@ -125,6 +137,10 @@ export default function App() {
     }
     return "chat";
   });
+  /** Compact mode dropdown (Chat | Deep Search | Fork). */
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const modeMenuRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("gbt-theme") === "light" ? "light" : "dark";
@@ -374,6 +390,38 @@ export default function App() {
     },
     [],
   );
+
+  /** Close message action bar when tapping outside that message. */
+  useEffect(() => {
+    if (!actionsMsgId) return undefined;
+    const onPointerDown = (e) => {
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      if (t.closest(`[data-msg-id="${CSS.escape(String(actionsMsgId))}"]`)) {
+        return;
+      }
+      setActionsMsgId(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [actionsMsgId]);
+
+  const revealMessageActions = useCallback((id, e) => {
+    // Keep open when using action buttons / links inside the message
+    if (e?.target instanceof Element) {
+      if (e.target.closest("button, a, input, textarea, select, label")) {
+        return;
+      }
+    }
+    // Don't steal a text selection gesture
+    try {
+      const sel = window.getSelection?.();
+      if (sel && !sel.isCollapsed && String(sel).trim()) return;
+    } catch {
+      /* ignore */
+    }
+    setActionsMsgId((cur) => (cur === id ? null : id));
+  }, []);
 
   const speakText = useCallback(
     async (id, rawText) => {
@@ -1023,6 +1071,22 @@ export default function App() {
           return;
         }
 
+        if (msg.type === "permission_request") {
+          setPermissionReq({
+            id: msg.id,
+            title: msg.title || "Aktion freigeben",
+            kind: msg.kind || "other",
+            preview: msg.preview || "",
+            options: Array.isArray(msg.options) ? msg.options : [],
+          });
+          return;
+        }
+        if (msg.type === "permission_dismiss") {
+          setPermissionReq((prev) =>
+            prev && prev.id === msg.id ? null : prev,
+          );
+          return;
+        }
         if (msg.type === "error") {
           setError(msg.message || "Unbekannter Fehler");
           finalizeStreaming();
@@ -1640,6 +1704,23 @@ export default function App() {
   // Unabhängig von sessionList (gilt auch für glyph-agent ohne Lupe).
   const canSummarize = caps ? Boolean(caps.summarize && caps.sessionHistory) : false;
   const agentLabel = agent?.label || "Agent";
+  /**
+   * Product line by profile (roles in server/agents.js):
+   *   Grok      → Build Term
+   *   ^_Code    → Code Term
+   *   °_Agent   → Chat Term
+   */
+  const productTerm = useMemo(() => {
+    const id = agent?.id || "";
+    if (id === "_code" || id === "code" || id === "claude") {
+      return `Code Term for ${agentLabel}`;
+    }
+    if (id === "glyph-agent" || id === "agent") {
+      // User-facing short name; picker keeps °_Agent.
+      return "Chat Term for Agent";
+    }
+    return `Build Term for ${agentLabel}`;
+  }, [agent?.id, agentLabel]);
   const unavailableFor = useCallback(
     (what) => `${what} ist nur im grok-Profil verfügbar (aktiv: ${agentLabel})`,
     [agentLabel],
@@ -1906,7 +1987,8 @@ export default function App() {
         : `Glyph got lost… in space · ${workingSeconds}s still — tippen = Stopp · dann neu`;
     }
     if (isWorking) {
-      return `${agentLabel} arbeitet… ${workingSeconds}s — Enter → Warteschlange · Snack = Stopp`;
+      // Short on purpose: stop/queue is the round button + empty Enter — no reminder spam
+      return `${agentLabel} work… ${workingSeconds}s`;
     }
     if (sendAction === "deep-search") {
       return "Deep Search Query… z. B. Compare Postgres 17 vs MySQL 9";
@@ -1914,7 +1996,8 @@ export default function App() {
     if (sendAction === "fork") {
       return "Optional: Directive für den Fork… (leer = nur Session branchen)";
     }
-    return `Nachricht an ${agentLabel}… / Befehle · Screenshot paste · Datei droppen`;
+    // Keep short: attach hints live in the empty state; long copy wraps badly on phones
+    return `Nachricht an ${agentLabel}…  ·  / für Befehle`;
   }, [
     connected,
     isWorking,
@@ -1984,6 +2067,84 @@ export default function App() {
     setSlashIndex((i) => Math.min(Math.max(0, i), slashItems.length - 1));
   }, [slashOpen, slashItems.length, slashQuery]);
 
+  /** SuperGrok-style: 1-line default, grow downward up to COMPOSER_MAX_H.
+   *  Mirror must match textarea *content* box (clientWidth/Height), not the
+   *  border box — otherwise scrollbar / gutter shifts wraps by ~10–15 chars
+   *  from line 2 onward and the caret drifts from the visible text.
+   *  Empty value: force min-height — iOS Safari scrollHeight grows with a
+   *  wrapped placeholder and balloons the empty composer (narrow phones). */
+  const resizeComposer = useCallback(() => {
+    const ta = composerRef.current;
+    if (!ta) return;
+    const mirror = ta.previousElementSibling?.classList?.contains(
+      "composer-highlight",
+    )
+      ? ta.previousElementSibling
+      : null;
+
+    const wrap = ta.closest(".composer-input-wrap");
+    const minVar = wrap
+      ? getComputedStyle(wrap).getPropertyValue("--composer-min-h").trim()
+      : "";
+    const rootFs = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const minH = minVar.endsWith("rem")
+      ? parseFloat(minVar) * rootFs
+      : parseFloat(minVar) || rootFs * 2.25;
+
+    ta.style.height = "auto";
+    ta.style.minHeight = "";
+
+    const empty = ta.value.length === 0;
+    const h = empty
+      ? minH
+      : Math.min(Math.max(ta.scrollHeight, minH), COMPOSER_MAX_H);
+    ta.style.height = `${h}px`;
+    ta.style.minHeight = `${h}px`;
+
+    if (mirror) {
+      // clientWidth excludes scrollbar — wrap points match caret column
+      mirror.style.width = `${ta.clientWidth}px`;
+      mirror.style.height = `${ta.clientHeight}px`;
+      mirror.style.minHeight = "";
+      mirror.scrollTop = ta.scrollTop;
+      mirror.scrollLeft = ta.scrollLeft;
+    }
+  }, []);
+
+  useEffect(() => {
+    resizeComposer();
+  }, [input, resizeComposer]);
+
+  /* Keep mirror width in sync when the composer pane is resized. */
+  useEffect(() => {
+    const ta = composerRef.current;
+    if (!ta || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      resizeComposer();
+    });
+    ro.observe(ta);
+    return () => ro.disconnect();
+  }, [resizeComposer]);
+
+  /* Close mode menu on outside click / Escape. */
+  useEffect(() => {
+    if (!modeMenuOpen) return;
+    const onDown = (e) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target)) {
+        setModeMenuOpen(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setModeMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [modeMenuOpen]);
+
   const applySlashInsert = useCallback(
     (name) => {
       const el = composerRef.current;
@@ -2005,9 +2166,10 @@ export default function App() {
         } catch {
           /* ignore */
         }
+        resizeComposer();
       });
     },
-    [input],
+    [input, resizeComposer],
   );
 
   const syncSlashFromComposer = useCallback((text, cursor) => {
@@ -2052,6 +2214,20 @@ export default function App() {
         <button
           type="button"
           className="side-rail-btn"
+          onClick={() => setShowCalendar(true)}
+          disabled={!canSeeActivity}
+          title={
+            canSeeActivity
+              ? "Aktivität — Glyph"
+              : unavailableFor("Die Aktivitäts-Ansicht")
+          }
+          aria-label="Aktivität"
+        >
+          <IconCalendar />
+        </button>
+        <button
+          type="button"
+          className="side-rail-btn"
           onClick={() => setShowOverview(true)}
           disabled={!canBrowseSessions}
           title={
@@ -2081,20 +2257,6 @@ export default function App() {
           aria-label="Befehle und Skills"
         >
           <IconCommands />
-        </button>
-        <button
-          type="button"
-          className="side-rail-btn"
-          onClick={() => setShowCalendar(true)}
-          disabled={!canSeeActivity}
-          title={
-            canSeeActivity
-              ? "Aktivitäts-Kalender"
-              : unavailableFor("Der Aktivitäts-Kalender")
-          }
-          aria-label="Kalender"
-        >
-          <IconCalendar />
         </button>
         <span className="side-rail-sep" aria-hidden="true" />
         <button
@@ -2150,8 +2312,8 @@ export default function App() {
             setLegendTab("handbook");
             setShowLegend(true);
           }}
-          title="Kurzhandbuch"
-          aria-label="Kurzhandbuch öffnen"
+          title="Kurzhandbuch · Befehle · Anbindung"
+          aria-label="Kurzhandbuch und Anbindung öffnen"
         >
           <IconBook />
         </button>
@@ -2170,11 +2332,11 @@ export default function App() {
                   #{GLYPH_BUILD}
                 </span>
               ) : null}
+              <span className="sub sub--inline" title={headerTooltip}>
+                {productTerm} · ACP
+                {cwdLabel ? ` · ${cwdLabel}` : ""}
+              </span>
             </h1>
-            <p className="sub" title={headerTooltip}>
-              Build Term for {agentLabel} · ACP
-              {cwdLabel ? ` · ${cwdLabel}` : ""}
-            </p>
           </div>
           <div className="top-actions">
             {agents.length > 1 ? (
@@ -2197,37 +2359,47 @@ export default function App() {
             ) : null}
             <button
               type="button"
-              className={`pill pill-btn ${
+              className={`pill pill-btn pill-btn--icon ${
                 reconnecting ? "pending" : connected ? "ok" : "bad"
               }`}
               disabled={reconnecting}
               title={
                 reconnecting
                   ? connected
-                    ? "${agentLabel}-Agent wird beendet…"
-                    : "${agentLabel}-Agent wird gestartet…"
+                    ? `${agentLabel}-Agent wird beendet…`
+                    : `${agentLabel}-Agent wird gestartet…`
                   : connected
-                    ? "${agentLabel} läuft — klicken zum Beenden (/quit)"
-                    : "${agentLabel} offline — klicken zum Verbinden"
+                    ? `${agentLabel} läuft — klicken zum Beenden (/quit)`
+                    : `${agentLabel} offline — klicken zum Verbinden`
+              }
+              aria-label={
+                reconnecting
+                  ? connected
+                    ? "Verbindung wird getrennt"
+                    : "Verbindung wird hergestellt"
+                  : connected
+                    ? "Verbunden — klicken zum Beenden"
+                    : "Offline — klicken zum Verbinden"
               }
               onClick={() => void toggleGrokConnection()}
             >
-              {reconnecting
-                ? connected
-                  ? "trennt…"
-                  : "verbindet…"
-                : connected
-                  ? "verbunden"
-                  : "offline"}
+              {reconnecting ? (
+                <IconRefresh size={18} />
+              ) : connected ? (
+                <IconLink size={18} />
+              ) : (
+                <IconLinkOff size={18} />
+              )}
             </button>
             {canSummarize && connected && sessionId ? (
               <button
                 type="button"
-                className="pill pill-btn active-session-summarize"
+                className="pill pill-btn pill-btn--icon active-session-summarize"
                 title="Aktive Session zusammenfassen (Vorschau → Bestätigen)"
+                aria-label="Session zusammenfassen"
                 onClick={() => setActiveSummarizeOpen(true)}
               >
-                ✎ Zusammenfassen
+                <IconSummarize size={18} />
               </button>
             ) : null}
           </div>
@@ -2305,80 +2477,59 @@ export default function App() {
                   </span>
                 </div>
               ) : (
-                visibleMessages.map((m) => (
-                  <article key={m.id} className={`msg msg-${m.role}`}>
-                    <div className="role role-row">
-                      <span>
-                        {m.role === "user"
-                          ? "Du"
-                          : m.role === "assistant"
-                            ? agentLabel
-                            : m.role === "thought"
-                              ? "Thinking"
-                              : m.role === "system"
-                                ? "System"
-                                : "Tool"}
-                        {m.streaming ? " …" : ""}
-                      </span>
-                    </div>
-                    {m.role === "user" && m.attachments?.length ? (
-                      <ul className="msg-attachments" aria-label="Anhänge">
-                        {m.attachments.map((a) => (
-                          <li
-                            key={a.id || a.path || a.name}
-                            className="msg-attach-chip"
-                            title={a.name}
-                          >
-                            <span className="msg-attach-icon" aria-hidden="true">
-                              {isImageMime(a.mimeType) ? "🖼" : "📄"}
-                            </span>
-                            <span className="msg-attach-name">{a.name}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {m.text || m.steps?.length ? (
-                      m.role === "user" ? (
-                        <SlashHighlightedText
-                          text={m.text}
-                          skills={skillCatalog}
-                          commands={commandCatalog}
-                          className="md-body user-text-with-slash"
-                          markdownFallback
-                        />
-                      ) : (
-                        <AssistantText text={m.text} steps={m.steps} />
-                      )
-                    ) : null}
-                    {m.role === "assistant" &&
+                visibleMessages.map((m) => {
+                  const roleLabel =
+                    m.role === "user"
+                      ? "Du"
+                      : m.role === "assistant"
+                        ? agentLabel
+                        : m.role === "thought"
+                          ? "Thinking"
+                          : m.role === "system"
+                            ? "System"
+                            : "Tool";
+                  const showCopy =
+                    (m.role === "user" || m.role === "assistant") &&
                     !m.streaming &&
-                    m.text?.trim() ? (
-                      <div
-                        className="msg-bottom-actions"
-                        role="group"
-                        aria-label="Antwortaktionen"
-                      >
-                        <button
-                          type="button"
-                          className={`msg-action-btn msg-bottom-btn${
-                            copiedId === m.id ? " is-copied" : ""
-                          }`}
-                          title={
-                            copiedId === m.id
-                              ? "Kopiert"
+                    Boolean(m.text?.trim());
+                  const copyActions = showCopy ? (
+                    <div
+                      className="msg-bottom-actions"
+                      role="group"
+                      aria-label={
+                        m.role === "user"
+                          ? "Nachrichtaktionen"
+                          : "Antwortaktionen"
+                      }
+                    >
+                      <button
+                        type="button"
+                        className={`msg-action-btn msg-bottom-btn${
+                          copiedId === m.id ? " is-copied" : ""
+                        }`}
+                        title={
+                          copiedId === m.id
+                            ? "Kopiert"
+                            : m.role === "user"
+                              ? "Nachricht kopieren"
                               : "Antwort kopieren"
-                          }
-                          aria-label={
-                            copiedId === m.id ? "Kopiert" : "Antwort kopieren"
-                          }
-                          onClick={() => void copyMessage(m.id, m.text)}
-                        >
-                          {copiedId === m.id ? (
-                            <IconCheck size={18} />
-                          ) : (
-                            <IconCopy size={18} />
-                          )}
-                        </button>
+                        }
+                        aria-label={
+                          copiedId === m.id
+                            ? "Kopiert"
+                            : m.role === "user"
+                              ? "Nachricht kopieren"
+                              : "Antwort kopieren"
+                        }
+                        onClick={() => void copyMessage(m.id, m.text)}
+                      >
+                        {copiedId === m.id ? (
+                          <IconCheck size={18} />
+                        ) : (
+                          <IconCopy size={18} />
+                        )}
+                      </button>
+                      {m.role === "assistant" ? (
                         <button
                           type="button"
                           className={`msg-action-btn msg-bottom-btn msg-speak-btn${
@@ -2398,9 +2549,7 @@ export default function App() {
                               ? "Vorlesen stoppen"
                               : "Antwort vorlesen"
                           }
-                          disabled={Boolean(
-                            ttsBusyId && ttsBusyId !== m.id,
-                          )}
+                          disabled={Boolean(ttsBusyId && ttsBusyId !== m.id)}
                           onClick={() => void speakText(m.id, m.text)}
                         >
                           {speakingId === m.id ? (
@@ -2409,11 +2558,89 @@ export default function App() {
                             <IconSpeaker size={18} />
                           )}
                         </button>
-                      </div>
-                    ) : null}
-                    {m.trace ? <AssistantMeta trace={m.trace} /> : null}
-                  </article>
-                ))
+                      ) : null}
+                    </div>
+                  ) : null;
+
+                  const actionsOpen =
+                    actionsMsgId === m.id ||
+                    speakingId === m.id ||
+                    ttsBusyId === m.id ||
+                    copiedId === m.id;
+
+                  return (
+                    <article
+                      key={m.id}
+                      data-msg-id={m.id}
+                      className={`msg msg-${m.role}${
+                        actionsOpen ? " is-actions-open" : ""
+                      }`}
+                      onClick={(e) => {
+                        if (!showCopy) return;
+                        revealMessageActions(m.id, e);
+                      }}
+                    >
+                      {m.role === "user" ? (
+                        <>
+                          {/* Bubble shell only around text — copy stays outside the rim */}
+                          <div className="msg-user-bubble">
+                            <div className="role role-row">
+                              <span>{roleLabel}</span>
+                            </div>
+                            {m.attachments?.length ? (
+                              <ul
+                                className="msg-attachments"
+                                aria-label="Anhänge"
+                              >
+                                {m.attachments.map((a) => (
+                                  <li
+                                    key={a.id || a.path || a.name}
+                                    className="msg-attach-chip"
+                                    title={a.name}
+                                  >
+                                    <span
+                                      className="msg-attach-icon"
+                                      aria-hidden="true"
+                                    >
+                                      {isImageMime(a.mimeType) ? "🖼" : "📄"}
+                                    </span>
+                                    <span className="msg-attach-name">
+                                      {a.name}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            {m.text ? (
+                              <SlashHighlightedText
+                                text={m.text}
+                                skills={skillCatalog}
+                                commands={commandCatalog}
+                                className="md-body user-text-with-slash"
+                                markdownFallback
+                              />
+                            ) : null}
+                          </div>
+                          {copyActions}
+                        </>
+                      ) : (
+                        <>
+                          <div className="role role-row">
+                            <span>
+                              {roleLabel}
+                              {m.streaming ? " …" : ""}
+                            </span>
+                          </div>
+                          {m.text || m.steps?.length ? (
+                            <AssistantText text={m.text} steps={m.steps} />
+                          ) : null}
+                          {copyActions}
+                          {m.trace ? <AssistantMeta trace={m.trace} /> : null}
+                        </>
+                      )}
+                    </article>
+                  );
+                })
               )}
             </div>
             {dropActive ? (
@@ -2440,6 +2667,10 @@ export default function App() {
             entries={planEntries}
             collapsed={planCollapsed}
             onToggle={() => setPlanCollapsed((c) => !c)}
+            onDismiss={() => {
+              setPlanEntries([]);
+              setPlanCollapsed(false);
+            }}
           />
           {queue.length > 0 ? (
             <div className="msg-queue" role="list" aria-label="Warteschlange">
@@ -2540,187 +2771,224 @@ export default function App() {
                 ) : null}
               </div>
             ) : null}
-            <div className="composer-input-wrap">
-              <SlashPopup
-                open={slashOpen}
-                items={slashItems}
-                selectedIndex={slashIndex}
-                query={slashQuery}
-                onSelectIndex={setSlashIndex}
-                onClose={() => setSlashOpen(false)}
-                onPick={(item) => applySlashInsert(item.name)}
-              />
-              <SlashHighlightedText
-                text={input}
-                skills={skillCatalog}
-                commands={commandCatalog}
-                className="composer-highlight"
-              />
-              <textarea
-                ref={composerRef}
-                className="composer-textarea--overlay"
-                value={input}
+            {/* SuperGrok pill: [+] [textarea] [Mode ▾] [🎤] [↵] */}
+            <div className="composer-row">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                multiple
+                tabIndex={-1}
+                aria-hidden="true"
                 onChange={(e) => {
-                  const v = e.target.value;
-                  setInput(v);
-                  syncSlashFromComposer(v, e.target.selectionStart ?? v.length);
+                  const files = Array.from(e.target.files || []);
+                  e.target.value = "";
+                  if (files.length) void addFiles(files);
                 }}
-                onScroll={(e) => {
-                  const mirror = e.currentTarget.previousElementSibling;
-                  if (
-                    mirror &&
-                    mirror.classList.contains("composer-highlight")
-                  ) {
-                    mirror.scrollTop = e.currentTarget.scrollTop;
-                    mirror.scrollLeft = e.currentTarget.scrollLeft;
-                  }
-                }}
-                onClick={(e) => {
-                  syncSlashFromComposer(
-                    e.currentTarget.value,
-                    e.currentTarget.selectionStart ?? 0,
-                  );
-                }}
-                onSelect={(e) => {
-                  syncSlashFromComposer(
-                    e.currentTarget.value,
-                    e.currentTarget.selectionStart ?? 0,
-                  );
-                }}
-                placeholder={composerPlaceholder}
-                rows={3}
-                onKeyDown={(e) => {
-                  if (slashOpen) {
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      setSlashOpen(false);
-                      return;
+              />
+              <button
+                type="button"
+                className="composer-plus-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={attachBusy}
+                title="Datei anhängen"
+                aria-label="Datei anhängen"
+              >
+                <IconPlus size={18} />
+              </button>
+              <div className="composer-input-wrap">
+                <SlashPopup
+                  open={slashOpen}
+                  items={slashItems}
+                  selectedIndex={slashIndex}
+                  query={slashQuery}
+                  onSelectIndex={setSlashIndex}
+                  onClose={() => setSlashOpen(false)}
+                  onPick={(item) => applySlashInsert(item.name)}
+                />
+                <SlashHighlightedText
+                  text={input}
+                  skills={skillCatalog}
+                  commands={commandCatalog}
+                  className="composer-highlight"
+                />
+                <textarea
+                  ref={composerRef}
+                  className="composer-textarea--overlay"
+                  value={input}
+                  rows={1}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setInput(v);
+                    syncSlashFromComposer(v, e.target.selectionStart ?? v.length);
+                    requestAnimationFrame(resizeComposer);
+                  }}
+                  onScroll={(e) => {
+                    const mirror = e.currentTarget.previousElementSibling;
+                    if (
+                      mirror &&
+                      mirror.classList.contains("composer-highlight")
+                    ) {
+                      mirror.scrollTop = e.currentTarget.scrollTop;
+                      mirror.scrollLeft = e.currentTarget.scrollLeft;
                     }
-                    if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setSlashIndex((i) =>
-                        Math.min(i + 1, Math.max(0, slashItems.length - 1)),
-                      );
-                      return;
-                    }
-                    if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setSlashIndex((i) => Math.max(i - 1, 0));
-                      return;
+                  }}
+                  onClick={(e) => {
+                    syncSlashFromComposer(
+                      e.currentTarget.value,
+                      e.currentTarget.selectionStart ?? 0,
+                    );
+                  }}
+                  onSelect={(e) => {
+                    syncSlashFromComposer(
+                      e.currentTarget.value,
+                      e.currentTarget.selectionStart ?? 0,
+                    );
+                  }}
+                  placeholder={composerPlaceholder}
+                  onKeyDown={(e) => {
+                    if (slashOpen) {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setSlashOpen(false);
+                        return;
+                      }
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSlashIndex((i) =>
+                          Math.min(i + 1, Math.max(0, slashItems.length - 1)),
+                        );
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSlashIndex((i) => Math.max(i - 1, 0));
+                        return;
+                      }
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        const item = slashItems[slashIndex];
+                        if (item) applySlashInsert(item.name);
+                        return;
+                      }
+                      if (e.key === "Tab" && slashItems[slashIndex]) {
+                        e.preventDefault();
+                        applySlashInsert(slashItems[slashIndex].name);
+                        return;
+                      }
                     }
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      const item = slashItems[slashIndex];
-                      if (item) applySlashInsert(item.name);
-                      return;
+                      if (connected) send();
                     }
-                    if (e.key === "Tab" && slashItems[slashIndex]) {
-                      e.preventDefault();
-                      applySlashInsert(slashItems[slashIndex].name);
-                      return;
-                    }
-                  }
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (connected) send();
-                  }
-                }}
-              />
-            </div>
-            <div className="composer-toolbar">
-              <div className="composer-tools">
-                <div
-                  className="action-picker"
-                  role="radiogroup"
-                  aria-label="Aktion"
-                >
-                  {[
-                    {
-                      id: "chat",
-                      label: "Chat",
-                      title: `Normale Nachricht an ${agentLabel}`,
-                    },
-                    {
-                      id: "deep-search",
-                      label: "Deep Search",
-                      title:
-                        "TUI /deep-research — Hintergrund-Recherche mit Quellen",
-                    },
-                    {
-                      id: "fork",
-                      label: "Fork",
-                      title:
-                        "Session branchen (TUI /fork). Text = optionale Directive",
-                    },
-                  ].map((opt) => {
-                    const blocked = opt.id === "deep-search" && !canDeepSearch;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={sendAction === opt.id}
-                        className={`action-picker-btn${
-                          sendAction === opt.id
-                            ? " action-picker-btn--active"
-                            : ""
-                        }${blocked ? " action-picker-btn--blocked" : ""}`}
-                        title={blocked ? unavailableFor("Deep Search") : opt.title}
-                        disabled={!connected || blocked}
-                        onClick={() => setSendAction(opt.id)}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="voice-controls" aria-label="Sprache">
-                  <button
-                    type="button"
-                    className={`voice-mic-btn${recording ? " is-recording" : ""}${
-                      sttBusy ? " is-busy" : ""
-                    }`}
-                    title={
-                      recording
-                        ? "Aufnahme stoppen (Grok STT)"
-                        : sttBusy
-                          ? "Transkript wird erstellt…"
-                          : voiceAvailable
-                            ? "Diktieren mit Grok STT"
-                            : voiceHint || "STT: XAI_API_KEY setzen"
-                    }
-                    aria-label={recording ? "Aufnahme stoppen" : "Diktieren"}
-                    aria-pressed={recording}
-                    disabled={sttBusy}
-                    onClick={toggleRecording}
-                  >
-                    <IconMic size={18} />
-                    <span className="voice-mic-label">
-                      {recording ? "Stop" : sttBusy ? "…" : "Mic"}
-                    </span>
-                  </button>
-                  <label className="voice-select-wrap" title="TTS-Stimme">
-                    <span className="sr-only">Stimme</span>
-                    <select
-                      className="voice-select"
-                      value={voiceId}
-                      onChange={(e) => setVoiceId(e.target.value)}
-                      disabled={Boolean(ttsBusyId) || Boolean(speakingId)}
-                      aria-label="TTS-Stimme"
-                    >
-                      {voiceList.map((v) => {
-                        const id = v.voice_id || v.id || v.name;
-                        const label = v.name || id;
-                        return (
-                          <option key={id} value={id}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </label>
-                </div>
+                  }}
+                />
               </div>
+              <div className="composer-mode-wrap" ref={modeMenuRef}>
+                <button
+                  type="button"
+                  className={`composer-mode-btn${modeMenuOpen ? " is-open" : ""}`}
+                  aria-haspopup="listbox"
+                  aria-expanded={modeMenuOpen}
+                  aria-label={`Modus: ${
+                    sendAction === "deep-search"
+                      ? "Deep Search"
+                      : sendAction === "fork"
+                        ? "Fork"
+                        : "Chat"
+                  }`}
+                  title="Sendemodus"
+                  disabled={!connected}
+                  onClick={() => setModeMenuOpen((o) => !o)}
+                >
+                  <span className="composer-mode-label">
+                    {sendAction === "deep-search"
+                      ? "Deep Search"
+                      : sendAction === "fork"
+                        ? "Fork"
+                        : "Chat"}
+                  </span>
+                  <span className="composer-mode-chevron" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+                {modeMenuOpen ? (
+                  <div
+                    className="composer-mode-menu"
+                    role="listbox"
+                    aria-label="Sendemodus"
+                  >
+                    {[
+                      {
+                        id: "chat",
+                        label: "Chat",
+                        title: `Normale Nachricht an ${agentLabel}`,
+                      },
+                      {
+                        id: "deep-search",
+                        label: "Deep Search",
+                        title:
+                          "TUI /deep-research — Hintergrund-Recherche mit Quellen",
+                      },
+                      {
+                        id: "fork",
+                        label: "Fork",
+                        title:
+                          "Session branchen (TUI /fork). Text = optionale Directive",
+                      },
+                    ].map((opt) => {
+                      const blocked =
+                        opt.id === "deep-search" && !canDeepSearch;
+                      const active = sendAction === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          className={`composer-mode-option${
+                            active ? " is-active" : ""
+                          }${blocked ? " is-blocked" : ""}`}
+                          title={
+                            blocked
+                              ? unavailableFor("Deep Search")
+                              : opt.title
+                          }
+                          disabled={!connected || blocked}
+                          onClick={() => {
+                            if (blocked) return;
+                            setSendAction(opt.id);
+                            setModeMenuOpen(false);
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className={`voice-mic-btn${recording ? " is-recording" : ""}${
+                  sttBusy ? " is-busy" : ""
+                }`}
+                title={
+                  recording
+                    ? "Aufnahme stoppen (Grok STT)"
+                    : sttBusy
+                      ? "Transkript wird erstellt…"
+                      : voiceAvailable
+                        ? "Diktieren mit Grok STT"
+                        : voiceHint || "STT: XAI_API_KEY setzen"
+                }
+                aria-label={recording ? "Aufnahme stoppen" : "Diktieren"}
+                aria-pressed={recording}
+                disabled={sttBusy}
+                onClick={toggleRecording}
+              >
+                <IconMic size={18} />
+              </button>
               <button
                 type="button"
                 className={`send${showWorking ? " send--working" : " send--idle"}${
@@ -2787,7 +3055,9 @@ export default function App() {
                 aria-live={showWorking ? "polite" : undefined}
               >
                 <span className="send-face send-face--enter" aria-hidden="true">
-                  <span className="send-icon">↵</span>
+                  <span className="send-icon">
+                    <IconEnter size={22} />
+                  </span>
                 </span>
                 <span className="send-face send-face--snack" aria-hidden="true">
                   {(showWorking || snackAlive) && (
@@ -2808,6 +3078,89 @@ export default function App() {
           </div>
         </footer>
       </div>
+
+      {permissionReq && (
+        <div
+          className="permission-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="permission-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              // Backdrop: reject once (safe default)
+              const ws = wsRef.current;
+              if (ws?.readyState === 1) {
+                ws.send(
+                  JSON.stringify({
+                    type: "permission_response",
+                    id: permissionReq.id,
+                    optionId: "reject-once",
+                  }),
+                );
+              }
+              setPermissionReq(null);
+            }
+          }}
+        >
+          <div className="permission-modal">
+            <h2 id="permission-modal-title">
+              Freigabe · {permissionReq.title}
+            </h2>
+            <p className="permission-modal-kind">
+              {permissionReq.kind === "execute"
+                ? "Shell-Befehl (Whitelist)"
+                : permissionReq.kind === "edit"
+                  ? "Datei schreiben"
+                  : "Aktion"}
+              {" · "}Profil ^_Code
+            </p>
+            {permissionReq.preview ? (
+              <pre className="permission-modal-preview">
+                {permissionReq.preview}
+              </pre>
+            ) : null}
+            <div className="permission-modal-actions">
+              {(permissionReq.options?.length
+                ? permissionReq.options
+                : [
+                    { optionId: "allow-once", name: "Einmal erlauben" },
+                    { optionId: "reject-once", name: "Ablehnen" },
+                  ]
+              ).map((opt) => {
+                const isAllow = String(opt.kind || opt.optionId || "").includes(
+                  "allow",
+                );
+                return (
+                  <button
+                    key={opt.optionId}
+                    type="button"
+                    className={
+                      isAllow
+                        ? "permission-btn permission-btn--allow"
+                        : "permission-btn permission-btn--reject"
+                    }
+                    onClick={() => {
+                      const ws = wsRef.current;
+                      if (ws?.readyState === 1) {
+                        ws.send(
+                          JSON.stringify({
+                            type: "permission_response",
+                            id: permissionReq.id,
+                            optionId: opt.optionId,
+                          }),
+                        );
+                      }
+                      setPermissionReq(null);
+                    }}
+                  >
+                    {opt.name || opt.optionId}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <CommandLegend
         open={showLegend}

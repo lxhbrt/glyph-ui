@@ -7,6 +7,11 @@
  * works for any profile; grok-only extras are declared per profile so the
  * UI can grey them out instead of failing at runtime.
  *
+ * Rollen (C′ 2026-08-07):
+ *   Grok         = Build (XAI/Grok Binary)
+ *   ^_Code       = Code (DeepSeek V4 Flash via OpenRouter, glyph-agent MODE=code)
+ *   °_Agent      = Vault/Tools + Cloud-Antwort (id glyph-agent, MODE=agent, kein Shell)
+ *
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
@@ -15,14 +20,11 @@ import { accessSync, constants } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Absoluter Pfad zur glyph-agent-ACP-Brücke (Tool-/Recherche-Schicht).
+// Absoluter Pfad zur glyph-agent-ACP-Brücke (Tool-/Recherche- und CODE-Schicht).
 const GLYPH_AGENT_ACP_FILE = fileURLToPath(new URL("./glyph-agent-acp.mjs", import.meta.url));
 // OpenRouter-UI-Profil entfernt (B+ 2026-08-05): Cloud läuft nur noch *innerhalb* von glyph-agent.
 
 export const DEFAULT_AGENT_ID = "grok";
-
-/** Fallback when the ACP adapter is not installed globally. */
-const CLAUDE_ACP_PACKAGE = "@agentclientprotocol/claude-agent-acp";
 
 /**
  * First executable match for `name` across PATH.
@@ -66,9 +68,7 @@ export function parseArgs(raw) {
 }
 
 /**
- * Claude speaks ACP through an adapter. Prefer a global install, fall back
- * to npx so the profile also works before anyone runs `npm i -g`.
- *
+ * @deprecated Claude-Profil entfernt (C′ 2026-08-07). Beibehalten für Tests/Kompat.
  * @param {NodeJS.ProcessEnv} env
  * @returns {{ bin: string, args: string[], via: string }}
  */
@@ -86,7 +86,7 @@ export function resolveClaudeCommand(env = process.env) {
   }
   return {
     bin: "npx",
-    args: ["-y", CLAUDE_ACP_PACKAGE, ...parseArgs(env.GLYPH_CLAUDE_ARGS)],
+    args: ["-y", "@agentclientprotocol/claude-agent-acp", ...parseArgs(env.GLYPH_CLAUDE_ARGS)],
     via: "npx",
   };
 }
@@ -99,6 +99,7 @@ export function resolveClaudeCommand(env = process.env) {
  * @property {string[]} args
  * @property {string} [via]
  * @property {string} [hint]
+ * @property {NodeJS.ProcessEnv | Record<string, string>} [env]
  * @property {{ deepSearch: boolean, activity: boolean, sessionList: boolean, sessionHistory: boolean, summarize: boolean }} capabilities
  *   - deepSearch     : Grok-only Multi-Quellen-Recherche
  *   - activity       : Aktivitäts-Kalender (liest ~/.grok/events.jsonl)
@@ -112,9 +113,8 @@ export function resolveClaudeCommand(env = process.env) {
  * @returns {AgentProfile[]}
  */
 export function buildAgentProfiles(env = process.env) {
-  const claude = resolveClaudeCommand(env);
-  // Nur drei Profile: Grok (Build), Claude (Code), glyph-agent (Vault/Tools + Cloud intern).
-  // Separates OpenRouter-UI-Profil entfällt — Cloud-Denker steckt in glyph-agent (B+).
+  // Drei Profile: Grok (Build), ^_Code (DeepSeek-Code), °_Agent (Vault; id glyph-agent).
+  // Claude OAuth entfernt — Code läuft über glyph-agent MODE=code + OpenRouter DeepSeek.
   return [
     {
       id: "grok",
@@ -126,23 +126,30 @@ export function buildAgentProfiles(env = process.env) {
       capabilities: { deepSearch: true, activity: true, sessionList: true, sessionHistory: true, summarize: true },
     },
     {
-      id: "claude",
-      label: "Claude",
-      bin: claude.bin,
-      args: claude.args,
-      via: claude.via,
-      // Sessions/activity read ~/.grok/sessions directly; Claude keeps its
-      // own store under ~/.claude/projects, so those views stay grok-only.
-      hint: "Sitzungen liegen unter ~/.claude/projects — in Glyph nicht gelistet",
-      capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: false, summarize: false },
+      id: "_code",
+      label: "^_Code",
+      bin: process.execPath,
+      args: [GLYPH_AGENT_ACP_FILE],
+      via: "bin",
+      // CODE-Modus: DeepSeek V4 Flash 0731, Workspace-Tools, Genehmigung in Glyph.
+      env: {
+        GLYPH_AGENT_MODE: "code",
+        GLYPH_AGENT_ACP_NAME: "^_Code",
+      },
+      hint: "DeepSeek V4 Flash · Grep/SearchReplace/Read/Write/Shell (Whitelist) · Roots: glyph-ui/agent/openclaw · Genehmigung in Glyph",
+      capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
     {
       id: "glyph-agent",
-      label: "glyph-agent",
+      label: "°_Agent",
       bin: process.execPath,
       args: [GLYPH_AGENT_ACP_FILE], // dünne Brücke zu glyph-agent (Tools: Vault, Recherche)
       via: "bin",
-      hint: "B+: VaultFind (Hybrid) + Web (Exa/TinyFish) + Cloud-Antwort. Diff+Backup. Dienst :18899.",
+      env: {
+        GLYPH_AGENT_MODE: "agent",
+        GLYPH_AGENT_ACP_NAME: "°_Agent",
+      },
+      hint: "B+: VaultFind/Wiki + Web/BrowseUrl + ReadPdf/Mail · Cloud-Antwort · kein Shell · Diff+Backup · :18899",
       // Kein persistentes Session-Listing, aber aktiver In-Memory-Verlauf (session/history) → summarize.
       capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
@@ -167,8 +174,21 @@ export function findAgent(profiles, id) {
  * @returns {AgentProfile}
  */
 export function resolveAgent(profiles, id) {
+  // Alias: alte UI-IDs / Anzeige-Labels / Tippfehler
+  const raw = id == null ? "" : String(id);
+  let normalized = raw;
+  if (raw === "claude" || raw === "code" || raw === "^_Code") {
+    normalized = "_code";
+  } else if (
+    raw === "°_Agent" ||
+    raw === "-_Agent" || // legacy label
+    raw === "_agent" ||
+    raw === "agent"
+  ) {
+    normalized = "glyph-agent";
+  }
   return (
-    findAgent(profiles, id) ||
+    findAgent(profiles, normalized) ||
     findAgent(profiles, DEFAULT_AGENT_ID) ||
     profiles[0]
   );
@@ -216,8 +236,7 @@ export function summarizeCapabilities(profile) {
   return {
     // Lupe (persistente Session-Liste) braucht List + History + Summarize → nur Grok.
     lupeSummarize: sessionList && sessionHistory && summarize,
-    // Aktiver In-Memory-Chat (glyph-agent): History + Summarize, ohne List.
+    // Aktiver In-Memory-Chat (°_Agent / ^_Code): History + Summarize, ohne List.
     activeSession: sessionHistory && summarize,
   };
 }
-

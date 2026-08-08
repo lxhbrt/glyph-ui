@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BindingsPanel } from "./BindingsPanel.jsx";
 
 const COMMAND_LEGEND = [
   {
@@ -29,9 +30,9 @@ const COMMAND_LEGEND = [
         desc: "Kurzhandbuch und Befehls-Legende (Doku) ganz unten in der Leiste.",
       },
       {
-        cmd: "Kalender",
+        cmd: "Glyph · Aktivität",
         need: "optional",
-        desc: "Aktivitäts-Heatmap (gelb = aktiv, dunkler = häufiger, Peak mit Auge). Klick → Sessions des Tages.",
+        desc: "Glyph-Symbol in der Leiste öffnet die Aktivitäts-Heatmap (gelb = aktiv, dunkler = häufiger, Peak mit Auge). Klick → Sessions des Tages.",
       },
       {
         cmd: "Wiki (i)",
@@ -47,6 +48,11 @@ const COMMAND_LEGEND = [
         cmd: "Theme",
         need: "optional",
         desc: "Hell / Dunkel umschalten.",
+      },
+      {
+        cmd: "Buch · Anbindung",
+        need: "empfohlen",
+        desc: "Buch → Tab Anbindung: API-Keys (OpenRouter, xAI Voice) und OAuth/Service-Status. Lokal: ~/.glyph-ui/bindings.json.",
       },
       {
         cmd: "Refresh",
@@ -84,9 +90,9 @@ const COMMAND_LEGEND = [
         desc: "Chat = normale Nachricht. Deep Search = /deep-research. Fork = Session branchen (/fork).",
       },
       {
-        cmd: "verbunden / offline",
+        cmd: "Kette · verbunden / offline",
         need: "empfohlen",
-        desc: "Agent starten/beenden. Gold = verbunden (nicht mehr „grün“).",
+        desc: "Icon-Button: Agent starten/beenden. Gold-Kette = verbunden, rot = offline.",
       },
       {
         cmd: "Freitext + Kontext",
@@ -228,20 +234,51 @@ function HandbookText({ children }) {
  */
 const SHORT_HANDBOOK = [
   {
+    id: "what",
+    title: "Was Glyph ist",
+    body: [
+      "**Glyph ist keine KI** — nur eine Browser-Hülle für Agenten (ACP).",
+      "Du bringst Grok / ^_Code / °_Agent mit; Glyph zeigt Chat, Tools und Status.",
+      "Für Leute, die lokal arbeiten und wissen, was sie tun (z. B. Mac Mini).",
+    ],
+  },
+  {
+    id: "first",
+    title: "Erster Start",
+    body: [
+      "**Mac & Windows:** Node.js 22+ · `git clone` · `npm install` · `npm run build` · `npm start`.",
+      "Browser: **http://127.0.0.1:5174** (Prod). Dev: `npm run dev` → UI :5173, Bridge :5174.",
+      "macOS-Extras (LaunchAgent, Dock) sind optional — unter Windows weglassen.",
+      "**Buch → Tab Anbindung**: Status prüfen · Keys speichern · Grok = `grok login` im Terminal.",
+      "Profil wählen (Header) → **Kette** verbinden → chatten.",
+    ],
+  },
+  {
     id: "start",
     title: "Schnellstart",
     body: [
-      "Oben rechts **verbunden** (gold) = Agent läuft. Offline? Pill klicken.",
+      "Oben rechts **Ketten-Icon** (gold) = Agent läuft. Offline (durchgestrichen)? Icon klicken.",
       "Nachricht tippen → **Enter** senden · **Shift+Enter** = neue Zeile.",
       "Ohne Verbindung ist das Eingabefeld deaktiviert.",
       "Sicherheit: Bridge mit vollen Tool-Rechten — **nur localhost**.",
     ],
   },
   {
+    id: "bind",
+    title: "Anbindung (Keys / OAuth)",
+    body: [
+      "**Buch** (unten) → Tab **Anbindung** (kein extra Leisten-Icon).",
+      "**Grok:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
+      "**^_Code / °_Agent:** `OPENROUTER_API_KEY` hier oder in `.env`. Engine: `python server.py` (:18899).",
+      "**Voice:** optional `XAI_API_KEY` (console.x.ai).",
+      "Gespeichert lokal: `~/.glyph-ui/bindings.json` (nie committen).",
+    ],
+  },
+  {
     id: "layout",
     title: "Oberfläche",
     body: [
-      "Links: Sessions, Neuer Chat, Befehle, Kalender, Wiki, Workspace, Theme, Refresh — **Buch** ganz unten.",
+      "Links: Sessions, Neuer Chat, Befehle, Kalender, Wiki, Workspace, Theme, Refresh — **Buch** ganz unten (Handbuch · Befehle · **Anbindung**).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
       "Unten: Composer · Chat | Deep Search | Fork · **Mic** · Stimme · **↵**.",
     ],
@@ -253,7 +290,7 @@ const SHORT_HANDBOOK = [
       ["Lupe", "Sessions suchen/öffnen; Ja + Wiki · Löschen (/delete)"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
       ["Befehle", "Filterbare Legende (Mitte der Leiste)"],
-      ["Buch", "Kurzhandbuch — ganz unten in der Leiste"],
+      ["Buch", "Handbuch · Befehle · Anbindung (Tabs)"],
       ["Kalender", "Aktivitäts-Heatmap — Klick → Sessions des Tages"],
       ["Wiki", "Wiki-Index (.md) in Obsidian / Standard-App"],
       ["Ordner", "Aktuellen Workspace (cwd) im Finder öffnen"],
@@ -331,7 +368,7 @@ const SHORT_HANDBOOK = [
     id: "tips",
     title: "Probleme & Tipps",
     rows: [
-      ["offline", "Pill klicken · `grok` im PATH? · `grok login`?"],
+      ["offline", "Kette klicken · Buch→Anbindung · `grok` im PATH? · `grok login`?"],
       ["Eingabe grau", "Erst verbinden"],
       [
         "hängt",
@@ -340,13 +377,14 @@ const SHORT_HANDBOOK = [
       ["Disk voll", "Lupe → Schließen → Ja + Wiki oder Löschen (/delete)"],
       ["UI veraltet", "Refresh in der Leiste"],
       ["Slash „tut nichts“", "Viele /Befehle sind TUI-only — Freitext oder Tabs"],
+      ["Code/Agent rot", "OpenRouter-Key + glyph-agent :18899 (Buch→Anbindung)"],
     ],
   },
   {
     id: "check",
     title: "Checkliste",
     body: [
-      "✓ `grok` eingeloggt · Status **verbunden**",
+      "✓ Buch→Anbindung grün oder Keys gesetzt · `grok` eingeloggt · Status **verbunden**",
       "✓ Workspace passt (Header-Pfad)",
       "✓ Enter = senden · Shift+Enter = Zeile",
       "✓ Arbeit: Text → Queue, leer → Stop",
@@ -355,6 +393,11 @@ const SHORT_HANDBOOK = [
   },
 ];
 
+function normalizeHelpTab(t) {
+  if (t === "commands" || t === "bindings" || t === "handbook") return t;
+  return "handbook";
+}
+
 function CommandLegend({
   open,
   onClose,
@@ -362,13 +405,13 @@ function CommandLegend({
   agentCommands = [],
 }) {
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState(initialTab); // handbook | commands
+  const [tab, setTab] = useState(() => normalizeHelpTab(initialTab));
   const panelRef = useRef(null);
 
   useEffect(() => {
     if (open) {
       setQuery("");
-      setTab(initialTab === "commands" ? "commands" : "handbook");
+      setTab(normalizeHelpTab(initialTab));
       requestAnimationFrame(() => panelRef.current?.focus());
     }
   }, [open, initialTab]);
@@ -467,6 +510,15 @@ function CommandLegend({
           >
             Befehle
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "bindings"}
+            className={`help-tab${tab === "bindings" ? " help-tab--active" : ""}`}
+            onClick={() => setTab("bindings")}
+          >
+            Anbindung
+          </button>
         </div>
 
         {tab === "handbook" ? (
@@ -477,6 +529,11 @@ function CommandLegend({
               Agent-Profile · Diagramme
             </a>
             .
+          </p>
+        ) : tab === "bindings" ? (
+          <p className="overview-hint">
+            Keys lokal speichern · Grok-OAuth im Terminal · Status je Profil. Kein
+            extra Leisten-Icon — alles unter dem <strong>Buch</strong>.
           </p>
         ) : (
           <p className="overview-hint">
@@ -489,18 +546,20 @@ function CommandLegend({
           </p>
         )}
 
-        <input
-          className="overview-search"
-          type="search"
-          placeholder={
-            tab === "handbook"
-              ? "Filter: Mic, Queue, Sessions, offline…"
-              : "Filter: Lupe, /fork, Deep Search, compact…"
-          }
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoFocus
-        />
+        {tab !== "bindings" ? (
+          <input
+            className="overview-search"
+            type="search"
+            placeholder={
+              tab === "handbook"
+                ? "Filter: Mic, Queue, Sessions, offline…"
+                : "Filter: Lupe, /fork, Deep Search, compact…"
+            }
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+          />
+        ) : null}
 
         {tab === "handbook" ? (
           <div className="overview-list handbook-list" role="tabpanel">
@@ -530,6 +589,10 @@ function CommandLegend({
                 </section>
               ))
             )}
+          </div>
+        ) : tab === "bindings" ? (
+          <div className="overview-list handbook-list bindings-scroll">
+            <BindingsPanel active={open && tab === "bindings"} />
           </div>
         ) : (
           <div className="overview-list legend-list" role="tabpanel">

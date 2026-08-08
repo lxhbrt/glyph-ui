@@ -30,7 +30,7 @@
 
 import express from "express";
 import { createServer } from "node:http";
-import { spawn, execFile } from "node:child_process";
+import { spawn, execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -70,6 +70,7 @@ import {
   resolveContextDefaults,
 } from "./sessions.js";
 import { buildActivity } from "./activity.js";
+import { resolveToolDisplayTitle } from "./toolTitle.mjs";
 import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
 import {
   buildFileName,
@@ -83,7 +84,13 @@ import {
   speechToText,
   textToSpeech,
   voiceStatus,
+  clearApiKeyCache,
 } from "./voice.js";
+import {
+  buildBindingsStatus,
+  loadBindingsIntoEnv,
+  updateBindings,
+} from "./bindings.js";
 import {
   getGlyphRoot,
   readGlyphBuild,
@@ -102,6 +109,8 @@ const AGENT_PROFILES = buildAgentProfiles();
 const STATE_DIR =
   process.env.GLYPH_UI_STATE_DIR ||
   path.join(os.homedir(), ".glyph-ui");
+/** Load UI-saved API keys into process.env (does not override existing env). */
+await loadBindingsIntoEnv(path.join(STATE_DIR, "bindings.json"));
 const UPLOAD_DIR = path.join(STATE_DIR, "uploads");
 const MAX_ATTACHMENT_BYTES = Number(
   process.env.GLYPH_UI_MAX_ATTACHMENT || 12 * 1024 * 1024,
@@ -161,6 +170,57 @@ function isLoopbackAddress(addr) {
   return a === "127.0.0.1" || a === "::1" || a === "localhost";
 }
 
+/**
+ * Extra Origins (comma-separated), e.g. Tailscale Serve:
+ *   GLYPH_WS_ORIGINS=https://mac.tailnet.ts.net:8443
+ */
+function originsFromEnvList() {
+  const raw = process.env.GLYPH_WS_ORIGINS || "";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * When GLYPH_ALLOW_TAILSCALE_ORIGIN=1, allow HTTPS Origins for this node's
+ * MagicDNS name (Tailscale Serve proxies to loopback; Origin is the ts.net host).
+ * Optional GLYPH_TAILSCALE_HOST overrides discovery; GLYPH_TAILSCALE_SERVE_PORTS
+ * defaults to 8443 (443 omits the port in the Origin header).
+ */
+function originsFromTailscale() {
+  if (process.env.GLYPH_ALLOW_TAILSCALE_ORIGIN !== "1") return [];
+  let host = String(process.env.GLYPH_TAILSCALE_HOST || "")
+    .trim()
+    .replace(/\.$/, "");
+  if (!host) {
+    try {
+      const out = execFileSync("tailscale", ["status", "--json"], {
+        encoding: "utf8",
+        timeout: 4000,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      const j = JSON.parse(out);
+      host = String(j?.Self?.DNSName || "")
+        .trim()
+        .replace(/\.$/, "");
+    } catch {
+      return [];
+    }
+  }
+  if (!host || host.includes("/") || host.includes(" ")) return [];
+  const ports = String(process.env.GLYPH_TAILSCALE_SERVE_PORTS || "8443")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const origins = [];
+  for (const p of ports) {
+    if (p === "443") origins.push(`https://${host}`);
+    else origins.push(`https://${host}:${p}`);
+  }
+  return origins;
+}
+
 /** Allowed browser Origins for WebSocket upgrades (prod UI + Vite dev UI). */
 function allowedWsOrigins() {
   const origins = new Set([
@@ -169,6 +229,8 @@ function allowedWsOrigins() {
     `http://localhost:${DEV_UI_PORT}`,
     `http://127.0.0.1:${DEV_UI_PORT}`,
   ]);
+  for (const o of originsFromEnvList()) origins.add(o);
+  for (const o of originsFromTailscale()) origins.add(o);
   return origins;
 }
 
@@ -930,6 +992,47 @@ app.get("/api/voice/status", async (_req, res) => {
   }
 });
 
+/**
+ * Connection bindings: OAuth/key status + local secret store (~/.glyph-ui/bindings.json).
+ * GET never returns raw secrets. PUT accepts OPENROUTER_API_KEY, XAI_API_KEY,
+ * GLYPH_AGENT_URL (empty string clears).
+ */
+app.get("/api/bindings", async (_req, res) => {
+  try {
+    res.json(
+      await buildBindingsStatus({
+        stateDir: STATE_DIR,
+        env: process.env,
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.put("/api/bindings", async (req, res) => {
+  try {
+    const body = req.body || {};
+    await updateBindings(body, {
+      stateDir: STATE_DIR,
+      env: process.env,
+    });
+    clearApiKeyCache();
+    res.json(
+      await buildBindingsStatus({
+        stateDir: STATE_DIR,
+        env: process.env,
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
 app.get("/api/tts/voices", async (_req, res) => {
   try {
     res.json(await listVoices());
@@ -1379,6 +1482,31 @@ app.get("/api/sessions/:id/history", async (req, res) => {
 
 /** Tool kinds that should finish cleanly rather than hard-abort mid-flight. */
 const CRITICAL_TOOL_KINDS = new Set(["edit", "delete", "move", "execute"]);
+
+/** Pull a short preview string from an ACP toolCall for the permission modal. */
+function extractPermissionPreview(toolCall) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  const parts = [];
+  if (toolCall.rawInput && typeof toolCall.rawInput === "object") {
+    try {
+      parts.push(JSON.stringify(toolCall.rawInput, null, 2).slice(0, 2000));
+    } catch {
+      /* ignore */
+    }
+  }
+  const content = toolCall.content;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      const text =
+        block?.content?.text ||
+        block?.text ||
+        (typeof block?.content === "string" ? block.content : "");
+      if (text) parts.push(String(text).slice(0, 2500));
+    }
+  }
+  return parts.join("\n").slice(0, 4000);
+}
+
 class GrokBridge {
   constructor() {
     this.connected = false;
@@ -1415,11 +1543,80 @@ class GrokBridge {
      * @type {Array<{ name: string, description: string, inputHint: string }>}
      */
     this.availableCommands = [];
+    /**
+     * Pending ACP permission request (for ^_Code Write/Shell).
+     * { id, resolve, params, timer }
+     * @type {null | { id: string, resolve: Function, params: object, timer: NodeJS.Timeout }}
+     */
+    this.pendingPermission = null;
   }
 
   /** Currently selected agent profile (never null — resolveAgent falls back). */
   agentProfile() {
     return resolveAgent(AGENT_PROFILES, this.agentId);
+  }
+
+  /**
+   * Interactive permission for ^_Code (never auto-approve shell/write).
+   * Broadcasts to browser; waits for permission_response or timeout/cancel.
+   */
+  askBrowserPermission(params) {
+    return new Promise((resolve) => {
+      // Cancel any previous waiter
+      if (this.pendingPermission) {
+        try {
+          clearTimeout(this.pendingPermission.timer);
+          this.pendingPermission.resolve({
+            outcome: { outcome: "cancelled" },
+          });
+        } catch {
+          /* ignore */
+        }
+        this.pendingPermission = null;
+      }
+      const id = `perm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const toolCall = params?.toolCall || {};
+      const options = Array.isArray(params?.options) ? params.options : [];
+      const timer = setTimeout(() => {
+        if (this.pendingPermission?.id === id) {
+          this.pendingPermission = null;
+          this.broadcast({ type: "permission_dismiss", id });
+          resolve({ outcome: { outcome: "cancelled" } });
+        }
+      }, 5 * 60 * 1000);
+      this.pendingPermission = { id, resolve, params, timer };
+      this.broadcast({
+        type: "permission_request",
+        id,
+        sessionId: params?.sessionId || this.sessionId,
+        title: toolCall.title || toolCall.toolCallId || "Aktion freigeben",
+        kind: toolCall.kind || "other",
+        preview: extractPermissionPreview(toolCall),
+        options: options.map((o) => ({
+          optionId: o.optionId,
+          name: o.name || o.optionId,
+          kind: o.kind || "allow_once",
+        })),
+      });
+    });
+  }
+
+  resolveBrowserPermission(id, optionId) {
+    if (!this.pendingPermission || this.pendingPermission.id !== id) {
+      return false;
+    }
+    clearTimeout(this.pendingPermission.timer);
+    const resolve = this.pendingPermission.resolve;
+    this.pendingPermission = null;
+    this.broadcast({ type: "permission_dismiss", id });
+    if (!optionId || optionId === "cancelled") {
+      resolve({ outcome: { outcome: "cancelled" } });
+    } else {
+      resolve({
+        outcome: { outcome: "selected", optionId: String(optionId) },
+      });
+    }
+    return true;
   }
 
   statusPayload(extra = {}) {
@@ -1598,12 +1795,17 @@ class GrokBridge {
 
       const clientApp = acp
         .client({ name: "grok-build-terminal" })
-        .onRequest(acp.methods.client.session.requestPermission, async () => {
+        .onRequest(acp.methods.client.session.requestPermission, async ({ params }) => {
           // ACP: after session/cancel, pending permissions MUST be cancelled
           if (this.cancelling) {
             return { outcome: { outcome: "cancelled" } };
           }
-          // always-approve on agent CLI; still answer cleanly if asked
+          // ^_Code: Write/Shell immer interaktiv in Glyph bestätigen (nie auto-approve).
+          // Grok/Build: always-approve (CLI-Äquivalent --always-approve).
+          const profileId = this.agentId;
+          if (profileId === "_code" || profileId === "code") {
+            return await this.askBrowserPermission(params || {});
+          }
           return {
             outcome: { outcome: "selected", optionId: "allow-once" },
           };
@@ -1816,6 +2018,17 @@ class GrokBridge {
     const kind = update?.sessionUpdate;
     if (!kind) return;
 
+    // Effective server trace via ACP _meta (glyph-agent adapter) or legacy
+    // agent_message_complete (pre-fix). Prefer _meta — complete is not in schema.
+    const glyphMeta =
+      params?._meta?.glyph ||
+      update?._meta?.glyph ||
+      update?.message?.metadata ||
+      null;
+    if (glyphMeta?.trace && typeof glyphMeta.trace === "object") {
+      this.broadcast({ type: "assistant_meta", trace: glyphMeta.trace });
+    }
+
     if (kind === "agent_message_chunk") {
       const text = update.content?.text || update.text || "";
       if (!text) return;
@@ -1834,13 +2047,9 @@ class GrokBridge {
       this.broadcast({ type: "assistant_chunk", text });
       return;
     }
-    // agent_message_complete: effektiven Trace (falls vom glyph-agent-Adapter geliefert)
-    // an die UI senden, damit Provider/Modell/Tool-Status aus dem ECHTEN Server stammen.
+    // Legacy: ignore invalid agent_message_complete if it ever reaches here
+    // (SDK usually rejects it before this handler).
     if (kind === "agent_message_complete") {
-      const metaTrace = update.message?.metadata?.trace;
-      if (metaTrace && typeof metaTrace === "object") {
-        this.broadcast({ type: "assistant_meta", trace: metaTrace });
-      }
       return;
     }
     if (kind === "agent_thought_chunk") {
@@ -1852,8 +2061,12 @@ class GrokBridge {
       const toolCallId = update.toolCallId || "";
       const status =
         update.status || (kind === "tool_call" ? "pending" : "in_progress");
-      const title = update.title || toolCallId || "tool";
-      const toolKind = update.kind || "";
+      const prev = toolCallId
+        ? this.activeTools.get(toolCallId) || {}
+        : {};
+      // Prefer title → name → kind/path — never dump opaque call-… UUIDs in the UI
+      const title = resolveToolDisplayTitle(update, prev);
+      const toolKind = update.kind || prev.kind || "";
 
       if (toolCallId) {
         const done =
@@ -1863,11 +2076,14 @@ class GrokBridge {
         if (done) {
           this.activeTools.delete(toolCallId);
         } else {
-          const prev = this.activeTools.get(toolCallId) || {};
           this.activeTools.set(toolCallId, {
-            title: title || prev.title || toolCallId,
-            kind: toolKind || prev.kind || "",
+            title,
+            name: update.name || prev.name || "",
+            kind: toolKind,
             status,
+            locations: update.locations || prev.locations,
+            rawInput:
+              update.rawInput !== undefined ? update.rawInput : prev.rawInput,
           });
         }
       }
@@ -2181,6 +2397,10 @@ class GrokBridge {
     if (!this.connected || !this.connection || !this.sessionId) {
       throw new Error("Grok is not connected");
     }
+    // Offene ^_Code-Genehmigung verwerfen
+    if (this.pendingPermission) {
+      this.resolveBrowserPermission(this.pendingPermission.id, "cancelled");
+    }
     if (!this.busy) {
       return { ok: true, cancelled: false, reason: "not_busy" };
     }
@@ -2411,6 +2631,19 @@ wss.on("connection", (ws) => {
         await bridge.disconnect();
       } else if (msg.type === "ping") {
         ws.send(JSON.stringify({ type: "pong" }));
+      } else if (msg.type === "permission_response") {
+        // ^_Code Genehmigung aus dem Browser
+        const ok = bridge.resolveBrowserPermission(
+          msg.id,
+          msg.optionId || (msg.allow ? "allow-once" : "reject-once"),
+        );
+        ws.send(
+          JSON.stringify({
+            type: "permission_ack",
+            id: msg.id,
+            ok,
+          }),
+        );
       }
     } catch (err) {
       ws.send(

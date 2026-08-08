@@ -8,6 +8,32 @@
   - All other tints = color-mix of those bases with white/black/panel
     (lighter/darker only — never shift gold→orange or mint/blue side accents)
 */
+
+/*
+  Type scale — identical in Hell/Dunkel and every agent profile
+  (Grok / ^_Code / °_Agent) and Chat|Deep Search|Fork.
+  Themes may only change colors; never re-size type per mode.
+  Desktop composer matches chat size; iOS media query floors at 16px
+  so Safari never auto-zooms the focused textarea.
+*/
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --type-chat: 0.85rem;
+  --type-chat-leading: 1.48;
+  --type-user: 0.85rem;
+  --type-user-leading: 1.42;
+  --type-secondary: 0.72rem;
+  --type-secondary-leading: 1.38;
+  --composer-font-size: 0.85rem;
+  --composer-line-height: 1.42;
+  --composer-letter-spacing: normal;
+  --composer-tab-size: 4;
+  --composer-pad-y: 5px;
+  --composer-pad-x: 8px;
+  --composer-min-h: 2rem;
+  --composer-max-h: 180px;
+}
+
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -24,11 +50,13 @@
   --gold-dim: color-mix(in srgb, var(--gold) 72%, #000000);
   --gold-deep: color-mix(in srgb, var(--gold) 45%, #000000);
 
-  /* Chat: assistant flat on --bg; user = Grok-style bubble fill */
-  --user: #2a272f;
+  /* Chat: assistant flat on --bg; user/composer fill = bg, rim only */
+  --user: var(--bg);
+  --user-rim: color-mix(in srgb, var(--text) 18%, var(--border));
   --assistant: transparent;
-  --thought: transparent;
-  --tool: transparent;
+  /* Live-Verlauf (Think/Tool) — muted, immer lesbar */
+  --thought: var(--muted);
+  --tool: var(--muted);
 
   /* THE stop red (stop rim + snack target only) */
   --danger: #d94a4a;
@@ -57,8 +85,6 @@
   /* Shared stone size (matches Enter SnackBoard cell 10 / gap 0.14 → 8px) */
   --snack-pixel: 8px;
   --snack-pixel-gap: 2px;
-
-  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
 :root[data-theme="light"] {
@@ -76,11 +102,13 @@
   --gold-dim: color-mix(in srgb, var(--gold) 78%, #000000);
   --gold-deep: color-mix(in srgb, var(--gold) 52%, #000000);
 
-  /* Chat: assistant flat on --bg; user bubble slightly warm */
-  --user: color-mix(in srgb, var(--gold) 10%, #e8e2d8);
+  /* Chat: assistant flat on --bg; user/composer fill = bg, rim only */
+  --user: var(--bg);
+  --user-rim: color-mix(in srgb, var(--text) 14%, var(--border));
   --assistant: transparent;
-  --thought: transparent;
-  --tool: transparent;
+  /* Live-Verlauf (Think/Tool) — muted, immer lesbar */
+  --thought: var(--muted);
+  --tool: var(--muted);
 
   --danger: #d94a4a;
   --danger-bright: color-mix(in srgb, var(--danger) 55%, #ffffff);
@@ -121,6 +149,9 @@ body,
 html {
   height: 100%;
   height: 100dvh;
+  /* Prevent iOS Safari from inflating text independently of our scale */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body,
@@ -213,8 +244,23 @@ body,
   cursor: not-allowed;
 }
 
-.side-rail-btn svg {
+.side-rail-btn svg,
+.side-rail-btn .icon-glyph-mark {
   display: block;
+}
+
+/* Glyph mark (rail: activity calendar) — silhouette from public/glyph-mark-mask.png */
+.icon-glyph-mark {
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-image: url("/glyph-mark-mask.png");
+  mask-image: url("/glyph-mark-mask.png");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
 }
 
 .side-rail-sep {
@@ -301,6 +347,18 @@ body,
   font-size: 0.85rem;
 }
 
+/* Product line sits next to Glyph #N — one header row, less height on phone */
+.sub.sub--inline {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  /* Allow soft wrap after · without exploding the row */
+  white-space: normal;
+  max-width: min(100%, 28rem);
+}
+
 .top-actions {
   display: flex;
   align-items: center;
@@ -375,6 +433,37 @@ button.pill-btn {
     transform 0.1s ease;
 }
 
+/* Compact icon-only pills (status / summarize) — saves header space on phone */
+button.pill-btn.pill-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  letter-spacing: 0;
+  text-transform: none;
+  flex-shrink: 0;
+}
+
+button.pill-btn.pill-btn--icon.pending svg {
+  animation: pill-icon-spin 0.9s linear infinite;
+}
+
+@keyframes pill-icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.pill-btn.pill-btn--icon.pending svg {
+    animation: none;
+  }
+}
+
 button.pill-btn:hover:not(:disabled) {
   transform: translateY(-1px);
 }
@@ -447,7 +536,7 @@ button.send {
   --send-morph: 0.48s cubic-bezier(0.34, 1.25, 0.64, 1);
   /* Calm idle: soft accent tint, not a solid neon block */
   background: var(--send-idle-bg);
-  color: var(--text);
+  color: var(--gold-bright);
   border: 1px solid var(--send-idle-border);
   font-weight: 650;
   width: 100%;
@@ -477,13 +566,23 @@ button.send {
 button.send:hover:not(:disabled):not(.send--working) {
   background: color-mix(in srgb, var(--gold) 28%, var(--panel));
   border-color: color-mix(in srgb, var(--gold) 55%, var(--border));
+  color: var(--text);
+}
+
+button.send:disabled:not(.send--working) {
+  color: color-mix(in srgb, var(--gold-bright) 45%, var(--muted));
 }
 
 button.send .send-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+button.send .send-icon svg {
   display: block;
-  font-size: 1.45rem;
-  font-weight: 700;
-  line-height: 1;
+  flex-shrink: 0;
 }
 
 /* Stacked faces for ↵ ⇄ Snack morph */
@@ -715,16 +814,16 @@ button.send.send--stuffed .send-snack {
 }
 
 /*
-  LVL-UP context Jagd-Bar — strip directly above the composer input.
+  LVL-UP context Jagd-Bar — strip above the composer.
+  Bar owns the height; text is a thin overlay (not a second row).
   Gray = context fill; gold snake shrinks with scroll (when overflow).
 */
 .context-lvl-bar {
   flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  position: relative;
+  display: block;
   margin: 0;
-  padding: 4px 6px 6px;
+  padding: 5px 8px;
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel) 92%, var(--bg));
@@ -732,33 +831,44 @@ button.send.send--stuffed .send-snack {
   user-select: none;
 }
 
+/* Overlay: LVL left, % right — same vertical band as the pixel track */
 .context-lvl-bar-meta {
+  position: absolute;
+  inset: 0 8px;
+  z-index: 1;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  min-height: 1rem;
-  padding: 0 2px;
-  font-size: 0.68rem;
+  pointer-events: none;
+  font-size: 0.58rem;
   font-weight: 650;
   letter-spacing: 0.04em;
   color: var(--muted);
 }
 
 .context-lvl-bar-tag {
+  flex: 0 0 auto;
+  padding: 1px 5px 0;
+  border-radius: 4px;
   color: var(--gold-bright, var(--gold));
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.12em;
+  font-size: 0.55rem;
+  letter-spacing: 0.14em;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--bg) 80%, transparent);
 }
 
 .context-lvl-bar-label {
+  flex: 0 0 auto;
+  padding: 1px 6px 0;
+  border-radius: 4px;
   font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--text) 72%, var(--muted));
-}
-
-.context-lvl-bar-est {
-  color: var(--muted);
-  font-weight: 700;
+  font-size: 0.58rem;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--bg) 80%, transparent);
 }
 
 .context-lvl-bar-canvas {
@@ -906,7 +1016,7 @@ button.send.send--stuffed .send-snack {
 .composer-box.is-drop-target {
   outline: 2px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
   outline-offset: 2px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--user));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
 }
 
 /* Floating cue while reading mid-chat and new tool/chunks arrive below */
@@ -938,24 +1048,27 @@ button.send.send--stuffed .send-snack {
   flex: 1 1 auto;
   min-height: 0; /* critical: allow flex child to scroll */
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: var(--panel);
+  /* Same surface as page — only the rim separates the pane */
+  background: var(--bg);
   padding: 14px;
   position: relative;
   z-index: 1;
-  /* Native scrollbar — LVL bar owns the snack hunt metaphor */
+  /* Native scrollbar only when content overflows — LVL bar owns snack metaphor */
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--gold) 45%, var(--border)) transparent;
 }
 
-/* Inner column — height changes observed for stick-to-bottom */
+/* Inner column — full height when empty (center hint), grows with messages */
 .messages-content {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-height: min-content;
+  gap: 12px;
+  box-sizing: border-box;
+  min-height: 100%;
 }
 
 /* Seamless answer area — same black as page chrome (--bg) */
@@ -968,10 +1081,12 @@ button.send.send--stuffed .send-snack {
 
 .empty {
   color: var(--muted);
-  margin: auto;
+  margin: auto 0;
+  align-self: center;
   text-align: center;
   max-width: 28rem;
-  line-height: 1.5;
+  font-size: var(--type-chat);
+  line-height: var(--type-chat-leading);
 }
 
 /*
@@ -1000,16 +1115,49 @@ button.send.send--stuffed .send-snack {
   padding: 10px 12px;
 }
 
-/* Prompt bubble — like Grok Chat app */
+/* User row: column so copy sits under the bubble, not inside the rim */
 .msg-user {
-  background: var(--user);
+  background: transparent;
   align-self: flex-end;
   max-width: min(82%, 34rem);
   border: none;
+  padding: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  user-select: text;
+}
+
+/* Prompt bubble — fill = page bg, rim only (not a filled card) */
+.msg-user-bubble {
+  background: var(--bg);
+  width: 100%;
+  border: 1px solid var(--user-rim);
   /* Speech bubble: round, slightly sharper corner toward the “tail” (bottom-right) */
   border-radius: 1.25rem 1.25rem 0.35rem 1.25rem;
   padding: 10px 14px 11px;
   box-shadow: none;
+}
+
+/* Message actions (copy / speak): hidden until the message is tapped.
+   Layout space is reserved; pointer-events off so invisible buttons are not hit. */
+.msg .msg-bottom-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.msg.is-actions-open .msg-bottom-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Copy under user bubble: outside the rim, right-aligned */
+.msg-user .msg-bottom-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+  padding-top: 0;
 }
 
 .msg-user .role {
@@ -1018,28 +1166,28 @@ button.send.send--stuffed .send-snack {
 
 .msg-user .body,
 .msg-user .md-body {
-  font-size: 0.97rem;
-  line-height: 1.45;
+  font-size: var(--type-user);
+  line-height: var(--type-user-leading);
 }
 
 /*
-  Grok answers = primary reading track.
-  Full body contrast: dark theme → light text, light theme → dark text
-  (same as --text, forced so nothing inherits muted chrome).
+  Chat reading hierarchy:
+  - Answer = primary track (full contrast)
+  - Think / Tool / Steps / System = secondary, muted but always readable
 */
 .msg-assistant {
   background: transparent;
   align-self: stretch;
   max-width: min(100%, 48rem);
-  padding: 4px 6px 12px 2px;
+  padding: 6px 6px 14px 2px;
   opacity: 1;
   color: var(--text);
 }
 
 .msg-assistant .role {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   color: var(--text);
-  opacity: 0.82;
+  opacity: 0.78;
   font-weight: 650;
 }
 
@@ -1053,13 +1201,14 @@ button.send.send--stuffed .send-snack {
   color: var(--text);
 }
 
+/* Primary reading size — same token as user + composer (all modes) */
 .msg-assistant .md-body {
   font-weight: 400;
-  font-size: 1rem;
-  line-height: 1.55;
+  font-size: var(--type-chat);
+  line-height: var(--type-chat-leading);
+  letter-spacing: 0.005em;
 }
 
-/* Dark: keep Grok as light as the app text (or a touch brighter) */
 :root[data-theme="dark"] .msg-assistant,
 :root[data-theme="dark"] .msg-assistant .md-body,
 :root[data-theme="dark"] .msg-assistant .md-body .md-p,
@@ -1067,7 +1216,6 @@ button.send.send--stuffed .send-snack {
   color: var(--text);
 }
 
-/* Light: keep Grok as dark as the app text */
 :root[data-theme="light"] .msg-assistant,
 :root[data-theme="light"] .msg-assistant .md-body,
 :root[data-theme="light"] .msg-assistant .md-body .md-p,
@@ -1076,67 +1224,110 @@ button.send.send--stuffed .send-snack {
 }
 
 /*
-  Tool + Thinking: secondary “nice to know” chrome.
-  Pale + italic so Grok replies scan as the main column.
+  Secondary chrome: muted, always visible (live tool/think stream).
+  No left accent bar — label + muted type is enough.
 */
 .msg-thought,
-.msg-tool {
+.msg-tool,
+.msg-system,
+.chat-secondary,
+.agent-steps,
+.steps-rail {
   background: transparent;
   max-width: min(100%, 48rem);
-  padding: 1px 6px 6px 2px;
-  opacity: 0.52;
-  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  padding: 2px 6px 8px 2px;
+  opacity: 1;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  font-weight: 400;
+  border: none;
+  border-left: none;
+  box-shadow: none;
 }
 
 .msg-thought .body,
 .msg-thought .md-body,
 .msg-tool .body,
-.msg-tool .md-body {
-  font-size: 0.84rem;
-  line-height: 1.4;
-  font-style: italic;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--muted) 75%, var(--text));
+.msg-tool .md-body,
+.msg-system .body,
+.msg-system .md-body,
+.msg-thought .md-body .md-p,
+.msg-thought .md-body .md-li,
+.msg-thought .md-body .md-h,
+.msg-tool .md-body .md-p,
+.msg-tool .md-body .md-li,
+.msg-tool .md-body .md-h,
+.msg-thought .md-body strong,
+.msg-tool .md-body strong,
+.msg-thought .md-code-inline,
+.msg-tool .md-code-inline,
+.msg-thought .md-code-block,
+.msg-tool .md-code-block,
+.msg-thought .md-body a,
+.msg-tool .md-body a,
+.msg-thought .role,
+.msg-tool .role,
+.msg-system .role,
+.agent-step-line,
+.step-line,
+.step-line--start,
+.step-line--result {
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  opacity: 1;
+  font-style: normal;
 }
 
-.msg-thought .role,
-.msg-tool .role {
-  font-size: 0.65rem;
-  letter-spacing: 0.1em;
-  opacity: 0.75;
-  margin-bottom: 3px;
-  color: var(--muted);
+/* Thinking body: italic (role label stays upright) */
+.msg-thought .body,
+.msg-thought .md-body,
+.msg-thought .md-body .md-p,
+.msg-thought .md-body .md-li {
+  font-style: italic;
+}
+
+.msg-thought {
+  color: var(--thought);
 }
 
 .msg-tool {
-  font-size: 0.84rem;
+  color: var(--tool);
 }
 
-/* Slightly quieter than tools/thinking, still secondary */
-.msg-system {
+.msg-thought .md-pre,
+.msg-tool .md-pre {
+  margin: 0.35em 0 0.5em;
+  padding: 0;
+  border-radius: 0;
   background: transparent;
-  max-width: min(100%, 48rem);
-  padding: 2px 6px 8px 2px;
-  opacity: 0.72;
+  border: none;
 }
 
-/*
-  glyph-agent Tool-/Stufen-Banner (SearchVault/SearchWeb/... + Modell):
-  bewusst gedeckt — kleiner + dunkler als der eigentliche Antworttext, damit
-  die „Tool/Think“-Stufen als Nebenkanal erscheinen und die Antwort im Fokus bleibt.
-*/
-.agent-steps {
+.msg-thought .role,
+.msg-tool .role,
+.msg-system .role {
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+
+.msg-tool {
+  font-size: var(--type-secondary);
+}
+
+/* Step banners / live rail: muted mono secondary track */
+.agent-steps,
+.steps-rail {
   display: block;
-  font-size: 0.82rem;
-  line-height: 1.45;
-  color: var(--muted);
-  opacity: 0.9;
-  margin: 0 0 8px 0;
-  padding: 6px 9px;
-  border-left: 3px solid color-mix(in srgb, var(--muted) 55%, transparent);
-  background: color-mix(in srgb, var(--panel) 40%, var(--bg));
-  border-radius: 6px;
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  margin: 0 0 6px 0;
+  padding: 0 0 0 6px;
   word-break: break-word;
+  color: var(--muted);
 }
 
 .agent-step-line {
@@ -1148,26 +1339,6 @@ button.send.send--stuffed .send-snack {
   margin-top: 2px;
 }
 
-/*
-  Live-Stufen-Rail (glyph-agent, Streaming): Stufen erscheinen beim Beginn der
-  Tätigkeit, das Ergebnis wird nachträglich angehängt. Bewusst gedeckt — kleiner
-  + dunkler als der eigentliche Antworttext, damit die „Tool/Think“-Stufen als
-  Nebenkanal erscheinen und die Antwort im Fokus bleibt.
-*/
-.steps-rail {
-  display: block;
-  margin: 0 0 8px 0;
-  padding: 6px 9px;
-  border-left: 3px solid color-mix(in srgb, var(--muted) 55%, transparent);
-  background: color-mix(in srgb, var(--panel) 40%, var(--bg));
-  border-radius: 6px;
-  font-size: 0.82rem;
-  line-height: 1.45;
-  color: var(--muted);
-  opacity: 0.9;
-  word-break: break-word;
-}
-
 .step-block {
   margin: 0;
   padding: 0;
@@ -1175,8 +1346,7 @@ button.send.send--stuffed .send-snack {
 
 .step-block + .step-block {
   margin-top: 3px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
-  padding-top: 3px;
+  padding-top: 0;
 }
 
 .step-line {
@@ -1185,12 +1355,22 @@ button.send.send--stuffed .send-snack {
 }
 
 .step-line--start {
-  font-weight: 600;
+  font-weight: 550;
 }
 
 .step-line--result {
-  opacity: 0.78;
   font-weight: 400;
+}
+
+/* Selection on secondary track */
+.msg-thought ::selection,
+.msg-tool ::selection,
+.msg-system ::selection,
+.agent-steps ::selection,
+.steps-rail ::selection,
+.chat-secondary ::selection {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 28%, var(--bg));
 }
 
 .role {
@@ -1272,7 +1452,6 @@ button.send.send--stuffed .send-snack {
   gap: 8px;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
 }
 
 .msg-bottom-actions .msg-bottom-btn {
@@ -1338,8 +1517,8 @@ button.send.send--stuffed .send-snack {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: inherit;
-  line-height: 1.45;
-  font-size: 0.98rem;
+  line-height: var(--type-chat-leading);
+  font-size: var(--type-chat);
 }
 
 /* Rendered Markdown in chat bubbles — no raw **markers** */
@@ -1347,8 +1526,8 @@ button.send.send--stuffed .send-snack {
   margin: 0;
   word-break: break-word;
   font-family: inherit;
-  line-height: 1.5;
-  font-size: 0.98rem;
+  line-height: var(--type-chat-leading);
+  font-size: var(--type-chat);
   color: var(--text);
 }
 
@@ -1373,15 +1552,15 @@ button.send.send--stuffed .send-snack {
 }
 
 .md-h {
-  margin: 0.85em 0 0.4em;
-  font-size: 1.05rem;
+  margin: 0.7em 0 0.3em;
+  font-size: 0.92rem;
   font-weight: 650;
   letter-spacing: 0.01em;
   color: var(--text);
 }
 
 .md-h--sm {
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .md-list {
@@ -1419,34 +1598,48 @@ button.send.send--stuffed .send-snack {
   font-style: italic;
 }
 
+/*
+  Inline code in the answer: readable mono, low chrome.
+  Gold chips compete with prose — keep neutral so “Codes” don’t dominate.
+*/
 .md-code-inline {
   font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
   font-size: 0.88em;
-  padding: 0.12em 0.4em;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--gold) 18%, var(--border));
-  color: var(--text);
+  padding: 0.08em 0.32em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--muted) 16%, var(--border));
+  color: color-mix(in srgb, var(--muted) 22%, var(--text));
 }
 
 .md-pre {
-  margin: 0.5em 0 0.75em;
+  margin: 0.55em 0 0.8em;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow-x: auto;
-  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--muted) 14%, var(--border));
 }
 
 .md-code-block {
   font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   line-height: 1.45;
   background: transparent;
   border: none;
   padding: 0;
-  color: var(--text);
+  color: color-mix(in srgb, var(--muted) 18%, var(--text));
   white-space: pre;
+}
+
+/* Answer path: code stays secondary to prose (full-contrast body wins) */
+.msg-assistant .md-code-inline {
+  background: color-mix(in srgb, var(--muted) 10%, var(--panel));
+  border-color: color-mix(in srgb, var(--muted) 14%, var(--border));
+}
+
+.msg-assistant .md-pre {
+  background: color-mix(in srgb, var(--panel) 45%, var(--bg));
 }
 
 .md-quote {
@@ -1540,12 +1733,20 @@ button.send.send--stuffed .send-snack {
   background: color-mix(in srgb, var(--panel) 90%, var(--accent));
 }
 
+.plan-bar-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+}
+
 .plan-bar-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 6px 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px 6px 10px;
   border: none;
   background: transparent;
   color: var(--text);
@@ -1557,6 +1758,30 @@ button.send.send--stuffed .send-snack {
 
 .plan-bar-head:hover {
   background: color-mix(in srgb, var(--bg) 18%, transparent);
+}
+
+.plan-bar-dismiss {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0 6px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.plan-bar-dismiss:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
 .plan-bar-label {
@@ -1663,7 +1888,7 @@ button.send.send--stuffed .send-snack {
   flex: 0 0 auto;
   border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--border));
   border-radius: 1.15rem;
-  background: color-mix(in srgb, var(--gold) 8%, var(--user));
+  background: var(--bg);
   padding: 8px 12px;
 }
 
@@ -1837,15 +2062,16 @@ button.send.send--stuffed .send-snack {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
-/* Input shell — same “bubble” language as user prompts */
+/* Input shell — same language as user prompts: bg fill, rim only */
 .composer-box {
   display: flex;
   flex-direction: column;
-  border: 1px solid color-mix(in srgb, var(--user) 70%, var(--border));
-  border-radius: 1.45rem;
-  background: var(--user);
+  border: 1px solid var(--user-rim);
+  /* Pill sides — rounder than a card, still flat top/bottom with attach strip */
+  border-radius: 1.85rem;
+  background: var(--bg);
   overflow: visible;
-  box-shadow: 0 6px 24px color-mix(in srgb, var(--bg) 55%, transparent);
+  box-shadow: none;
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease;
@@ -1855,30 +2081,102 @@ button.send.send--stuffed .send-snack {
   position: relative;
   width: 100%;
   min-width: 0;
+  /*
+    Shared text metrics — mirror + textarea must occupy the SAME box.
+    Font/line/pad tokens live on :root so Hell/Dunkel and all profiles
+    share one scale; only layout may override pads on small screens.
+    Mirror width is set in JS to textarea.clientWidth so wrap points
+    match the caret (scrollbar must not widen the visible text layer).
+  */
+}
+
+/* SuperGrok pill row: [+] [textarea] [Mode] [mic] [send] */
+.composer-row {
+  display: flex;
+  /* Center + / Chat / Mic with the text line (send is slightly taller) */
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.composer-row .composer-input-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: center;
+  display: block;
 }
 
 /* Mirror layer under textarea: shows accent on valid /commands */
 .composer-highlight {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
+  /* width/height: JS → ta.clientWidth/clientHeight (excludes scrollbar) */
+  display: block;
   width: 100%;
-  min-height: 72px;
-  max-height: 200px;
-  padding: 16px 18px 10px;
+  height: 100%;
   margin: 0;
-  border: none;
+  border: 0 solid transparent;
   box-sizing: border-box;
+  padding: var(--composer-pad-y) var(--composer-pad-x);
+  min-height: 0;
+  max-height: none;
   font: inherit;
-  line-height: 1.45;
+  font-size: var(--composer-font-size);
+  font-family: inherit;
+  font-weight: 400;
+  font-style: normal;
+  line-height: var(--composer-line-height);
+  letter-spacing: var(--composer-letter-spacing);
+  tab-size: var(--composer-tab-size);
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
   word-wrap: break-word;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* No stable gutter — width is locked to textarea.clientWidth in JS */
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
   pointer-events: none;
   color: var(--text);
   z-index: 0;
+  text-align: left;
+  vertical-align: top;
 }
 
-.composer-highlight .slash-cmd,
+.composer-highlight::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Spans must not alter metrics vs plain textarea text */
+.composer-highlight > span {
+  margin: 0;
+  padding: 0;
+  border: none;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+/* Color-only slash highlight in composer — bold changes glyph width → caret lag */
+.composer-highlight .slash-cmd {
+  color: var(--gold);
+  font-weight: inherit;
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border-radius: 2px;
+  /* box-decoration-break keeps background on wraps without metric shift */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* History / standalone slash text may stay semibold (not under caret) */
 .user-text-with-slash .slash-cmd,
 .slash-highlighted-text .slash-cmd {
   color: var(--gold);
@@ -1889,25 +2187,47 @@ button.send.send--stuffed .send-snack {
 .composer.composer--grok textarea.composer-textarea--overlay {
   position: relative;
   z-index: 1;
+  display: block;
   width: 100%;
   height: auto;
-  min-height: 72px;
-  max-height: 200px;
-  resize: none;
-  border: none;
+  margin: 0;
+  border: 0 solid transparent;
   border-radius: 0;
+  box-sizing: border-box;
+  padding: var(--composer-pad-y) var(--composer-pad-x);
+  min-height: var(--composer-min-h);
+  max-height: var(--composer-max-h);
+  resize: none;
   background: transparent;
   color: transparent;
+  -webkit-text-fill-color: transparent;
   caret-color: var(--text);
-  padding: 16px 18px 10px;
   font: inherit;
-  line-height: 1.45;
+  font-size: var(--composer-font-size);
+  font-family: inherit;
+  font-weight: 400;
+  font-style: normal;
+  line-height: var(--composer-line-height);
+  letter-spacing: var(--composer-letter-spacing);
+  tab-size: var(--composer-tab-size);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  word-wrap: break-word;
+  overflow-x: hidden;
   overflow-y: auto;
-  box-sizing: border-box;
+  /* Mirror is sized to clientWidth — no extra gutter that desyncs wraps */
+  scrollbar-gutter: auto;
+  /* Off: JS sets height; content sizing fights caret/mirror sync */
+  field-sizing: fixed;
+  vertical-align: top;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .composer.composer--grok textarea.composer-textarea--overlay::placeholder {
   color: var(--muted);
+  -webkit-text-fill-color: var(--muted);
   opacity: 0.85;
 }
 
@@ -2102,19 +2422,17 @@ button.send.send--stuffed .send-snack {
 }
 
 .composer-box:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
-    0 8px 28px color-mix(in srgb, var(--bg) 50%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--user-rim));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
+/* Legacy toolbar (superseded by .composer-row); kept for any residual markup */
 .composer-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 6px 12px 12px;
-  /* Soft fade instead of hard card edge inside the bubble */
   border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
   background: color-mix(in srgb, var(--bg) 12%, transparent);
 }
@@ -2126,6 +2444,140 @@ button.send.send--stuffed .send-snack {
   gap: 8px;
   min-width: 0;
   flex: 1;
+}
+
+/* Circular + attach control */
+.composer-plus-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 28%, var(--panel));
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.composer-plus-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.composer-plus-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Compact mode dropdown (Chat | Deep Search | Fork) */
+.composer-mode-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.composer-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 2.25rem;
+  max-width: 8.5rem;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 28%, var(--panel));
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.composer-mode-btn:hover:not(:disabled),
+.composer-mode-btn.is-open {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.composer-mode-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.composer-mode-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-mode-chevron {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  line-height: 1;
+}
+
+.composer-mode-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 10.5rem;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.composer-mode-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.composer-mode-option:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.composer-mode-option.is-active {
+  color: var(--send-fg, var(--text));
+  background: color-mix(in srgb, var(--accent) 28%, var(--panel));
+}
+
+.composer-mode-option.is-blocked,
+.composer-mode-option:disabled {
+  opacity: 0.4;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  cursor: not-allowed;
 }
 
 .composer-chip {
@@ -2217,7 +2669,7 @@ button.send.send--stuffed .send-snack {
   cursor: pointer;
 }
 
-/* Grok Voice: mic (STT) + voice picker (TTS) */
+/* Grok Voice: mic (STT) icon-only; TTS voice picker removed from composer */
 .voice-controls {
   display: inline-flex;
   align-items: center;
@@ -2228,15 +2680,17 @@ button.send.send--stuffed .send-snack {
 .voice-mic-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  box-sizing: border-box;
+  flex-shrink: 0;
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 650;
   color: var(--muted);
-  padding: 5px 10px;
+  padding: 0;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 28%, var(--panel));
   cursor: pointer;
   user-select: none;
 }
@@ -2250,7 +2704,7 @@ button.send.send--stuffed .send-snack {
 .voice-mic-btn.is-recording {
   color: #fff;
   border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
-  background: color-mix(in srgb, var(--danger) 78%, #000);
+  background: color-mix(in srgb, var(--danger) 78%, var(--panel));
   animation: voice-pulse 1.2s ease-in-out infinite;
 }
 
@@ -2265,7 +2719,7 @@ button.send.send--stuffed .send-snack {
 }
 
 .voice-mic-label {
-  letter-spacing: 0.02em;
+  display: none; /* icon-only mic; label kept for legacy markup */
 }
 
 .voice-select-wrap {
@@ -2401,9 +2855,10 @@ button.send.send--stuffed .send-snack {
 
 .empty-soft {
   display: inline-block;
-  margin-top: 10px;
+  margin-top: 8px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
 }
 
 button.ghost {
@@ -3149,40 +3604,114 @@ button.cal-cell {
   color: color-mix(in srgb, var(--text) 88%, var(--muted));
 }
 
+/*
+  Mobile layout pass (≤640px / iPhone PWA via Tailscale):
+  - Safe areas (notch / home indicator) for standalone
+  - Compact chrome, larger touch targets
+  - Type scale is NOT re-sized here — same tokens as desktop/all modes
+*/
 @media (max-width: 640px) {
   .app {
     flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
   }
 
   .side-rail {
     flex-direction: row;
     width: 100%;
     height: auto;
-    justify-content: center;
-    flex-wrap: wrap;
-    padding: 8px;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px;
+    padding: 6px 8px;
     border-right: none;
     border-bottom: 1px solid var(--border);
     order: -1;
+  }
+
+  .side-rail::-webkit-scrollbar {
+    display: none;
   }
 
   .side-rail-spacer {
     display: none;
   }
 
+  .side-rail-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 2px;
+  }
+
   .side-rail-btn {
     flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
   }
 
   .app-main {
-    padding: 10px;
+    padding: 8px 10px 10px;
     max-width: none;
+    gap: 8px;
   }
 
   .top {
     flex-direction: column;
+    gap: 8px;
   }
 
+  .top h1 {
+    font-size: 1.15rem;
+  }
+
+  .app-build {
+    font-size: 0.68rem;
+  }
+
+  .sub {
+    font-size: 0.78rem;
+    margin-top: 2px;
+  }
+
+  .sub.sub--inline {
+    /* Same type size as desktop — only layout width changes on phone */
+    margin-top: 0;
+    max-width: 100%;
+  }
+
+  .top-actions {
+    gap: 8px;
+    width: 100%;
+  }
+
+  .agent-pick-select {
+    min-height: 36px;
+    font-size: 0.8rem;
+    padding: 6px 26px 6px 12px;
+  }
+
+  button.pill-btn {
+    min-height: 36px;
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+
+  button.pill-btn.pill-btn--icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0;
+  }
+
+  /* Chat type scale stays on :root tokens (same as desktop / all modes) */
   .msg-user {
     max-width: 92%;
   }
@@ -3192,6 +3721,104 @@ button.cal-cell {
   .msg-tool,
   .msg-system {
     max-width: 100%;
+  }
+
+  /* LVL strip: slightly larger labels on small screens */
+  .context-lvl-bar {
+    padding: 6px 8px;
+  }
+
+  .context-lvl-bar-meta {
+    font-size: 0.65rem;
+  }
+
+  .context-lvl-bar-tag {
+    font-size: 0.62rem;
+  }
+
+  .context-lvl-bar-label {
+    font-size: 0.65rem;
+  }
+
+  /*
+    Composer (phone) — layout + iOS zoom floor:
+    - Font size floored at 16px so iOS Safari never auto-zooms on focus
+    - Row 1: textarea full width (no crushed placeholder)
+    - Row 2: [+] [Chat] …… [mic] [send]
+  */
+  .composer-input-wrap {
+    --composer-font-size: 16px;
+    --composer-pad-y: 10px;
+    --composer-pad-x: 4px;
+    --composer-min-h: 2.5rem;
+    --composer-max-h: 140px;
+    flex: 1 0 100%;
+    order: 0;
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .composer-row {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 6px;
+    padding: 10px 12px 12px;
+  }
+
+  .composer-plus-btn {
+    order: 1;
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .composer-mode-wrap {
+    order: 2;
+    margin-right: auto; /* push mic + send to the right */
+  }
+
+  .composer-mode-btn {
+    height: 2.5rem;
+    font-size: 0.8rem;
+    padding: 0 12px;
+    max-width: 7.5rem;
+  }
+
+  .voice-mic-btn {
+    order: 3;
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .composer.composer--grok .send {
+    order: 4;
+    width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .composer.composer--grok .send.send--working,
+  .composer.composer--grok .send.send--morph-out {
+    width: 3rem;
+    height: 3rem;
+    min-height: 3rem;
+  }
+
+  /* Empty chat: less floaty void on tall phones — tokens stay :root scale */
+  .empty {
+    max-width: 22rem;
+    padding: 0 12px;
+  }
+
+  .empty-soft {
+    margin-top: 8px;
+  }
+
+  .messages.messages--borderless {
+    padding: 6px 4px 12px;
+  }
+
+  .composer.composer--grok {
+    gap: 6px;
   }
 
   .session-row {
@@ -3205,7 +3832,214 @@ button.cal-cell {
 
   .session-actions button {
     flex: 1;
+    min-height: 44px;
   }
+
+  .slash-popup {
+    max-height: min(240px, 38dvh);
+    left: 0.4rem;
+    right: 0.4rem;
+  }
+
+  .summarize-overlay {
+    padding: max(12px, env(safe-area-inset-top, 0px))
+      max(12px, env(safe-area-inset-right, 0px))
+      max(12px, env(safe-area-inset-bottom, 0px))
+      max(12px, env(safe-area-inset-left, 0px));
+    align-items: flex-end;
+  }
+
+  .summarize-dialog {
+    max-height: min(86dvh, 100%);
+    border-radius: 16px 16px 12px 12px;
+  }
+}
+
+/* ---------- BindingsPanel (Anbindung / Keys, Tab im Buch) ---------- */
+.bindings-scroll {
+  padding-bottom: 20px;
+}
+.bindings-panel {
+  padding: 4px 2px 12px;
+}
+.bindings-panel .summarize-input {
+  width: 100%;
+  background: var(--bg, #0f0f0f);
+  color: var(--fg, #eee);
+  border: 1px solid var(--line, #333);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  box-sizing: border-box;
+}
+.bindings-panel .summarize-label {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 10px 0 4px;
+}
+.bindings-panel .summarize-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.bindings-panel .summarize-status {
+  opacity: 0.7;
+  font-size: 13px;
+}
+.bindings-panel .summarize-error {
+  color: #ff6b6b;
+  font-size: 13px;
+}
+.bindings-panel .summarize-success {
+  color: #4ade80;
+  font-size: 13px;
+}
+.bindings-lead {
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.85;
+  margin: 0 0 14px;
+}
+.bindings-lead code {
+  font-size: 11px;
+  opacity: 0.9;
+}
+.bindings-section {
+  margin-bottom: 16px;
+}
+.bindings-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+.bindings-profile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bindings-profile {
+  border: 1px solid var(--line, #333);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg, #0f0f0f);
+}
+.bindings-profile.is-ok {
+  border-color: rgba(74, 222, 128, 0.35);
+}
+.bindings-profile.is-bad {
+  border-color: rgba(255, 107, 107, 0.35);
+}
+.bindings-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.bindings-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  flex-shrink: 0;
+}
+.bindings-profile.is-ok .bindings-dot {
+  background: #4ade80;
+}
+.bindings-auth {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bindings-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.bindings-checks li {
+  display: flex;
+  gap: 6px;
+  opacity: 0.85;
+  margin: 2px 0;
+}
+.bindings-checks li.ok {
+  opacity: 0.9;
+}
+.bindings-checks li.bad {
+  opacity: 0.75;
+}
+.bindings-check-mark {
+  width: 1em;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.bindings-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  opacity: 0.6;
+  line-height: 1.35;
+}
+.bindings-voice {
+  margin: 10px 0 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+.bindings-voice.ok {
+  color: #4ade80;
+}
+.bindings-voice.bad {
+  color: #fbbf24;
+}
+.bindings-form .summarize-label {
+  margin-top: 12px;
+}
+.bindings-masked {
+  font-weight: 400;
+  opacity: 0.65;
+  font-size: 11px;
+}
+.bindings-clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.bindings-clear input {
+  margin: 0;
+}
+.bindings-oauth-box {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #333);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.bindings-oauth-box p {
+  margin: 6px 0 0;
+  opacity: 0.8;
+}
+.bindings-oauth-box code {
+  font-size: 11px;
+}
+.bindings-footer {
+  margin: 14px 0 0;
+  font-size: 11px;
+  opacity: 0.5;
+  word-break: break-all;
 }
 
 /* ---------- SummarizeDialog (Session-Zusammenfassung) ---------- */
@@ -3313,49 +4147,132 @@ button.cal-cell {
 }
 
 /* ---------- AssistantMeta (kompakte Modell-/Provider-Statuszeile) ---------- */
+/* Trace line: secondary chrome under the answer (same family as Think/Steps) */
 .assistant-meta {
-  margin-top: 8px;
-  font-size: 12px;
-  opacity: 0.8;
+  margin-top: 10px;
+  font-size: 0.72rem;
+  opacity: 1;
+  color: color-mix(in srgb, var(--muted) 65%, var(--text));
 }
 .assistant-meta-line {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg, #131316);
-  border: 1px solid var(--line, #333);
-  border-radius: 8px;
-  padding: 4px 8px;
-  color: var(--fg, #eee);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--muted) 22%, var(--border));
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: color-mix(in srgb, var(--muted) 55%, var(--text));
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.72rem;
 }
-.assistant-meta-line:hover { border-color: var(--accent, #3d7fff); }
+.assistant-meta-line:hover {
+  border-color: color-mix(in srgb, var(--muted) 40%, var(--border));
+  color: color-mix(in srgb, var(--muted) 35%, var(--text));
+}
 .assistant-meta-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent, #3d7fff);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
   display: inline-block;
 }
-.assistant-meta-toggle { opacity: 0.6; margin-left: 4px; }
+.assistant-meta-toggle { opacity: 0.55; margin-left: 4px; }
 .assistant-meta-details {
   margin-top: 6px;
-  background: var(--bg, #0f0f0f);
-  border: 1px solid var(--line, #333);
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--muted) 18%, var(--border));
+  border-radius: 6px;
   padding: 6px 10px;
+  color: color-mix(in srgb, var(--muted) 60%, var(--text));
 }
 .assistant-meta-details summary {
   cursor: pointer;
-  opacity: 0.7;
-  font-size: 11px;
+  opacity: 0.75;
+  font-size: 0.7rem;
   margin-bottom: 4px;
+  color: var(--muted);
 }
 .assistant-meta-list {
   margin: 0;
   padding-left: 16px;
-  font-size: 11px;
-  opacity: 0.85;
+  font-size: 0.7rem;
+  opacity: 0.9;
 }
 .assistant-meta-list li { margin: 1px 0; }
 .assistant-meta-list ul { padding-left: 14px; }
+
+/* ^_Code permission modal */
+.permission-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.permission-modal {
+  width: min(520px, 100%);
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  background: var(--panel, #1a1a1a);
+  color: var(--text, #eee);
+  border: 1px solid var(--line, #444);
+  border-radius: 12px;
+  padding: 16px 18px 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.permission-modal h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.permission-modal-kind {
+  margin: 0 0 10px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.permission-modal-preview {
+  margin: 0 0 14px;
+  max-height: 280px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg, #0f0f0f);
+  border: 1px solid var(--line, #333);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.permission-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.permission-btn {
+  border-radius: 8px;
+  border: 1px solid var(--line, #444);
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--bg, #222);
+  color: inherit;
+}
+.permission-btn--allow {
+  background: #1a5c2e;
+  border-color: #2a7a40;
+  color: #e8ffe8;
+}
+.permission-btn--reject {
+  background: #4a2020;
+  border-color: #6a3030;
+  color: #ffe8e8;
+}
+.permission-btn:hover {
+  filter: brightness(1.08);
+}

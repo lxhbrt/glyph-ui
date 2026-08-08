@@ -22,10 +22,16 @@ import crypto from "node:crypto";
 /** Alias-Mapping: Profil → KI-Kürzel (für Dateiname + Frontmatter). */
 export const AGENT_SLUGS = {
   grok: "Grok",
-  claude: "Claude",
+  claude: "Code", // legacy
+  _code: "Code",
+  code: "Code",
   // openrouter: nur Legacy-Alias für alte Summary-Dateinamen (kein UI-Profil mehr)
   openrouter: "Glyph-Agent",
   "glyph-agent": "Glyph-Agent",
+  // UI-Label °_Agent (id bleibt glyph-agent)
+  "-_agent": "Glyph-Agent",
+  _agent: "Glyph-Agent",
+  agent: "Glyph-Agent",
 };
 
 /** Standard-Alias (Fallback, wenn Profil unbekannt). */

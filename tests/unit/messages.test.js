@@ -32,6 +32,19 @@ describe("formatToolText", () => {
   it("omits status when empty", () => {
     assert.equal(formatToolText({ title: "Read file" }), "Read file");
   });
+
+  it("does not show call-… ids; keeps previous title", () => {
+    assert.equal(
+      formatToolText(
+        {
+          title: "call-af890ea9-3946-46b2-b43d-0a16a2f552d0-17",
+          status: "completed",
+        },
+        "read_file · pending",
+      ),
+      "read_file · completed",
+    );
+  });
 });
 
 describe("upsertToolMessage", () => {

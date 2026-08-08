@@ -1,18 +1,18 @@
 # Glyph
 
-**Offene Browser-UI für mehrere lokale & Cloud-Agenten** über ACP (Agent Client Protocol).
-*Ursprünglich als „Build Term for Grok“ gestartet — heute ein profilneutrales Gesicht für
-grok, claude und glyph-agent.*
+**Browser-Hülle für Coding-Agenten** über ACP (Agent Client Protocol) — **keine eigene KI**.
+Du bringst Grok / ^_Code / °_Agent mit; Glyph streamt Chat, Tools und Status.
+Für lokale Power-User (z. B. Mac Mini). *Ursprung: „Build Term for Grok“.*
 
 **Erstellt von [Lx Hbrt](https://github.com/lxhbrt)** · Copyright © 2026 · [MIT License](./LICENSE)
 
 > Unofficial / independent — **not affiliated with or endorsed by xAI**. „Grok“ und „Grok Build“ sind Marken der jeweiligen Rechteinhaber.
 
-**Anwendungshandbuch (DE):** [HANDBUCH.md](./HANDBUCH.md)
+**Anwendungshandbuch (DE):** [HANDBUCH.md](./HANDBUCH.md) · In der App: **Buch** → Handbuch · Befehle · **Anbindung** (Keys / OAuth-Status)
 
 ```
 Browser (React)  --WebSocket-->  Node Bridge  --stdio ACP-->  Agent-Profil
-                                                               (grok | claude | glyph-agent)
+                                                               (grok | ^_Code | °_Agent)
 ```
 
 ## Von Grok zu einer offenen UI
@@ -25,8 +25,8 @@ nach je ein weiteres Profil hinzu:
 | Schritt | Profil | Grund |
 |---------|--------|-------|
 | Start | **grok** | Browser-Oberfläche für die lokale Grok-CLI (OAuth) |
-| +1 | **claude** | zweites OAuth-Konto (Anthropic) für den Chat |
-| +2 | **glyph-agent** | Vault/Tools + Cloud-Antwort intern (B+, Engine) |
+| +1 | **^_Code** | DeepSeek V4 Flash (OpenRouter) · Workspace Read/Write/Shell · Genehmigung in Glyph |
+| +2 | **°_Agent** | Vault/Tools + Cloud-Antwort intern (B+, Engine; id `glyph-agent`) |
 
 Heute ist grok **nur noch das Standard-Profil**, nicht das Produkt. Alle Profile teilen
 dieselbe Bedienung; Grok-spezifische Extras (Deep Search, Voice, Session-Liste) sind pro
@@ -46,7 +46,15 @@ Profil deklariert und in der UI ausgegraut, wo sie nicht gelten.
 git clone https://github.com/lxhbrt/glyph-ui.git
 cd glyph-ui
 npm install
+npm run build
+npm start
+# → http://127.0.0.1:5174
 ```
+
+**Anbindung:** In der UI **Buch → Anbindung** → Keys (`OPENROUTER_API_KEY`, `XAI_API_KEY`) lokal speichern;
+Grok per Terminal `grok login`. Details: [HANDBUCH.md §1](./HANDBUCH.md).
+
+Mac & Windows (Node 22+). LaunchAgent/Dock nur macOS.
 
 ## Ports (ein Modell)
 
@@ -91,6 +99,26 @@ npm run service:uninstall
 Doppelklick auf `scripts/Open Glyph.command`  
 oder: `npm run open` → öffnet **http://127.0.0.1:5174/**
 
+### Remote (iPhone/iPad über Tailscale)
+
+Glyph bleibt auf **127.0.0.1**. Zugriff von unterwegs nur über **Tailscale Serve** (tailnet-only, kostenlos) — nicht über `0.0.0.0` / Funnel.
+
+```bash
+# Voraussetzung: LaunchAgent installiert, Tailscale App angemeldet
+npm run service:remote
+# = scripts/enable-tailscale-remote.sh
+```
+
+| Was | Adresse |
+|-----|---------|
+| Lokal | http://127.0.0.1:5174 |
+| Remote (Serve) | `https://<MagicDNS>:8443/` |
+| OpenClaw (falls gesetzt) | bleibt auf `:443` unangetastet |
+
+**iPhone:** Tailscale-App (gleiches Konto) → Safari `https://…:8443/` → Profil **°_Agent** → optional „Zum Home-Bildschirm“.  
+**ACL:** in der Tailscale-Admin-Console nur Mac + iPhone freigeben.  
+Details: [HANDBUCH.md § Remote](./HANDBUCH.md#remote-tailscale).
+
 ### Tests & CI
 
 ```bash
@@ -112,7 +140,7 @@ Auf `main` und bei Pull Requests läuft dasselbe über GitHub Actions (Node 22 �
 
 Details: [HANDBUCH.md](./HANDBUCH.md)
 
-## Agent-Profile & glyph-agent
+## Agent-Profile & °_Agent
 
 Glyph ist ein **ACP-Client** (kein Modell-Client): Das aktive Profil spawnet ein anderes
 Binary/adapter, statt auf eine andere API zu zeigen. Profile in `server/agents.js`,
@@ -121,10 +149,10 @@ Auswahl in der UI (Header), Start-Profil via `GLYPH_AGENT` (Default `grok`).
 | Profil | Spawnt | Hinweis |
 |--------|--------|---------|
 | **grok** (Default) | `grok agent --always-approve --no-leader stdio` | Volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
-| **claude** | `claude-agent-acp` (od. `npx …`) | Sessions unter `~/.claude/projects` (nicht in Glyph gelistet) |
-| **glyph-agent** | `node server/glyph-agent-acp.mjs` | Dünne Brücke zum lokalen glyph-agent-Dienst (Vault/Tools + Cloud-Antwort) |
+| **^_Code** | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | DeepSeek CODE · Write/Shell mit Glyph-Freigabe |
+| **°_Agent** (id `glyph-agent`) | `node server/glyph-agent-acp.mjs` | Dünne Brücke zum lokalen glyph-agent-Dienst (Vault/Tools + Cloud-Antwort) |
 
-**glyph-agent** (separate Codebasis `~/glyph-agent/`) ist die lokale Tool-/Recherche-Schicht:
+**°_Agent** nutzt die Engine `~/glyph-agent/` — lokale Tool-/Recherche-Schicht:
 HTTP-Dienst (`server.py`, localhost**:18899**) mit kontrolliertem Tool-Loop, Cloud-Denker
 und Vault-/Recherche-Tools. Die Brücke `server/glyph-agent-acp.mjs` übersetzt ACP ↔ HTTP
 und streamt die Antwort als Chunks zurück. Spielregeln: `glyph-agent/CONSTITUTION.md`.
@@ -149,8 +177,8 @@ hängt vom aktiven Profil ab.
 | Profil | Textanhänge | Bilder | Hinweis |
 |--------|-------------|--------|---------|
 | **grok** | ✅ | ✅ | native ACP-Unterstützung gemäß Grok-Profil |
-| **claude** | (Adapter) | (Adapter) | abhängig vom `claude-agent-acp`-Adapter |
-| **glyph-agent** | ✅ | ❌ | Bilder werden NICHT an das Modell übertragen (Stufe-1-Hinweis) |
+| **^_Code** | ✅ | ❌ | Textanhänge ja; Write/Shell brauchen Genehmigung |
+| **°_Agent** | ✅ | ❌ | Bilder werden NICHT an das Modell übertragen (Stufe-1-Hinweis) |
 
 ### Erlaubte Formate & Limits
 
@@ -230,6 +258,11 @@ Wichtige Variablen:
 | `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil glyph-agent) |
 | `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für glyph-agent-Antwort |
 | `XAI_API_KEY` | — | Voice (STT/TTS) — [console.x.ai](https://console.x.ai) |
+| `GLYPH_ALLOW_TAILSCALE_ORIGIN` | `0` | `1` = MagicDNS-HTTPS-Origins für WS/API erlauben (Serve) |
+| `GLYPH_TAILSCALE_HOST` | — | MagicDNS-Name (sonst Discovery via `tailscale status`) |
+| `GLYPH_TAILSCALE_SERVE_PORTS` | `8443` | Serve-HTTPS-Ports für Origin-Allowlist |
+| `GLYPH_WS_ORIGINS` | — | Zusätzliche erlaubte Origins (kommagetrennt) |
+| `GLYPH_ALLOW_REMOTE` | `0` | `1` = non-loopback-Bind (nicht empfohlen; Prefer Serve) |
 
 Beispiel:
 
@@ -249,7 +282,9 @@ GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 
 ## Sicherheit
 
-Nur auf **localhost** laufen lassen. Die Bridge startet den Agenten mit vollem Tool-Zugriff (grok mit `--always-approve`). Nicht ungeschützt ins Netz hängen.
+Bridge bindet standardmäßig nur **127.0.0.1**. WebSocket und mutierende API brauchen erlaubte Origin + WS-Token.  
+Remote: **Tailscale Serve** (tailnet-only), nicht `GLYPH_ALLOW_REMOTE=1` und nicht Funnel/öffentliches Internet.  
+Die Bridge startet den Agenten mit vollem Tool-Zugriff (grok mit `--always-approve`).
 
 ## Urheberrecht & Marken
 

@@ -4,16 +4,13 @@
  * Single track (Snack pixel language):
  *   - Gray stones = context fill (truth / high-water front)
  *   - Gold snake  = scrollRatio × context fill (shrinks when scrolling up)
- *   - Soft-cap tick + apple at window end
+ *   - Soft-cap tick at soft-cap ratio
  *
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useRef } from "react";
-import {
-  formatContextTooltip,
-  formatTokenCount,
-} from "../utils/contextMeter.js";
+import { formatContextTooltip } from "../utils/contextMeter.js";
 
 const CELL = 10;
 const GAP = 1;
@@ -81,7 +78,8 @@ export function ContextLvlBar({
   });
 
   const pct = Math.round(Math.min(1, Math.max(0, contextFill)) * 100);
-  const label = `${estimated ? "~" : ""}${pct}% · ${estimated ? "~" : ""}${formatTokenCount(used)}/${formatTokenCount(windowTokens)}`;
+  /* Compact on-bar label; full used/window lives in title/aria tooltip only */
+  const label = `${estimated ? "~" : ""}${pct}%`;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -97,9 +95,6 @@ export function ContextLvlBar({
       head: col("--snack-snake-head", col("--gold-bright", "#e8c86a")),
       body: col("--snack-snake-body", col("--gold", "#d4af37")),
       soft: col("--lvl-soft-cap", "rgba(232,200,106,0.85)"),
-      apple: col("--snack-stop", "#d94a4a"),
-      appleInner: col("--snack-stop-inner", "#e07070"),
-      leaf: col("--snack-leaf", "#5a9e4a"),
       eye: "rgba(0,0,0,0.78)",
     };
 
@@ -127,8 +122,7 @@ export function ContextLvlBar({
       ctx.clearRect(0, 0, w, h);
 
       const padY = Math.floor((h - STONE) / 2);
-      const appleReserve = STONE + 4;
-      const trackW = Math.max(STONE, w - appleReserve - 4);
+      const trackW = Math.max(STONE, w - 4);
       const cols = Math.max(1, Math.floor(trackW / CELL));
       const trackPx = cols * CELL;
 
@@ -148,7 +142,7 @@ export function ContextLvlBar({
         ctx.fillRect(i * CELL + GAP, padY, STONE, STONE);
       }
 
-      // Gold snake (alive) — head at front facing apple
+      // Gold snake — head at fill front (eye faces right / track end)
       for (let i = 0; i < goldN; i++) {
         const fromHead = goldN - 1 - i; // 0 = head
         const t = goldN <= 1 ? 0 : fromHead / (goldN - 1);
@@ -159,7 +153,6 @@ export function ContextLvlBar({
         ctx.fillStyle = fill;
         ctx.fillRect(i * CELL + GAP, padY, STONE, STONE);
         if (fromHead === 0) {
-          // eye toward apple (right)
           const eye = Math.max(2, Math.floor(STONE * 0.28));
           ctx.fillStyle = palette.eye;
           ctx.fillRect(
@@ -178,19 +171,6 @@ export function ContextLvlBar({
       );
       ctx.fillStyle = palette.soft;
       ctx.fillRect(softX, padY - 2, 2, STONE + 4);
-
-      // Apple at window end
-      const ax = trackPx + 2;
-      const ay = padY;
-      ctx.fillStyle = palette.apple;
-      ctx.fillRect(ax, ay, STONE, STONE);
-      const pad = Math.max(1, Math.floor(STONE * 0.22));
-      ctx.fillStyle = palette.appleInner;
-      ctx.fillRect(ax + pad, ay + pad, STONE - pad * 2, STONE - pad * 2);
-      if (STONE >= 6) {
-        ctx.fillStyle = palette.leaf;
-        ctx.fillRect(ax + STONE - 3, ay - 1, 3, 2);
-      }
     };
 
     const targetFill = Math.min(1, Math.max(0, contextFill));
@@ -255,16 +235,11 @@ export function ContextLvlBar({
       aria-valuetext={tooltip}
       title={tooltip}
     >
-      <div className="context-lvl-bar-meta">
+      <canvas ref={canvasRef} className="context-lvl-bar-canvas" />
+      <div className="context-lvl-bar-meta" aria-hidden="true">
         <span className="context-lvl-bar-tag">LVL</span>
         <span className="context-lvl-bar-label">{label}</span>
-        {estimated ? (
-          <span className="context-lvl-bar-est" title="Geschätzt">
-            ~
-          </span>
-        ) : null}
       </div>
-      <canvas ref={canvasRef} className="context-lvl-bar-canvas" />
     </div>
   );
 }

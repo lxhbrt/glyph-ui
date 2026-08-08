@@ -174,17 +174,26 @@ export async function extractTextAttachments(blocks) {
     }
 
     if (b.type === "image") {
-      skips.push("Bild (multimodale Stufe 2 noch nicht unterstützt)");
+      // Multimodal Stufe 2: buildPromptWithAttachments / extractImages — hier nicht skippen
       continue;
     }
 
-    // Eingebettete Ressource: Dateiinhalt liegt als Text bei (embedded_resource).
-    if (b.type === "embedded_resource") {
+    // Eingebettete Ressource: ACP `resource` (Glyph-Bridge) oder `embedded_resource`.
+    if (b.type === "embedded_resource" || b.type === "resource") {
       const res = b.resource || {};
       const name = escapeName(res.name || res.uri || "anhang");
       const mime = String(res.mimeType || (res.mediaType ?? ""));
+      // Blob-Bilder in resource-Blöcken → Stufe 2 (extractImages), nicht als Text
+      if (isImageMime(mime) || (typeof res.blob === "string" && isImageMime(mime))) {
+        continue;
+      }
       const data = res.text ?? res.data ?? "";
       if (!isTextAttachment({ mimeType: mime, name })) {
+        // Binär-blob ohne Bild-MIME: überspringen mit Hinweis
+        if (typeof res.blob === "string" && res.blob.trim()) {
+          skips.push(`${name} (Binär-Anhang, kein Text: ${mime || "unbekannt"})`);
+          continue;
+        }
         skips.push(`${name} (kein erlaubter Text-Typ: ${mime || "unbekannt"})`);
         continue;
       }
@@ -261,16 +270,62 @@ export function skipsNote(skips) {
 }
 
 /**
- * Kombiniert Text + Textanhänge zu einem Prompt und liefert zusätzlich eine
- * strukturierte Attachments-Liste für die rückwärtskompatibel erweiterte
- * POST /chat-Schnittstelle.
+ * Extrahiert Bildblöcke (ACP type:image oder resource+blob) zu OpenAI image_url-Parts.
+ * @param {Array<object>} blocks
+ * @returns {{ images: Array<{type:"image_url", image_url:{url:string}}>, skips: string[] }}
+ */
+export function extractImages(blocks) {
+  const images = [];
+  const skips = [];
+  if (!Array.isArray(blocks)) return { images, skips };
+
+  for (const b of blocks) {
+    if (!b || typeof b !== "object") continue;
+
+    if (b.type === "image") {
+      try {
+        images.push(toOpenAIImage(b));
+      } catch (e) {
+        skips.push(`Bild (${e.message})`);
+      }
+      continue;
+    }
+
+    // Bridge sendet manchaml resource + blob für Binär; wenn MIME image/* → Vision
+    if (b.type === "resource" || b.type === "embedded_resource") {
+      const res = b.resource || {};
+      const mime = String(res.mimeType || res.mediaType || "").toLowerCase();
+      if (!isImageMime(mime)) continue;
+      const data = res.blob || res.data;
+      if (typeof data !== "string" || !data.trim()) {
+        skips.push(`${escapeName(res.name || res.uri || "bild")} (Bild ohne Daten)`);
+        continue;
+      }
+      try {
+        images.push(toOpenAIImage({ mimeType: mime, data }));
+      } catch (e) {
+        skips.push(`Bild (${e.message})`);
+      }
+    }
+  }
+  return { images, skips };
+}
+
+/**
+ * Kombiniert Text + Textanhänge + Bilder für POST /chat.
  *
  * @param {Array<object>} blocks ACP-Prompt-ContentBlocks
- * @returns {Promise<{ message: string, attachments: Array<{name:string, mime:string, content:string}> }>}
+ * @returns {Promise<{
+ *   message: string,
+ *   attachments: Array<{name:string, mime:string, content:string}>,
+ *   images: Array<{type:"image_url", image_url:{url:string}}>
+ * }>}
  */
 export async function buildPromptWithAttachments(blocks) {
   const { text, skips } = await extractTextAttachments(blocks || []);
-  const message = text + skipsNote(skips);
+  const { images, skips: imgSkips } = extractImages(blocks || []);
+  const allSkips = [...skips, ...imgSkips];
+  const message = text + skipsNote(allSkips);
   // Strukturierte Anhang-Liste, die in POST /chat verstanden wird (für Server mit
   // echter Attachment-Unterstützung). Bei reiner Text-Einbettung in message kann
   // der Adapter attachments weglassen — beide Wege sind rückwärtskompatibel.
@@ -278,15 +333,17 @@ export async function buildPromptWithAttachments(blocks) {
   const blocksList = Array.isArray(blocks) ? blocks : [];
   for (const b of blocksList) {
     if (!b || typeof b !== "object") continue;
-    if (b.type === "embedded_resource") {
+    if (b.type === "embedded_resource" || b.type === "resource") {
       const res = b.resource || {};
       const name = escapeName(res.name || res.uri || "anhang");
+      const mime = String(res.mimeType || "text/plain");
+      if (isImageMime(mime)) continue;
       if (typeof res.text === "string" && res.text.trim()) {
-        attachments.push({ name, mime: res.mimeType || "text/plain", content: res.text });
+        attachments.push({ name, mime, content: res.text });
       }
     }
   }
-  return { message, attachments };
+  return { message, attachments, images };
 }
 
 /**
@@ -330,10 +387,20 @@ export async function buildOpenRouterContent(blocks) {
       continue;
     }
 
-    if (b.type === "embedded_resource" || b.type === "resource_link") {
+    if (
+      b.type === "embedded_resource" ||
+      b.type === "resource" ||
+      b.type === "resource_link"
+    ) {
       // Textanhänge via bestehender Stufe-1-Extraktion einbetten.
       const sub = await extractTextAttachments([b]);
       if (sub.text) textBuf.push(sub.text);
+      // Bild-resource: in Reihenfolge als image_url
+      const { images: more } = extractImages([b]);
+      if (more.length) {
+        flush();
+        out.push(...more);
+      }
       continue;
     }
   }
