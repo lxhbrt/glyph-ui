@@ -90,6 +90,12 @@ import {
   buildBindingsStatus,
   loadBindingsIntoEnv,
   updateBindings,
+  pushModelsToAgent,
+  probeModelOnAgent,
+  resolveModelContextWindow,
+  syncModelsIfMismatch,
+  readBindingsFile,
+  bindingsPath,
 } from "./bindings.js";
 import {
   getGlyphRoot,
@@ -1015,19 +1021,114 @@ app.get("/api/bindings", async (_req, res) => {
 app.put("/api/bindings", async (req, res) => {
   try {
     const body = req.body || {};
-    await updateBindings(body, {
+    // Optional contextWindow fill for shared primary on save
+    if (body.models?.shared?.primary && !body.models.shared.contextWindow) {
+      try {
+        const win = await resolveModelContextWindow(body.models.shared.primary, {
+          cached: body.models.shared.contextWindow,
+        });
+        body.models.shared.contextWindow = win.window;
+      } catch {
+        /* keep without window */
+      }
+    }
+    if (body.models?.code?.primary && !body.models.code.contextWindow) {
+      try {
+        const win = await resolveModelContextWindow(body.models.code.primary);
+        body.models.code.contextWindow = win.window;
+      } catch {
+        /* ignore */
+      }
+    }
+    const saved = await updateBindings(body, {
       stateDir: STATE_DIR,
       env: process.env,
     });
     clearApiKeyCache();
+
+    let modelsApply = null;
+    if (body.models && saved.models?.shared?.primary) {
+      const agentUrl =
+        String(
+          process.env.GLYPH_AGENT_URL ||
+            saved.settings?.GLYPH_AGENT_URL ||
+            "",
+        ).trim() || "http://127.0.0.1:18899";
+      modelsApply = await pushModelsToAgent(agentUrl, saved.models);
+    }
+
     res.json(
       await buildBindingsStatus({
         stateDir: STATE_DIR,
         env: process.env,
+        modelsApply,
       }),
     );
   } catch (err) {
     res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Apply bindings models to running glyph-agent (or sync if mismatch).
+ * POST { } empty → sync from file if mismatch; or { models } to push explicit.
+ */
+app.post("/api/models/apply", async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (body.models) {
+      const file = await readBindingsFile(bindingsPath(STATE_DIR));
+      const models = body.models;
+      const agentUrl =
+        String(
+          process.env.GLYPH_AGENT_URL || file.settings?.GLYPH_AGENT_URL || "",
+        ).trim() || "http://127.0.0.1:18899";
+      const push = await pushModelsToAgent(agentUrl, models);
+      res.status(push.ok ? 200 : 502).json(push);
+      return;
+    }
+    const result = await syncModelsIfMismatch({
+      stateDir: STATE_DIR,
+      env: process.env,
+    });
+    res.status(result.ok || result.skipped ? 200 : 502).json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Probe model via glyph-agent (production key/URL). Body: { model }
+ */
+app.post("/api/models/probe", async (req, res) => {
+  try {
+    const model = String(req.body?.model || req.body?.primary || "").trim();
+    if (!model) {
+      res.status(400).json({ ok: false, error: "model fehlt" });
+      return;
+    }
+    const file = await readBindingsFile(bindingsPath(STATE_DIR));
+    const agentUrl =
+      String(
+        process.env.GLYPH_AGENT_URL || file.settings?.GLYPH_AGENT_URL || "",
+      ).trim() || "http://127.0.0.1:18899";
+    const result = await probeModelOnAgent(agentUrl, model);
+    if (result.ok && result.context_length) {
+      /* client may cache */
+    } else if (result.ok) {
+      const win = await resolveModelContextWindow(model);
+      result.context_length = win.window;
+      result.context_source = win.source;
+    }
+    res.status(result.ok ? 200 : 502).json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
       error: err instanceof Error ? err.message : String(err),
     });
   }
@@ -1865,6 +1966,15 @@ class GrokBridge {
         }),
       );
 
+      // OpenRouter model hot-apply when Code/Agent connects and bindings differ
+      const profileId = this.agentId || this.agentProfile?.()?.id;
+      if (profileId === "_code" || profileId === "glyph-agent") {
+        void syncModelsIfMismatch({
+          stateDir: STATE_DIR,
+          env: process.env,
+        }).catch(() => {});
+      }
+
       void connection.closed.then(() => {
         this.handleDisconnect("ACP channel closed");
       });
@@ -2692,6 +2802,20 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`Working directory  → ${WORK_CWD}`);
   console.log(`Uploads            → ${UPLOAD_DIR}`);
   console.log(`Grok connected     → ${bridge.connected}`);
+
+  // Re-push OpenRouter models from bindings if agent is up but drifted
+  // (agent restart loses hot-apply; bindings.json is source of truth).
+  void syncModelsIfMismatch({
+    stateDir: STATE_DIR,
+    env: process.env,
+  })
+    .then((r) => {
+      if (r?.applied) console.log("Models sync         → applied to glyph-agent");
+      else if (r?.reason === "in_sync") console.log("Models sync         → in sync");
+      else if (r?.reason === "agent_down")
+        console.log("Models sync         → agent offline (apply on connect)");
+    })
+    .catch(() => {});
 
   // Ensure upload dir exists so the first attachment does not race mkdir.
   const logUploadCleanup = (r) => {

@@ -403,6 +403,7 @@ function CommandLegend({
   onClose,
   initialTab = "handbook",
   agentCommands = [],
+  agentProfileId = "",
 }) {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState(() => normalizeHelpTab(initialTab));
@@ -592,7 +593,10 @@ function CommandLegend({
           </div>
         ) : tab === "bindings" ? (
           <div className="overview-list handbook-list bindings-scroll">
-            <BindingsPanel active={open && tab === "bindings"} />
+            <BindingsPanel
+              active={open && tab === "bindings"}
+              agentProfileId={agentProfileId}
+            />
           </div>
         ) : (
           <div className="overview-list legend-list" role="tabpanel">

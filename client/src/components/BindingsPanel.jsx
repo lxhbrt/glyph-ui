@@ -1,18 +1,64 @@
 /**
- * Anbindung: API-Keys + OAuth/Service-Status (Inhalt, kein eigenes Overlay).
+ * Anbindung: API-Keys + OpenRouter-Models + OAuth/Service-Status.
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
 import { useCallback, useEffect, useState } from "react";
 
 /**
+ * Prefill model fields: bindings → agent health → placeholders (never wipe edits).
+ * @param {object|null} data
+ * @param {{ hasUserEdits: boolean, primary: string, fallback: string, codePrimary: string, codeFallback: string }} fields
+ */
+function prefillModels(data, fields) {
+  if (fields.hasUserEdits) return fields;
+  const shared = data?.models?.shared;
+  const code = data?.models?.code;
+  const active = data?.modelsActive?.shared || data?.modelsActive?.active;
+  const healthPrimary =
+    active?.primary ||
+    data?.modelsActive?.active?.primary ||
+    data?.modelsActive?.shared?.primary ||
+    "";
+  const healthFb =
+    active?.fallback ??
+    data?.modelsActive?.active?.fallback ??
+    data?.modelsActive?.shared?.fallback ??
+    "";
+  const primary =
+    shared?.primary ||
+    healthPrimary ||
+    fields.primary ||
+    "deepseek/deepseek-v4-flash-0731";
+  const fallback =
+    shared?.fallback != null && shared?.primary
+      ? shared.fallback
+      : shared?.primary
+        ? shared.fallback || ""
+        : healthFb || fields.fallback || "";
+  const codePrimary = code?.primary || fields.codePrimary || "";
+  const codeFallback =
+    code?.primary != null ? code.fallback || "" : fields.codeFallback || "";
+  return {
+    hasUserEdits: false,
+    primary,
+    fallback,
+    codePrimary,
+    codeFallback,
+    codeOpen: Boolean(code?.primary) || fields.codeOpen,
+  };
+}
+
+/**
  * @param {object} props
  * @param {boolean} props.active — when true, load/refresh status
+ * @param {string} [props.agentProfileId] — grok | _code | glyph-agent
  */
-function BindingsPanel({ active }) {
+function BindingsPanel({ active, agentProfileId = "" }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
   const [openrouter, setOpenrouter] = useState("");
@@ -20,6 +66,19 @@ function BindingsPanel({ active }) {
   const [agentUrl, setAgentUrl] = useState("");
   const [clearOpenrouter, setClearOpenrouter] = useState(false);
   const [clearXai, setClearXai] = useState(false);
+  const [primary, setPrimary] = useState("");
+  const [fallback, setFallback] = useState("");
+  const [codePrimary, setCodePrimary] = useState("");
+  const [codeFallback, setCodeFallback] = useState("");
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [modelsDirty, setModelsDirty] = useState(false);
+
+  const openRouterProfiles =
+    agentProfileId === "_code" ||
+    agentProfileId === "code" ||
+    agentProfileId === "glyph-agent" ||
+    agentProfileId === "agent" ||
+    !agentProfileId;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,18 +98,38 @@ function BindingsPanel({ active }) {
       setXai("");
       setClearOpenrouter(false);
       setClearXai(false);
+      const filled = prefillModels(data, {
+        hasUserEdits: modelsDirty,
+        primary,
+        fallback,
+        codePrimary,
+        codeFallback,
+        codeOpen,
+      });
+      if (!modelsDirty) {
+        setPrimary(filled.primary);
+        setFallback(filled.fallback);
+        setCodePrimary(filled.codePrimary);
+        setCodeFallback(filled.codeFallback);
+        if (filled.codeOpen) setCodeOpen(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-prefill when not dirty
+  }, [modelsDirty]);
 
   useEffect(() => {
     if (!active) return;
     void load();
   }, [active, load]);
+
+  function markModelsDirty() {
+    setModelsDirty(true);
+  }
 
   async function save(e) {
     e?.preventDefault?.();
@@ -65,10 +144,30 @@ function BindingsPanel({ active }) {
       else if (xai.trim()) body.XAI_API_KEY = xai.trim();
       if (agentUrl.trim()) body.GLYPH_AGENT_URL = agentUrl.trim();
 
+      const p = primary.trim();
+      if (p) {
+        body.models = {
+          shared: {
+            primary: p,
+            fallback: fallback.trim(),
+          },
+          code: codeOpen && codePrimary.trim()
+            ? {
+                primary: codePrimary.trim(),
+                fallback: codeFallback.trim(),
+              }
+            : null,
+        };
+      }
+
       if (!Object.keys(body).length) {
-        setOkMsg("Nichts zu speichern — Key eintippen oder Status neu laden.");
+        setOkMsg("Nichts zu speichern — Key oder Model eintippen.");
         setSaving(false);
         return;
+      }
+
+      if (body.models && !body.models.shared?.primary) {
+        throw new Error("OpenRouter Primary-Model ist Pflicht");
       }
 
       const res = await fetch("/api/bindings", {
@@ -86,11 +185,68 @@ function BindingsPanel({ active }) {
       setClearOpenrouter(false);
       setClearXai(false);
       setAgentUrl(data?.settings?.GLYPH_AGENT_URL?.value || agentUrl);
-      setOkMsg("Gespeichert unter ~/.glyph-ui/bindings.json (nur lokal).");
+      setModelsDirty(false);
+      if (data?.models?.shared?.primary) {
+        setPrimary(data.models.shared.primary);
+        setFallback(data.models.shared.fallback || "");
+      }
+      if (data?.models?.code?.primary) {
+        setCodePrimary(data.models.code.primary);
+        setCodeFallback(data.models.code.fallback || "");
+        setCodeOpen(true);
+      } else if (body.models && body.models.code === null) {
+        setCodePrimary("");
+        setCodeFallback("");
+      }
+
+      const apply = data?.modelsApply;
+      if (body.models && apply) {
+        if (apply.ok && apply.applied) {
+          setOkMsg(
+            "Gespeichert + live am glyph-agent übernommen (nächster Chat).",
+          );
+        } else {
+          setOkMsg(
+            `Gespeichert in bindings.json. Apply ausstehend: ${apply.error || "Agent offline"} — greift beim Connect.`,
+          );
+        }
+      } else {
+        setOkMsg("Gespeichert unter ~/.glyph-ui/bindings.json (nur lokal).");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function testModel() {
+    const m = primary.trim();
+    if (!m) {
+      setError("Zum Testen Primary-Model eintragen");
+      return;
+    }
+    setTesting(true);
+    setError("");
+    setOkMsg("");
+    try {
+      const res = await fetch("/api/models/probe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: m }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || `Probe HTTP ${res.status}`);
+      }
+      const win = data.context_length
+        ? ` · context ${Number(data.context_length).toLocaleString("de-DE")}`
+        : "";
+      setOkMsg(`Test ok: ${m}${win}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -152,6 +308,107 @@ function BindingsPanel({ active }) {
       </section>
 
       <form className="bindings-form" onSubmit={(e) => void save(e)}>
+        <h4 className="bindings-section-title">OpenRouter Models (^_Code / °_Agent)</h4>
+        {!openRouterProfiles ? (
+          <p className="bindings-hint">
+            Profil <strong>Grok</strong> nutzt die CLI/OAuth — Model-IDs hier greifen
+            erst nach Wechsel auf <code>^_Code</code> oder <code>°_Agent</code>.
+            OAuth-Provider-Tausch (z. B. Claude) ist v1 nicht Teil dieses Menüs.
+          </p>
+        ) : null}
+        {status?.modelsMismatch ? (
+          <p className="bindings-hint bindings-hint--warn">
+            Gespeicherte Models weichen vom laufenden Agent ab — Speichern oder
+            Connect synct (Mismatch).
+          </p>
+        ) : null}
+        <label className="summarize-label" htmlFor="bind-model-primary">
+          Primary (OpenRouter Model-ID)
+        </label>
+        <input
+          id="bind-model-primary"
+          className="summarize-input"
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="deepseek/deepseek-v4-flash-0731"
+          value={primary}
+          disabled={saving || !openRouterProfiles}
+          onChange={(e) => {
+            markModelsDirty();
+            setPrimary(e.target.value);
+          }}
+        />
+        <label className="summarize-label" htmlFor="bind-model-fallback">
+          Fallback (optional — leer = kein Fallback)
+        </label>
+        <input
+          id="bind-model-fallback"
+          className="summarize-input"
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="inclusionai/ling-3.0-tiny:free"
+          value={fallback}
+          disabled={saving || !openRouterProfiles}
+          onChange={(e) => {
+            markModelsDirty();
+            setFallback(e.target.value);
+          }}
+        />
+        <details
+          className="bindings-advanced"
+          open={codeOpen}
+          onToggle={(e) => setCodeOpen(e.currentTarget.open)}
+        >
+          <summary>Erweitert: Code abweichend</summary>
+          <p className="bindings-hint">
+            Leer lassen = gleiches Paar wie Primary/Fallback (shared).
+          </p>
+          <label className="summarize-label" htmlFor="bind-code-primary">
+            Code Primary
+          </label>
+          <input
+            id="bind-code-primary"
+            className="summarize-input"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={codePrimary}
+            disabled={saving || !openRouterProfiles}
+            onChange={(e) => {
+              markModelsDirty();
+              setCodePrimary(e.target.value);
+            }}
+          />
+          <label className="summarize-label" htmlFor="bind-code-fallback">
+            Code Fallback
+          </label>
+          <input
+            id="bind-code-fallback"
+            className="summarize-input"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={codeFallback}
+            disabled={saving || !openRouterProfiles}
+            onChange={(e) => {
+              markModelsDirty();
+              setCodeFallback(e.target.value);
+            }}
+          />
+        </details>
+        <div className="summarize-actions" style={{ marginBottom: "1rem" }}>
+          <button
+            type="button"
+            className="pill pill-btn"
+            disabled={saving || testing || loading || !openRouterProfiles}
+            onClick={() => void testModel()}
+          >
+            {testing ? "Teste…" : "Testen"}
+          </button>
+        </div>
+
         <h4 className="bindings-section-title">Keys & URL</h4>
 
         <label className="summarize-label" htmlFor="bind-or">
@@ -244,7 +501,8 @@ function BindingsPanel({ active }) {
             Im Terminal auf diesem Mac/PC: <code>grok login</code>
             <br />
             Glyph liest nur den Status aus <code>~/.grok/auth.json</code> — kein
-            Token-Eingabe hier (gewollt).
+            Token-Eingabe hier (gewollt). Provider-Wechsel (z. B. Claude) ist
+            kein OpenRouter-Model-String — eigenes Epic, nicht dieses Menü.
           </p>
         </div>
 

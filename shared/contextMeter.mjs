@@ -9,8 +9,8 @@
 /** Default soft-cap when model catalog has no auto_compact_threshold_percent. */
 export const DEFAULT_SOFT_CAP_PERCENT = 80;
 
-/** Conservative fallback when model id is unknown. */
-export const DEFAULT_CONTEXT_WINDOW = 200_000;
+/** Conservative fallback when model id is unknown (and OpenRouter lookup misses). */
+export const DEFAULT_CONTEXT_WINDOW = 250_000;
 
 /**
  * Known model → context window (tokens).
@@ -35,6 +35,7 @@ export const CONTEXT_WINDOWS = {
   "sonnet-5": 1_000_000,
   "sonnet 5": 1_000_000,
   "deepseek/deepseek-v4-flash": 1_000_000,
+  "deepseek/deepseek-v4-flash-0731": 1_000_000,
   "deepseek-v4-flash": 1_000_000,
   "deepseek-v4-flash-0731": 1_000_000,
   "deepseek/deepseek-reasoner": 1_000_000,

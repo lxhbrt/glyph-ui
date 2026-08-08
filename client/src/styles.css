@@ -402,6 +402,50 @@ body,
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
+.model-hud {
+  max-width: 14rem;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #333);
+  background: transparent;
+  color: var(--muted, #999);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+  text-align: left;
+}
+.model-hud:hover {
+  color: var(--fg, #eee);
+  border-color: var(--fg-dim, #666);
+}
+.model-hud--mismatch {
+  border-color: #c9a227;
+  color: #e6c35c;
+}
+.model-hud--muted {
+  opacity: 0.75;
+}
+.model-hud-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bindings-advanced {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+}
+.bindings-advanced summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted, #999);
+}
+.bindings-hint--warn {
+  color: #e6c35c;
+}
 .agent-pick-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;

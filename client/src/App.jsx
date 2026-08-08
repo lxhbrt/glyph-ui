@@ -106,6 +106,8 @@ export default function App() {
   const [agent, setAgent] = useState(null);
   const [agents, setAgents] = useState([]);
   const [agentSwitching, setAgentSwitching] = useState(false);
+  /** OpenRouter model badge (Code/Agent): active from agent, desired from bindings. */
+  const [modelHud, setModelHud] = useState(null);
   /** ^_Code: Write/Shell-Genehmigung aus dem Bridge-Server */
   const [permissionReq, setPermissionReq] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -1963,8 +1965,63 @@ export default function App() {
       lines.push(`${bridgeMeta.host}:${bridgeMeta.port}`);
       if (bridgeMeta.root) lines.push(bridgeMeta.root);
     }
+    if (modelHud?.label) lines.push(`Model: ${modelHud.label}`);
     return lines.length ? lines.join("\n") : undefined;
-  }, [sessionId, cwd, bridgeMeta]);
+  }, [sessionId, cwd, bridgeMeta, modelHud]);
+
+  /** Poll bindings/health for OpenRouter model badge + mismatch auto-sync. */
+  useEffect(() => {
+    const profileId = agent?.id || "";
+    const isOr = profileId === "_code" || profileId === "glyph-agent";
+    if (!isOr) {
+      setModelHud({
+        kind: "grok",
+        label: "Grok (CLI)",
+        mismatch: false,
+      });
+      return undefined;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        // Mismatch → try apply once per poll cycle (server no-ops if in sync)
+        await fetch("/api/models/apply", { method: "POST" }).catch(() => {});
+        const res = await fetch("/api/bindings", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || cancelled) return;
+        const active = data.modelsActive?.active || data.modelsActive?.shared;
+        const desired = data.models?.shared;
+        const code = data.modelsActive?.code || data.models?.code;
+        const primary =
+          active?.primary || desired?.primary || data.modelsActive?.shared?.primary || "";
+        const fb =
+          active?.fallback ??
+          desired?.fallback ??
+          data.modelsActive?.shared?.fallback ??
+          "";
+        let label = primary || "—";
+        if (primary && fb) label = `${primary} → ${fb}`;
+        if (code?.override && code?.primary) {
+          label = `${label} · code:${code.primary}`;
+        }
+        setModelHud({
+          kind: "openrouter",
+          label,
+          primary,
+          fallback: fb || "",
+          mismatch: Boolean(data.modelsMismatch),
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    void tick();
+    const id = window.setInterval(tick, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [agent?.id, connected]);
 
   /** Stale UI vs running bridge — only then surface a banner. */
   const buildMismatch = Boolean(
@@ -2356,6 +2413,37 @@ export default function App() {
                   ))}
                 </select>
               </label>
+            ) : null}
+            {modelHud?.label ? (
+              <button
+                type="button"
+                className={`model-hud${modelHud.mismatch ? " model-hud--mismatch" : ""}${
+                  modelHud.kind === "grok" ? " model-hud--muted" : ""
+                }`}
+                title={
+                  modelHud.kind === "grok"
+                    ? "Grok-Profil: Model steuert die CLI. OpenRouter-IDs: Buch → Anbindung (nach Wechsel auf Code/Agent)."
+                    : modelHud.mismatch
+                      ? `Gespeichert ≠ aktiv: ${modelHud.label} — Buch → Anbindung`
+                      : modelHud.label
+                }
+                onClick={() => {
+                  setLegendTab("bindings");
+                  setShowLegend(true);
+                }}
+              >
+                <span className="model-hud-text">
+                  {modelHud.kind === "grok"
+                    ? "Grok"
+                    : modelHud.primary
+                      ? modelHud.primary.split("/").pop()
+                      : "Model"}
+                  {modelHud.kind !== "grok" && modelHud.fallback
+                    ? ` → ${String(modelHud.fallback).split("/").pop()}`
+                    : ""}
+                  {modelHud.mismatch ? " ⚠" : ""}
+                </span>
+              </button>
             ) : null}
             <button
               type="button"
@@ -3167,6 +3255,7 @@ export default function App() {
         onClose={() => setShowLegend(false)}
         initialTab={legendTab}
         agentCommands={agentCommands}
+        agentProfileId={agent?.id || ""}
       />
       <ExtensionsModal
         open={showExtensions}

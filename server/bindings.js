@@ -45,8 +45,97 @@ export function maskSecret(value) {
 }
 
 /**
+ * @param {unknown} pair
+ * @returns {{ primary: string, fallback: string, contextWindow?: number } | null}
+ */
+export function normalizeModelPair(pair) {
+  if (!pair || typeof pair !== "object") return null;
+  const primary = String(pair.primary || pair.model || "").trim();
+  if (!primary) return null;
+  const fallback = String(pair.fallback || pair.fallbackModel || "").trim();
+  const out = { primary, fallback };
+  const cw = Number(pair.contextWindow ?? pair.context_length);
+  if (Number.isFinite(cw) && cw > 0) out.contextWindow = Math.round(cw);
+  return out;
+}
+
+/**
  * @param {unknown} raw
- * @returns {{ keys: Record<string, string>, settings: Record<string, string> }}
+ * @returns {{
+ *   shared: { primary: string, fallback: string, contextWindow?: number } | null,
+ *   code: { primary: string, fallback: string, contextWindow?: number } | null,
+ * }}
+ */
+export function normalizeModels(raw) {
+  const empty = { shared: null, code: null };
+  if (!raw || typeof raw !== "object") return empty;
+  const src = raw.models && typeof raw.models === "object" ? raw.models : raw;
+  const shared = normalizeModelPair(src.shared);
+  const code = normalizeModelPair(src.code);
+  return { shared, code };
+}
+
+/**
+ * Build agent POST /models body from stored models.
+ * Empty code primary → omit code (agent uses shared for both).
+ * @param {{ shared?: object|null, code?: object|null }} models
+ */
+export function modelsToAgentPayload(models) {
+  const sharedPair = normalizeModelPair(models?.shared);
+  if (!sharedPair) return null;
+  const body = {
+    shared: {
+      primary: sharedPair.primary,
+      fallback: sharedPair.fallback || "",
+    },
+  };
+  const codePair = normalizeModelPair(models?.code);
+  if (codePair) {
+    body.code = {
+      primary: codePair.primary,
+      fallback: codePair.fallback || "",
+    };
+  }
+  return body;
+}
+
+/**
+ * Compare desired bindings models vs agent health snapshot.
+ * @param {{ shared?: object|null, code?: object|null }} desired
+ * @param {object|null|undefined} health
+ */
+export function modelsMismatch(desired, health) {
+  const want = modelsToAgentPayload(desired);
+  if (!want) return false;
+  const snap = health?.models || health || {};
+  const actShared = snap.shared || {
+    primary: health?.primary_model || health?.model,
+    fallback: health?.fallback_model,
+  };
+  const actCode = snap.code || {
+    primary: health?.code_model,
+    fallback: health?.code_fallback_model,
+  };
+  const norm = (v) => String(v || "").trim();
+  if (norm(want.shared.primary) !== norm(actShared?.primary)) return true;
+  if (norm(want.shared.fallback) !== norm(actShared?.fallback)) return true;
+  if (want.code) {
+    if (norm(want.code.primary) !== norm(actCode?.primary)) return true;
+    if (norm(want.code.fallback) !== norm(actCode?.fallback)) return true;
+  } else if (actCode?.override) {
+    // agent has code override but we want shared-only
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{
+ *   keys: Record<string, string>,
+ *   settings: Record<string, string>,
+ *   models: { shared: object|null, code: object|null },
+ * }}
  */
 export function normalizeBindingsFile(raw) {
   const keys = {};
@@ -72,24 +161,25 @@ export function normalizeBindingsFile(raw) {
     const v = setSrc?.[id];
     if (typeof v === "string" && v.trim()) settings[id] = v.trim();
   }
-  return { keys, settings };
+  const models = normalizeModels(obj);
+  return { keys, settings, models };
 }
 
 /**
  * @param {string} [filePath]
- * @returns {Promise<{ keys: Record<string, string>, settings: Record<string, string> }>}
+ * @returns {Promise<{ keys: Record<string, string>, settings: Record<string, string>, models: object }>}
  */
 export async function readBindingsFile(filePath = bindingsPath()) {
   try {
     const raw = await fs.readFile(filePath, "utf8");
     return normalizeBindingsFile(JSON.parse(raw));
   } catch {
-    return { keys: {}, settings: {} };
+    return { keys: {}, settings: {}, models: { shared: null, code: null } };
   }
 }
 
 /**
- * @param {{ keys?: Record<string, string>, settings?: Record<string, string> }} data
+ * @param {{ keys?: Record<string, string>, settings?: Record<string, string>, models?: object }} data
  * @param {string} [filePath]
  */
 export async function writeBindingsFile(data, filePath = bindingsPath()) {
@@ -106,6 +196,28 @@ export async function writeBindingsFile(data, filePath = bindingsPath()) {
   for (const id of BINDING_SETTING_IDS) {
     const v = data?.settings?.[id];
     if (typeof v === "string" && v.trim()) payload.settings[id] = v.trim();
+  }
+  const models = normalizeModels({ models: data?.models || data });
+  if (models.shared || models.code) {
+    payload.models = {};
+    if (models.shared) {
+      payload.models.shared = {
+        primary: models.shared.primary,
+        fallback: models.shared.fallback || "",
+      };
+      if (models.shared.contextWindow) {
+        payload.models.shared.contextWindow = models.shared.contextWindow;
+      }
+    }
+    if (models.code) {
+      payload.models.code = {
+        primary: models.code.primary,
+        fallback: models.code.fallback || "",
+      };
+      if (models.code.contextWindow) {
+        payload.models.code.contextWindow = models.code.contextWindow;
+      }
+    }
   }
   const tmp = `${filePath}.${process.pid}.tmp`;
   await fs.writeFile(tmp, `${JSON.stringify(payload, null, 2)}\n`, {
@@ -253,7 +365,7 @@ export async function probeAgentHealth(baseUrl, opts = {}) {
   const base = String(baseUrl || "http://127.0.0.1:18899").replace(/\/$/, "");
   const url = `${base}/health`;
   if (!fetchImpl) {
-    return { ok: false, url, detail: "fetch unavailable" };
+    return { ok: false, url, detail: "fetch unavailable", body: null };
   }
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -269,6 +381,7 @@ export async function probeAgentHealth(baseUrl, opts = {}) {
     return {
       ok,
       url,
+      body,
       detail: ok
         ? body?.status || body?.ok || "ok"
         : `HTTP ${res.status}`,
@@ -277,11 +390,212 @@ export async function probeAgentHealth(baseUrl, opts = {}) {
     return {
       ok: false,
       url,
+      body: null,
       detail: err instanceof Error ? err.message : String(err),
     };
   } finally {
     clearTimeout(t);
   }
+}
+
+/**
+ * Push models to glyph-agent POST /models (hot-apply).
+ * @param {string} baseUrl
+ * @param {{ shared?: object|null, code?: object|null }} models
+ * @param {{ fetchImpl?: typeof fetch, timeoutMs?: number }} [opts]
+ */
+export async function pushModelsToAgent(baseUrl, models, opts = {}) {
+  const fetchImpl = opts.fetchImpl || globalThis.fetch;
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  const payload = modelsToAgentPayload(models);
+  if (!payload) {
+    return { ok: false, error: "Kein shared.primary gesetzt", applied: false };
+  }
+  const base = String(baseUrl || "http://127.0.0.1:18899").replace(/\/$/, "");
+  const url = `${base}/models`;
+  if (!fetchImpl) {
+    return { ok: false, error: "fetch unavailable", applied: false, url };
+  }
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok || body?.ok === false) {
+      return {
+        ok: false,
+        applied: false,
+        url,
+        error: body?.error || `HTTP ${res.status}`,
+        body,
+      };
+    }
+    return { ok: true, applied: true, url, body };
+  } catch (err) {
+    return {
+      ok: false,
+      applied: false,
+      url,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * Probe a model via glyph-agent POST /models/probe.
+ * @param {string} baseUrl
+ * @param {string} modelId
+ * @param {{ fetchImpl?: typeof fetch, timeoutMs?: number }} [opts]
+ */
+export async function probeModelOnAgent(baseUrl, modelId, opts = {}) {
+  const fetchImpl = opts.fetchImpl || globalThis.fetch;
+  const timeoutMs = opts.timeoutMs ?? 60000;
+  const base = String(baseUrl || "http://127.0.0.1:18899").replace(/\/$/, "");
+  const url = `${base}/models/probe`;
+  if (!fetchImpl) {
+    return { ok: false, error: "fetch unavailable", url };
+  }
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: String(modelId || "").trim() }),
+      signal: ctrl.signal,
+    });
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok || body?.ok === false) {
+      return {
+        ok: false,
+        url,
+        error: body?.error || `HTTP ${res.status}`,
+        body,
+      };
+    }
+    return { ok: true, url, ...body };
+  } catch (err) {
+    return {
+      ok: false,
+      url,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * Resolve context window: static map → OpenRouter catalog → 250k.
+ * @param {string} modelId
+ * @param {{ fetchImpl?: typeof fetch, timeoutMs?: number, openrouterUrl?: string, cached?: number }} [opts]
+ */
+export async function resolveModelContextWindow(modelId, opts = {}) {
+  const { resolveContextWindow, DEFAULT_CONTEXT_WINDOW } = await import(
+    "../shared/contextMeter.mjs"
+  );
+  const id = String(modelId || "").trim();
+  if (!id) {
+    return { window: DEFAULT_CONTEXT_WINDOW, source: "default" };
+  }
+  if (Number.isFinite(opts.cached) && opts.cached > 0) {
+    return { window: Math.round(opts.cached), source: "cache" };
+  }
+  const mapped = resolveContextWindow(id, "");
+  if (mapped.source === "map") {
+    return { window: mapped.window, source: "map", matchedKey: mapped.matchedKey };
+  }
+  const fetchImpl = opts.fetchImpl || globalThis.fetch;
+  if (!fetchImpl) {
+    return { window: DEFAULT_CONTEXT_WINDOW, source: "default" };
+  }
+  const base = String(
+    opts.openrouterUrl || process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1",
+  ).replace(/\/$/, "");
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 12000);
+  try {
+    const res = await fetchImpl(`${base}/models`, {
+      headers: { Accept: "application/json" },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      return { window: DEFAULT_CONTEXT_WINDOW, source: "default" };
+    }
+    const data = await res.json();
+    const list = data?.data || [];
+    const hit = list.find((m) => String(m?.id || "") === id);
+    const cl = Number(hit?.context_length);
+    if (Number.isFinite(cl) && cl > 0) {
+      return { window: Math.round(cl), source: "openrouter" };
+    }
+    return { window: DEFAULT_CONTEXT_WINDOW, source: "default" };
+  } catch {
+    return { window: DEFAULT_CONTEXT_WINDOW, source: "default" };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * If bindings models differ from agent health, push (Q27).
+ * @param {object} [opts]
+ */
+export async function syncModelsIfMismatch(opts = {}) {
+  const env = opts.env || process.env;
+  const stateDir =
+    opts.stateDir ||
+    env.GLYPH_UI_STATE_DIR ||
+    path.join(os.homedir(), ".glyph-ui");
+  const filePath = opts.bindingsFile || bindingsPath(stateDir);
+  const file = await readBindingsFile(filePath);
+  if (!file.models?.shared?.primary) {
+    return { ok: true, skipped: true, reason: "no_models_in_bindings" };
+  }
+  const agentUrl =
+    String(env.GLYPH_AGENT_URL || file.settings.GLYPH_AGENT_URL || "").trim() ||
+    "http://127.0.0.1:18899";
+  const health =
+    opts.agentHealth ||
+    (await probeAgentHealth(agentUrl, { fetchImpl: opts.fetchImpl }));
+  if (!health.ok) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "agent_down",
+      error: health.detail,
+    };
+  }
+  if (!modelsMismatch(file.models, health.body)) {
+    return { ok: true, skipped: true, reason: "in_sync", health: health.body };
+  }
+  const push = await pushModelsToAgent(agentUrl, file.models, {
+    fetchImpl: opts.fetchImpl,
+  });
+  return {
+    ok: push.ok,
+    skipped: false,
+    applied: Boolean(push.applied),
+    error: push.error,
+    body: push.body,
+  };
 }
 
 /**
@@ -318,6 +632,13 @@ export async function buildBindingsStatus(opts = {}) {
   // °_Agent can run tools without OpenRouter for some paths, but Cloud-Antwort needs key
   const agentOk = agentHealth.ok;
 
+  const modelsDesired = file.models || { shared: null, code: null };
+  const modelsActive = agentHealth.body?.models || null;
+  const mismatch =
+    Boolean(modelsDesired.shared?.primary) &&
+    agentHealth.ok &&
+    modelsMismatch(modelsDesired, agentHealth.body);
+
   return {
     stateDir,
     bindingsPath: filePath,
@@ -338,6 +659,10 @@ export async function buildBindingsStatus(opts = {}) {
             : "default",
       },
     },
+    models: modelsDesired,
+    modelsActive,
+    modelsMismatch: mismatch,
+    modelsApply: opts.modelsApply || null,
     profiles: {
       grok: {
         id: "grok",
@@ -423,6 +748,7 @@ export async function buildBindingsStatus(opts = {}) {
 /**
  * Merge UI patch into file + env.
  * Empty string clears a key/setting.
+ * Patch may include `models: { shared, code }` (code null clears override).
  * @param {Record<string, unknown>} patch
  * @param {object} [opts]
  */
@@ -437,6 +763,10 @@ export async function updateBindings(patch, opts = {}) {
   const next = {
     keys: { ...current.keys },
     settings: { ...current.settings },
+    models: {
+      shared: current.models?.shared ? { ...current.models.shared } : null,
+      code: current.models?.code ? { ...current.models.code } : null,
+    },
   };
 
   const body = patch && typeof patch === "object" ? patch : {};
@@ -456,6 +786,21 @@ export async function updateBindings(patch, opts = {}) {
       delete next.settings[id];
     } else {
       next.settings[id] = String(raw).trim();
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "models")) {
+    const m = body.models;
+    if (m == null) {
+      next.models = { shared: null, code: null };
+    } else if (typeof m === "object") {
+      if (Object.prototype.hasOwnProperty.call(m, "shared")) {
+        next.models.shared = normalizeModelPair(m.shared);
+      }
+      if (Object.prototype.hasOwnProperty.call(m, "code")) {
+        // null / empty primary clears code override
+        next.models.code = normalizeModelPair(m.code);
+      }
     }
   }
 

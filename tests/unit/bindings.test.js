@@ -14,7 +14,10 @@ import {
   bindingsPath,
   buildBindingsStatus,
   maskSecret,
+  modelsMismatch,
+  modelsToAgentPayload,
   normalizeBindingsFile,
+  normalizeModels,
   readBindingsFile,
   resolveKeySource,
   updateBindings,
@@ -34,6 +37,7 @@ test("normalizeBindingsFile accepts nested and flat shapes", () => {
   });
   assert.equal(nested.keys.OPENROUTER_API_KEY, "sk-a");
   assert.equal(nested.settings.GLYPH_AGENT_URL, "http://127.0.0.1:9");
+  assert.equal(nested.models.shared, null);
 
   const flat = normalizeBindingsFile({
     XAI_API_KEY: "xai-1",
@@ -41,6 +45,71 @@ test("normalizeBindingsFile accepts nested and flat shapes", () => {
   });
   assert.equal(flat.keys.XAI_API_KEY, "xai-1");
   assert.equal(flat.settings.GLYPH_AGENT_URL, "http://x");
+});
+
+test("normalizeModels nested shared/code", () => {
+  const m = normalizeModels({
+    models: {
+      shared: {
+        primary: " deepseek/deepseek-v4-flash-0731 ",
+        fallback: "inclusionai/ling-3.0-tiny:free",
+        contextWindow: 1048576,
+      },
+      code: { primary: "x/y", fallback: "" },
+    },
+  });
+  assert.equal(m.shared.primary, "deepseek/deepseek-v4-flash-0731");
+  assert.equal(m.shared.fallback, "inclusionai/ling-3.0-tiny:free");
+  assert.equal(m.shared.contextWindow, 1048576);
+  assert.equal(m.code.primary, "x/y");
+  assert.equal(m.code.fallback, "");
+});
+
+test("modelsToAgentPayload and modelsMismatch", () => {
+  const models = {
+    shared: { primary: "a/b", fallback: "c/d" },
+    code: null,
+  };
+  const payload = modelsToAgentPayload(models);
+  assert.deepEqual(payload.shared, { primary: "a/b", fallback: "c/d" });
+  assert.equal(payload.code, undefined);
+
+  assert.equal(
+    modelsMismatch(models, {
+      shared: { primary: "a/b", fallback: "c/d" },
+      code: { primary: "a/b", fallback: "c/d", override: false },
+    }),
+    false,
+  );
+  assert.equal(
+    modelsMismatch(models, {
+      shared: { primary: "a/b", fallback: "" },
+      code: { override: false },
+    }),
+    true,
+  );
+});
+
+test("write/read models roundtrip", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "glyph-bind-m-"));
+  const file = path.join(dir, "bindings.json");
+  const env = {};
+  await updateBindings(
+    {
+      models: {
+        shared: {
+          primary: "deepseek/deepseek-v4-flash-0731",
+          fallback: "inclusionai/ling-3.0-tiny:free",
+        },
+        code: null,
+      },
+    },
+    { stateDir: dir, bindingsFile: file, env },
+  );
+  const read = await readBindingsFile(file);
+  assert.equal(read.models.shared.primary, "deepseek/deepseek-v4-flash-0731");
+  assert.equal(read.models.shared.fallback, "inclusionai/ling-3.0-tiny:free");
+  assert.equal(read.models.code, null);
 });
 
 test("bindingsPath default under state dir", () => {
