@@ -53,6 +53,7 @@
     "service:install": "bash scripts/install-service.sh",
     "service:uninstall": "bash scripts/uninstall-service.sh",
     "service:status": "bash scripts/status-service.sh",
+    "service:remote": "bash scripts/enable-tailscale-remote.sh",
     "icon:dock": "bash scripts/install-dock-icon.sh",
     "open": "bash \"scripts/Open Glyph.command\""
   },

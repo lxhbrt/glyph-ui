@@ -37,6 +37,10 @@ import {
   IconCopy,
   IconCheck,
   IconRefresh,
+  IconEnter,
+  IconLink,
+  IconLinkOff,
+  IconSummarize,
 } from "./components/icons.jsx";
 
 /** Composer textarea grows down to this max height (px). */
@@ -1666,6 +1670,23 @@ export default function App() {
   // Unabhängig von sessionList (gilt auch für glyph-agent ohne Lupe).
   const canSummarize = caps ? Boolean(caps.summarize && caps.sessionHistory) : false;
   const agentLabel = agent?.label || "Agent";
+  /**
+   * Product line by profile (roles in server/agents.js):
+   *   Grok      → Build Term
+   *   ^_Code    → Code Term
+   *   °_Agent   → Chat Term
+   */
+  const productTerm = useMemo(() => {
+    const id = agent?.id || "";
+    if (id === "_code" || id === "code" || id === "claude") {
+      return `Code Term for ${agentLabel}`;
+    }
+    if (id === "glyph-agent" || id === "agent") {
+      // User-facing short name; picker keeps °_Agent.
+      return "Chat Term for Agent";
+    }
+    return `Build Term for ${agentLabel}`;
+  }, [agent?.id, agentLabel]);
   const unavailableFor = useCallback(
     (what) => `${what} ist nur im grok-Profil verfügbar (aktiv: ${agentLabel})`,
     [agentLabel],
@@ -1932,7 +1953,8 @@ export default function App() {
         : `Glyph got lost… in space · ${workingSeconds}s still — tippen = Stopp · dann neu`;
     }
     if (isWorking) {
-      return `${agentLabel} arbeitet… ${workingSeconds}s — Enter → Warteschlange · Snack = Stopp`;
+      // Short on purpose: stop/queue is the round button + empty Enter — no reminder spam
+      return `${agentLabel} work… ${workingSeconds}s`;
     }
     if (sendAction === "deep-search") {
       return "Deep Search Query… z. B. Compare Postgres 17 vs MySQL 9";
@@ -1940,7 +1962,8 @@ export default function App() {
     if (sendAction === "fork") {
       return "Optional: Directive für den Fork… (leer = nur Session branchen)";
     }
-    return `Nachricht an ${agentLabel}… / Befehle · Screenshot paste · Datei droppen`;
+    // Keep short: attach hints live in the empty state; long copy wraps badly on phones
+    return `Nachricht an ${agentLabel}…  ·  / für Befehle`;
   }, [
     connected,
     isWorking,
@@ -2013,7 +2036,9 @@ export default function App() {
   /** SuperGrok-style: 1-line default, grow downward up to COMPOSER_MAX_H.
    *  Mirror must match textarea *content* box (clientWidth/Height), not the
    *  border box — otherwise scrollbar / gutter shifts wraps by ~10–15 chars
-   *  from line 2 onward and the caret drifts from the visible text. */
+   *  from line 2 onward and the caret drifts from the visible text.
+   *  Empty value: force min-height — iOS Safari scrollHeight grows with a
+   *  wrapped placeholder and balloons the empty composer (narrow phones). */
   const resizeComposer = useCallback(() => {
     const ta = composerRef.current;
     if (!ta) return;
@@ -2023,10 +2048,22 @@ export default function App() {
       ? ta.previousElementSibling
       : null;
 
+    const wrap = ta.closest(".composer-input-wrap");
+    const minVar = wrap
+      ? getComputedStyle(wrap).getPropertyValue("--composer-min-h").trim()
+      : "";
+    const rootFs = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const minH = minVar.endsWith("rem")
+      ? parseFloat(minVar) * rootFs
+      : parseFloat(minVar) || rootFs * 2.25;
+
     ta.style.height = "auto";
     ta.style.minHeight = "";
 
-    const h = Math.min(ta.scrollHeight, COMPOSER_MAX_H);
+    const empty = ta.value.length === 0;
+    const h = empty
+      ? minH
+      : Math.min(Math.max(ta.scrollHeight, minH), COMPOSER_MAX_H);
     ta.style.height = `${h}px`;
     ta.style.minHeight = `${h}px`;
 
@@ -2147,10 +2184,10 @@ export default function App() {
           disabled={!canSeeActivity}
           title={
             canSeeActivity
-              ? "Aktivitäts-Kalender"
-              : unavailableFor("Der Aktivitäts-Kalender")
+              ? "Aktivität — Glyph"
+              : unavailableFor("Die Aktivitäts-Ansicht")
           }
-          aria-label="Kalender"
+          aria-label="Aktivität"
         >
           <IconCalendar />
         </button>
@@ -2261,11 +2298,11 @@ export default function App() {
                   #{GLYPH_BUILD}
                 </span>
               ) : null}
+              <span className="sub sub--inline" title={headerTooltip}>
+                {productTerm} · ACP
+                {cwdLabel ? ` · ${cwdLabel}` : ""}
+              </span>
             </h1>
-            <p className="sub" title={headerTooltip}>
-              Build Term for {agentLabel} · ACP
-              {cwdLabel ? ` · ${cwdLabel}` : ""}
-            </p>
           </div>
           <div className="top-actions">
             {agents.length > 1 ? (
@@ -2288,37 +2325,47 @@ export default function App() {
             ) : null}
             <button
               type="button"
-              className={`pill pill-btn ${
+              className={`pill pill-btn pill-btn--icon ${
                 reconnecting ? "pending" : connected ? "ok" : "bad"
               }`}
               disabled={reconnecting}
               title={
                 reconnecting
                   ? connected
-                    ? "${agentLabel}-Agent wird beendet…"
-                    : "${agentLabel}-Agent wird gestartet…"
+                    ? `${agentLabel}-Agent wird beendet…`
+                    : `${agentLabel}-Agent wird gestartet…`
                   : connected
-                    ? "${agentLabel} läuft — klicken zum Beenden (/quit)"
-                    : "${agentLabel} offline — klicken zum Verbinden"
+                    ? `${agentLabel} läuft — klicken zum Beenden (/quit)`
+                    : `${agentLabel} offline — klicken zum Verbinden`
+              }
+              aria-label={
+                reconnecting
+                  ? connected
+                    ? "Verbindung wird getrennt"
+                    : "Verbindung wird hergestellt"
+                  : connected
+                    ? "Verbunden — klicken zum Beenden"
+                    : "Offline — klicken zum Verbinden"
               }
               onClick={() => void toggleGrokConnection()}
             >
-              {reconnecting
-                ? connected
-                  ? "trennt…"
-                  : "verbindet…"
-                : connected
-                  ? "verbunden"
-                  : "offline"}
+              {reconnecting ? (
+                <IconRefresh size={18} />
+              ) : connected ? (
+                <IconLink size={18} />
+              ) : (
+                <IconLinkOff size={18} />
+              )}
             </button>
             {canSummarize && connected && sessionId ? (
               <button
                 type="button"
-                className="pill pill-btn active-session-summarize"
+                className="pill pill-btn pill-btn--icon active-session-summarize"
                 title="Aktive Session zusammenfassen (Vorschau → Bestätigen)"
+                aria-label="Session zusammenfassen"
                 onClick={() => setActiveSummarizeOpen(true)}
               >
-                ✎ Zusammenfassen
+                <IconSummarize size={18} />
               </button>
             ) : null}
           </div>
@@ -2570,6 +2617,10 @@ export default function App() {
             entries={planEntries}
             collapsed={planCollapsed}
             onToggle={() => setPlanCollapsed((c) => !c)}
+            onDismiss={() => {
+              setPlanEntries([]);
+              setPlanCollapsed(false);
+            }}
           />
           {queue.length > 0 ? (
             <div className="msg-queue" role="list" aria-label="Warteschlange">
@@ -2954,7 +3005,9 @@ export default function App() {
                 aria-live={showWorking ? "polite" : undefined}
               >
                 <span className="send-face send-face--enter" aria-hidden="true">
-                  <span className="send-icon">↵</span>
+                  <span className="send-icon">
+                    <IconEnter size={22} />
+                  </span>
                 </span>
                 <span className="send-face send-face--snack" aria-hidden="true">
                   {(showWorking || snackAlive) && (

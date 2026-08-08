@@ -28,16 +28,24 @@ function IconCompose({ size = 20 }) {
 }
 
 function IconCommands({ size = 20 }) {
-  /* Command palette / slash — Befehle */
+  /* ^_ — Befehle/Skills (analog Obsidian >_, passend zu ^_Code) */
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {/* caret ^ */}
       <path
-        d="M9 7.5V9a2.5 2.5 0 0 1-2.5 2.5H5M15 7.5V9a2.5 2.5 0 0 0 2.5 2.5H19M9 16.5V15a2.5 2.5 0 0 0-2.5-2.5H5M15 16.5V15a2.5 2.5 0 0 1 2.5-2.5H19"
+        d="M4.75 14.25L9 8.5l4.25 5.75"
         stroke="currentColor"
-        strokeWidth="1.75"
+        strokeWidth="1.85"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* underscore _ */}
+      <path
+        d="M14.25 16.75h5"
+        stroke="currentColor"
+        strokeWidth="1.85"
         strokeLinecap="round"
       />
-      <path d="M10 12h4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
     </svg>
   );
 }
@@ -70,63 +78,19 @@ function IconBook({ size = 20 }) {
 }
 
 /**
- * Activity calendar icon — 4 snack-style cells:
- * red apple (+ light highlight) · dark gold head (eye toward apple) · mid · light
+ * Glyph mark — freigegebene Silhouette (Stein / Schriftzeichen / frühe Kalligrafie).
+ * CSS mask + currentColor so it matches the other monochrome rail icons.
+ * Replaces the old 2×2 snack-cell calendar glyph; the activity-calendar action is unchanged.
  */
 function IconCalendar({ size = 20 }) {
-  const gap = 1.5;
-  const cell = (24 - gap * 3) / 2; // 2×2 grid with outer padding = gap
-  const pad = gap;
-  const r = 1.2;
-  // positions: [x, y]
-  const tl = [pad, pad];
-  const tr = [pad + cell + gap, pad];
-  const bl = [pad, pad + cell + gap];
-  const br = [pad + cell + gap, pad + cell + gap];
-  // apple red · peak head · mid · light (matches cal-cell / snack palette)
-  const apple = "var(--snack-stop, #d94a4a)";
-  // same as snack drawApple stopInner (danger-bright = red + white)
-  const appleDot = "var(--snack-stop-inner, #e8a0a0)";
-  const head = "var(--gold-deep, #8a6a12)";
-  const mid = "var(--gold, #d4af37)";
-  const light = "var(--gold-bright, #e8c86a)";
-  const eye = "rgba(0,0,0,0.82)";
-  // highlight on apple (matches snack PIXEL apple: inset light square)
-  const appleDotSz = 2.2;
-  const appleDotX = tl[0] + 2.2;
-  const appleDotY = tl[1] + 2.2;
-  // eye on head (top-right) looking LEFT toward the apple
-  const eyeSz = 2.2;
-  const eyeX = tr[0] + 1.4;
-  const eyeY = tr[1] + (cell - eyeSz) / 2;
-
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      {/* top-left: Apfel (rot) + heller Punkt wie Snack-Apfel */}
-      <rect x={tl[0]} y={tl[1]} width={cell} height={cell} rx={r} fill={apple} />
-      <rect
-        x={appleDotX}
-        y={appleDotY}
-        width={appleDotSz}
-        height={appleDotSz}
-        fill={appleDot}
-      />
-      {/* top-right: Kopf / Peak — Auge schaut zum Apfel (links) */}
-      <rect x={tr[0]} y={tr[1]} width={cell} height={cell} rx={r} fill={head} />
-      <rect x={eyeX} y={eyeY} width={eyeSz} height={eyeSz} fill={eye} />
-      {/* bottom-left: mittel */}
-      <rect x={bl[0]} y={bl[1]} width={cell} height={cell} rx={r} fill={mid} />
-      {/* bottom-right: hell */}
-      <rect x={br[0]} y={br[1]} width={cell} height={cell} rx={r} fill={light} />
-    </svg>
+    <span
+      className="icon-glyph-mark"
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    />
   );
 }
-
-/**
- * Activity calendar (Claude-Code style):
- * gold cells = active days; brighter = less, darker = more;
- * darkest + eye = peak frequency.
- */
 
 function IconFolder({ size = 20 }) {
   return (
@@ -306,6 +270,108 @@ function IconStop({ size = 18 }) {
   );
 }
 
+/** Enter / return — send in composer (replaces flaky Unicode ↵ on mobile). */
+function IconEnter({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M19 6.5v6a3 3 0 0 1-3 3H7"
+        stroke="currentColor"
+        strokeWidth="1.85"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.25 11.75L6.5 15.5l3.75 3.75"
+        stroke="currentColor"
+        strokeWidth="1.85"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Agent connected — chain link (status color via parent). */
+function IconLink({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9.5 14.5l5-5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11.2 16.8l-1.1 1.1a3.6 3.6 0 0 1-5.1-5.1l1.1-1.1M12.8 7.2l1.1-1.1a3.6 3.6 0 1 1 5.1 5.1l-1.1 1.1"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Agent offline — broken link. */
+function IconLinkOff({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9.5 14.5l1.8-1.8M14.5 9.5l-1.2 1.2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11.2 16.8l-1.1 1.1a3.6 3.6 0 0 1-5.1-5.1l1.1-1.1M12.8 7.2l1.1-1.1a3.6 3.6 0 1 1 5.1 5.1l-1.1 1.1"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5 5l14 14"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Session zusammenfassen — pen on note (icon-only header control). */
+function IconSummarize({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7 4.75h7.5A2.25 2.25 0 0 1 16.75 7v2.2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7 4.75A1.75 1.75 0 0 0 5.25 6.5v11A1.75 1.75 0 0 0 7 19.25h7.5A1.75 1.75 0 0 0 16.25 17.5V14"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.5 9h4M8.5 12.5h3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14.2 17.3l5.1-5.1a1.1 1.1 0 0 1 1.55 0l.35.35a1.1 1.1 0 0 1 0 1.55l-5.1 5.1-2.15.55.55-2.15z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export {
   IconSearch,
   IconCompose,
@@ -324,4 +390,8 @@ export {
   IconCheck,
   IconRefresh,
   IconStop,
+  IconEnter,
+  IconLink,
+  IconLinkOff,
+  IconSummarize,
 };

@@ -91,6 +91,26 @@ npm run service:uninstall
 Doppelklick auf `scripts/Open Glyph.command`  
 oder: `npm run open` → öffnet **http://127.0.0.1:5174/**
 
+### Remote (iPhone/iPad über Tailscale)
+
+Glyph bleibt auf **127.0.0.1**. Zugriff von unterwegs nur über **Tailscale Serve** (tailnet-only, kostenlos) — nicht über `0.0.0.0` / Funnel.
+
+```bash
+# Voraussetzung: LaunchAgent installiert, Tailscale App angemeldet
+npm run service:remote
+# = scripts/enable-tailscale-remote.sh
+```
+
+| Was | Adresse |
+|-----|---------|
+| Lokal | http://127.0.0.1:5174 |
+| Remote (Serve) | `https://<MagicDNS>:8443/` |
+| OpenClaw (falls gesetzt) | bleibt auf `:443` unangetastet |
+
+**iPhone:** Tailscale-App (gleiches Konto) → Safari `https://…:8443/` → Profil **°_Agent** → optional „Zum Home-Bildschirm“.  
+**ACL:** in der Tailscale-Admin-Console nur Mac + iPhone freigeben.  
+Details: [HANDBUCH.md § Remote](./HANDBUCH.md#remote-tailscale).
+
 ### Tests & CI
 
 ```bash
@@ -230,6 +250,11 @@ Wichtige Variablen:
 | `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil glyph-agent) |
 | `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für glyph-agent-Antwort |
 | `XAI_API_KEY` | — | Voice (STT/TTS) — [console.x.ai](https://console.x.ai) |
+| `GLYPH_ALLOW_TAILSCALE_ORIGIN` | `0` | `1` = MagicDNS-HTTPS-Origins für WS/API erlauben (Serve) |
+| `GLYPH_TAILSCALE_HOST` | — | MagicDNS-Name (sonst Discovery via `tailscale status`) |
+| `GLYPH_TAILSCALE_SERVE_PORTS` | `8443` | Serve-HTTPS-Ports für Origin-Allowlist |
+| `GLYPH_WS_ORIGINS` | — | Zusätzliche erlaubte Origins (kommagetrennt) |
+| `GLYPH_ALLOW_REMOTE` | `0` | `1` = non-loopback-Bind (nicht empfohlen; Prefer Serve) |
 
 Beispiel:
 
@@ -249,7 +274,9 @@ GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 
 ## Sicherheit
 
-Nur auf **localhost** laufen lassen. Die Bridge startet den Agenten mit vollem Tool-Zugriff (grok mit `--always-approve`). Nicht ungeschützt ins Netz hängen.
+Bridge bindet standardmäßig nur **127.0.0.1**. WebSocket und mutierende API brauchen erlaubte Origin + WS-Token.  
+Remote: **Tailscale Serve** (tailnet-only), nicht `GLYPH_ALLOW_REMOTE=1` und nicht Funnel/öffentliches Internet.  
+Die Bridge startet den Agenten mit vollem Tool-Zugriff (grok mit `--always-approve`).
 
 ## Urheberrecht & Marken
 

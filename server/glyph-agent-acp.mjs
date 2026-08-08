@@ -166,9 +166,10 @@ app.onRequest(acp.methods.agent.initialize, async () => ({
   agentCapabilities: {
     loadSession: false,
     promptCapabilities: {
-      // Stufe 1: Textanhänge werden vom Adapter verarbeitet (embedded_resource,
-      // resource_link). Bilder folgen als multimodale Stufe 2.
+      // Stufe 1: Text (resource / embedded_resource / resource_link)
+      // Stufe 2: Bilder → OpenRouter multimodal (image_url data-URI)
       attachments: true,
+      image: true,
       text: true,
     },
     sessionCapabilities: {},
@@ -365,8 +366,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     throw err;
   }
 
-  // Text + Textanhänge aus ACP-Blöcken extrahieren (Stufe 1).
-  // Bilder/Binär => Hinweis im skips (keine stille Verwerfung).
+  // Text + Textänge + Bilder (Stufe 1 Text / Stufe 2 multimodal image_url).
   const built = await buildPromptWithAttachments(params.prompt || []);
   store.messages.push({ role: "user", content: built.message });
 
@@ -385,6 +385,8 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     let body = {
       message: built.message,
       attachments: built.attachments,
+      // OpenAI-style image_url parts (data: URLs) for vision models
+      images: Array.isArray(built.images) ? built.images : [],
       mode: IS_CODE ? "code" : "agent",
     };
 

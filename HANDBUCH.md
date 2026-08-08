@@ -76,6 +76,48 @@ npm run build
 npm start                 # UI + Bridge auf Port 5174
 ```
 
+### Remote (Tailscale)
+
+Ziel: Glyph vom iPhone bedienen, **ohne** die Bridge ins öffentliche Netz zu hängen.
+
+| Schicht | Rolle |
+|---------|--------|
+| Glyph | bleibt `127.0.0.1:5174` |
+| Tailscale Serve | HTTPS im **eigenen** Tailnet, Standard-Port **8443** |
+| OpenClaw | falls vorhanden: Serve auf **:443** — wird nicht überschrieben |
+
+```bash
+# Einmal / nach Reboot prüfen:
+npm run service:remote
+# oder: bash scripts/enable-tailscale-remote.sh
+```
+
+Das Script:
+
+1. startet Tailscale falls nötig  
+2. setzt Serve `https://<MagicDNS>:8443` → `http://127.0.0.1:5174`  
+3. schreibt LaunchAgent-Env (`GLYPH_ALLOW_TAILSCALE_ORIGIN=1`, Host, Port) und lädt den Service neu  
+
+**Mac am Dock (Strom):** Systemschlaf am Netzstrom aus (`sleep 0`), Wake-on-LAN an — Host bleibt erreichbar, wenn der Rechner an ist.
+
+**iPhone / iPad (Checkliste):**
+
+1. Tailscale-App installieren, **gleiches Konto**, Status „Connected“  
+2. Safari: `https://<dein-mac>.ts.net:8443/`  
+3. Profil **°_Agent** (oder grok) wählen  
+4. Optional: Teilen → **Zum Home-Bildschirm** (PWA-ähnlich)  
+5. ACL in [login.tailscale.com/admin/acls](https://login.tailscale.com/admin/acls): nur Mac + iPhone (strenge Device-Tags/Quellen)
+
+**Smoke (Mac):**
+
+```bash
+curl -fsS http://127.0.0.1:5174/api/health
+curl -fsS "https://$(tailscale status --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))'):8443/api/health"
+tailscale serve status
+```
+
+**Nicht v1:** öffentliches Funnel, native iOS-App, WhatsApp-Anbindung an Glyph.
+
 ---
 
 ## 2. Oberfläche auf einen Blick

@@ -29,9 +29,9 @@ const COMMAND_LEGEND = [
         desc: "Kurzhandbuch und Befehls-Legende (Doku) ganz unten in der Leiste.",
       },
       {
-        cmd: "Kalender",
+        cmd: "Glyph · Aktivität",
         need: "optional",
-        desc: "Aktivitäts-Heatmap (gelb = aktiv, dunkler = häufiger, Peak mit Auge). Klick → Sessions des Tages.",
+        desc: "Glyph-Symbol in der Leiste öffnet die Aktivitäts-Heatmap (gelb = aktiv, dunkler = häufiger, Peak mit Auge). Klick → Sessions des Tages.",
       },
       {
         cmd: "Wiki (i)",
@@ -84,9 +84,9 @@ const COMMAND_LEGEND = [
         desc: "Chat = normale Nachricht. Deep Search = /deep-research. Fork = Session branchen (/fork).",
       },
       {
-        cmd: "verbunden / offline",
+        cmd: "Kette · verbunden / offline",
         need: "empfohlen",
-        desc: "Agent starten/beenden. Gold = verbunden (nicht mehr „grün“).",
+        desc: "Icon-Button: Agent starten/beenden. Gold-Kette = verbunden, rot = offline.",
       },
       {
         cmd: "Freitext + Kontext",
@@ -231,7 +231,7 @@ const SHORT_HANDBOOK = [
     id: "start",
     title: "Schnellstart",
     body: [
-      "Oben rechts **verbunden** (gold) = Agent läuft. Offline? Pill klicken.",
+      "Oben rechts **Ketten-Icon** (gold) = Agent läuft. Offline (durchgestrichen)? Icon klicken.",
       "Nachricht tippen → **Enter** senden · **Shift+Enter** = neue Zeile.",
       "Ohne Verbindung ist das Eingabefeld deaktiviert.",
       "Sicherheit: Bridge mit vollen Tool-Rechten — **nur localhost**.",

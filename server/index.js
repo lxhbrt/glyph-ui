@@ -30,7 +30,7 @@
 
 import express from "express";
 import { createServer } from "node:http";
-import { spawn, execFile } from "node:child_process";
+import { spawn, execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -162,6 +162,57 @@ function isLoopbackAddress(addr) {
   return a === "127.0.0.1" || a === "::1" || a === "localhost";
 }
 
+/**
+ * Extra Origins (comma-separated), e.g. Tailscale Serve:
+ *   GLYPH_WS_ORIGINS=https://mac.tailnet.ts.net:8443
+ */
+function originsFromEnvList() {
+  const raw = process.env.GLYPH_WS_ORIGINS || "";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * When GLYPH_ALLOW_TAILSCALE_ORIGIN=1, allow HTTPS Origins for this node's
+ * MagicDNS name (Tailscale Serve proxies to loopback; Origin is the ts.net host).
+ * Optional GLYPH_TAILSCALE_HOST overrides discovery; GLYPH_TAILSCALE_SERVE_PORTS
+ * defaults to 8443 (443 omits the port in the Origin header).
+ */
+function originsFromTailscale() {
+  if (process.env.GLYPH_ALLOW_TAILSCALE_ORIGIN !== "1") return [];
+  let host = String(process.env.GLYPH_TAILSCALE_HOST || "")
+    .trim()
+    .replace(/\.$/, "");
+  if (!host) {
+    try {
+      const out = execFileSync("tailscale", ["status", "--json"], {
+        encoding: "utf8",
+        timeout: 4000,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      const j = JSON.parse(out);
+      host = String(j?.Self?.DNSName || "")
+        .trim()
+        .replace(/\.$/, "");
+    } catch {
+      return [];
+    }
+  }
+  if (!host || host.includes("/") || host.includes(" ")) return [];
+  const ports = String(process.env.GLYPH_TAILSCALE_SERVE_PORTS || "8443")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const origins = [];
+  for (const p of ports) {
+    if (p === "443") origins.push(`https://${host}`);
+    else origins.push(`https://${host}:${p}`);
+  }
+  return origins;
+}
+
 /** Allowed browser Origins for WebSocket upgrades (prod UI + Vite dev UI). */
 function allowedWsOrigins() {
   const origins = new Set([
@@ -170,6 +221,8 @@ function allowedWsOrigins() {
     `http://localhost:${DEV_UI_PORT}`,
     `http://127.0.0.1:${DEV_UI_PORT}`,
   ]);
+  for (const o of originsFromEnvList()) origins.add(o);
+  for (const o of originsFromTailscale()) origins.add(o);
   return origins;
 }
 
