@@ -206,4 +206,38 @@ test("buildBindingsStatus never leaks raw secrets", async () => {
   assert.ok(status.keys.OPENROUTER_API_KEY.masked.startsWith("…"));
   assert.equal(status.profiles._code.checks.find((c) => c.id === "openrouter").ok, true);
   assert.equal(status.profiles["glyph-agent"].checks.find((c) => c.id === "agent_service").ok, true);
+  assert.equal(status.voice.ok, true);
+  assert.equal(status.voice.provider, "xai");
+  assert.ok(status.profiles.voice);
+  assert.equal(status.profiles.voice.kind, "capability");
+  assert.equal(status.profiles.voice.ok, true);
+});
+
+test("buildBindingsStatus: OpenRouter alone enables Voice profile", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "glyph-bind-or-"));
+  const file = path.join(dir, "bindings.json");
+  await writeBindingsFile(
+    {
+      keys: { OPENROUTER_API_KEY: "sk-or-only-voice" },
+      settings: {},
+    },
+    file,
+  );
+  const env = {
+    OPENROUTER_API_KEY: "sk-or-only-voice",
+    PATH: process.env.PATH,
+    HOME: dir,
+  };
+  const status = await buildBindingsStatus({
+    stateDir: dir,
+    bindingsFile: file,
+    env,
+    home: dir,
+    agentHealth: { ok: false, url: "http://127.0.0.1:18899/health", detail: "offline" },
+  });
+  assert.equal(status.voice.ok, true);
+  assert.equal(status.voice.provider, "openrouter");
+  assert.equal(status.profiles.voice.ok, true);
+  assert.equal(status.profiles.voice.auth, "openrouter");
+  assert.equal(status.keys.XAI_API_KEY.set, false);
 });

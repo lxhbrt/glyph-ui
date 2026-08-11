@@ -1,14 +1,30 @@
 /**
- * Anbindung: API-Keys + OpenRouter-Models + OAuth/Service-Status.
+ * Anbindung: Kabelplan (Profile + Voice) + Stecker (Keys/Models).
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
+
+/** Agent profiles on the map (full nodes). */
+const PROFILE_ORDER = ["grok", "_code", "glyph-agent"];
+/** Capability strands (thin nodes). */
+const CAPABILITY_ORDER = ["voice"];
+const MAP_NODE_ORDER = [...PROFILE_ORDER, ...CAPABILITY_ORDER];
+
+/** Hub + node positions in viewBox 0–100 (for cable SVG). */
+const MAP_POS = {
+  hub: { x: 50, y: 48 },
+  grok: { x: 50, y: 12 },
+  _code: { x: 16, y: 82 },
+  "glyph-agent": { x: 84, y: 82 },
+  /** Thin capability strand — right mid */
+  voice: { x: 90, y: 42 },
+};
 
 /**
  * Prefill model fields: bindings → agent health → placeholders (never wipe edits).
  * @param {object|null} data
- * @param {{ hasUserEdits: boolean, primary: string, fallback: string, codePrimary: string, codeFallback: string }} fields
+ * @param {{ hasUserEdits: boolean, primary: string, fallback: string, codePrimary: string, codeFallback: string, codeOpen: boolean }} fields
  */
 function prefillModels(data, fields) {
   if (fields.hasUserEdits) return fields;
@@ -49,6 +65,188 @@ function prefillModels(data, fields) {
   };
 }
 
+function nodeSlot(id) {
+  if (id === "grok") return "grok";
+  if (id === "_code") return "code";
+  if (id === "glyph-agent") return "agent";
+  if (id === "voice") return "voice";
+  return "agent";
+}
+
+/**
+ * @param {{ profiles: Record<string, object>, expandedId: string|null, onToggle: (id: string) => void, loading: boolean }} props
+ */
+function BindingsMap({ profiles, expandedId, onToggle, loading }) {
+  const titleId = useId();
+
+  return (
+    <section
+      className="bindings-map"
+      aria-labelledby={titleId}
+      data-loading={loading || undefined}
+    >
+      <h4 id={titleId} className="bindings-section-title">
+        Kabelplan
+      </h4>
+
+      <div className="bindings-map-stage">
+        <svg
+          className="bindings-map-cables"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {MAP_NODE_ORDER.map((id) => {
+            const p = profiles[id];
+            const to = MAP_POS[id];
+            if (!to) return null;
+            const ok = Boolean(p?.ok);
+            const thin = p?.kind === "capability" || id === "voice";
+            return (
+              <line
+                key={id}
+                className={`bindings-cable${thin ? " is-thin" : ""}${ok ? " is-live" : " is-cut"}`}
+                x1={MAP_POS.hub.x}
+                y1={MAP_POS.hub.y}
+                x2={to.x}
+                y2={to.y}
+              />
+            );
+          })}
+        </svg>
+
+        <div className="bindings-map-hub" aria-hidden="true">
+          <img
+            className="bindings-map-mark"
+            src="/glyph-mark.png"
+            alt=""
+            width={40}
+            height={40}
+            draggable={false}
+          />
+          <span className="bindings-map-hub-label">Glyph</span>
+        </div>
+
+        {MAP_NODE_ORDER.map((id) => {
+          const p = profiles[id];
+          if (!p) return null;
+          const ok = Boolean(p.ok);
+          const open = expandedId === id;
+          const slot = nodeSlot(id);
+          const thin = p.kind === "capability" || id === "voice";
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`bindings-node bindings-node--${slot}${thin ? " is-thin" : ""}${ok ? " is-ok" : " is-bad"}${open ? " is-open" : ""}`}
+              aria-expanded={open}
+              aria-controls={`bindings-node-detail-${id}`}
+              onClick={() => onToggle(id)}
+            >
+              <span className="bindings-node-dot" aria-hidden="true" />
+              <span className="bindings-node-body">
+                <strong className="bindings-node-label">{p.label}</strong>
+                <span className="bindings-node-auth">{p.auth}</span>
+              </span>
+              <span className="bindings-node-state" aria-hidden="true">
+                {ok ? "live" : "cut"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {MAP_NODE_ORDER.map((id) => {
+        const p = profiles[id];
+        if (!p || expandedId !== id) return null;
+        return (
+          <div
+            key={`detail-${id}`}
+            id={`bindings-node-detail-${id}`}
+            className={`bindings-node-detail${p.ok ? " is-ok" : " is-bad"}`}
+            role="region"
+            aria-label={`${p.label} — Checks`}
+          >
+            <ul className="bindings-checks">
+              {(p.checks || []).map((c) => (
+                <li key={c.id} className={c.ok ? "ok" : "bad"}>
+                  <span className="bindings-check-mark" aria-hidden="true">
+                    {c.ok ? "✓" : "·"}
+                  </span>
+                  <span>{c.detail}</span>
+                </li>
+              ))}
+            </ul>
+            {id === "grok" ? (
+              <p className="bindings-oauth-inline">
+                OAuth nur Terminal: <code>grok login</code> · Status aus{" "}
+                <code>~/.grok/auth.json</code> — kein Token hier.
+              </p>
+            ) : null}
+            {p.hint ? <p className="bindings-hint">{p.hint}</p> : null}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/**
+ * Key row: password input + optional immediate Entfernen when a key is set.
+ */
+function KeyField({
+  id,
+  label,
+  meta,
+  placeholder,
+  value,
+  onChange,
+  keySet,
+  masked,
+  source,
+  onRemove,
+  removing,
+  saving,
+}) {
+  return (
+    <div className="bindings-key-row">
+      <label className="bindings-label" htmlFor={id}>
+        {label}
+        <span className="bindings-label-meta">
+          {meta}
+          {keySet
+            ? ` · gesetzt ${masked || "…"}${source ? ` (${source})` : ""}`
+            : " · fehlt"}
+        </span>
+      </label>
+      <div className="bindings-key-controls">
+        <input
+          id={id}
+          className="bindings-input"
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={placeholder}
+          value={value}
+          disabled={saving || removing}
+          onChange={onChange}
+        />
+        {keySet ? (
+          <button
+            type="button"
+            className="bindings-remove-btn"
+            disabled={saving || removing}
+            onClick={() => void onRemove()}
+            title="Gespeicherten Key sofort entfernen"
+          >
+            {removing ? "…" : "Entfernen"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /**
  * @param {object} props
  * @param {boolean} props.active — when true, load/refresh status
@@ -58,20 +256,20 @@ function BindingsPanel({ active, agentProfileId = "" }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [removingKey, setRemovingKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
   const [openrouter, setOpenrouter] = useState("");
   const [xai, setXai] = useState("");
   const [agentUrl, setAgentUrl] = useState("");
-  const [clearOpenrouter, setClearOpenrouter] = useState(false);
-  const [clearXai, setClearXai] = useState(false);
   const [primary, setPrimary] = useState("");
   const [fallback, setFallback] = useState("");
   const [codePrimary, setCodePrimary] = useState("");
   const [codeFallback, setCodeFallback] = useState("");
   const [codeOpen, setCodeOpen] = useState(false);
   const [modelsDirty, setModelsDirty] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
 
   const openRouterProfiles =
     agentProfileId === "_code" ||
@@ -96,8 +294,6 @@ function BindingsPanel({ active, agentProfileId = "" }) {
       );
       setOpenrouter("");
       setXai("");
-      setClearOpenrouter(false);
-      setClearXai(false);
       const filled = prefillModels(data, {
         hasUserEdits: modelsDirty,
         primary,
@@ -131,6 +327,39 @@ function BindingsPanel({ active, agentProfileId = "" }) {
     setModelsDirty(true);
   }
 
+  function toggleNode(id) {
+    setExpandedId((cur) => (cur === id ? null : id));
+  }
+
+  /**
+   * Immediate key delete — no checkbox + Speichern riddle.
+   * @param {"OPENROUTER_API_KEY" | "XAI_API_KEY"} keyId
+   */
+  async function removeKey(keyId) {
+    setRemovingKey(keyId);
+    setError("");
+    setOkMsg("");
+    try {
+      const res = await fetch("/api/bindings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [keyId]: "" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      setStatus(data);
+      if (keyId === "OPENROUTER_API_KEY") setOpenrouter("");
+      if (keyId === "XAI_API_KEY") setXai("");
+      setOkMsg(`${keyId} entfernt.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRemovingKey("");
+    }
+  }
+
   async function save(e) {
     e?.preventDefault?.();
     setSaving(true);
@@ -138,10 +367,8 @@ function BindingsPanel({ active, agentProfileId = "" }) {
     setOkMsg("");
     try {
       const body = {};
-      if (clearOpenrouter) body.OPENROUTER_API_KEY = "";
-      else if (openrouter.trim()) body.OPENROUTER_API_KEY = openrouter.trim();
-      if (clearXai) body.XAI_API_KEY = "";
-      else if (xai.trim()) body.XAI_API_KEY = xai.trim();
+      if (openrouter.trim()) body.OPENROUTER_API_KEY = openrouter.trim();
+      if (xai.trim()) body.XAI_API_KEY = xai.trim();
       if (agentUrl.trim()) body.GLYPH_AGENT_URL = agentUrl.trim();
 
       const p = primary.trim();
@@ -151,12 +378,13 @@ function BindingsPanel({ active, agentProfileId = "" }) {
             primary: p,
             fallback: fallback.trim(),
           },
-          code: codeOpen && codePrimary.trim()
-            ? {
-                primary: codePrimary.trim(),
-                fallback: codeFallback.trim(),
-              }
-            : null,
+          code:
+            codeOpen && codePrimary.trim()
+              ? {
+                  primary: codePrimary.trim(),
+                  fallback: codeFallback.trim(),
+                }
+              : null,
         };
       }
 
@@ -182,8 +410,6 @@ function BindingsPanel({ active, agentProfileId = "" }) {
       setStatus(data);
       setOpenrouter("");
       setXai("");
-      setClearOpenrouter(false);
-      setClearXai(false);
       setAgentUrl(data?.settings?.GLYPH_AGENT_URL?.value || agentUrl);
       setModelsDirty(false);
       if (data?.models?.shared?.primary) {
@@ -253,271 +479,204 @@ function BindingsPanel({ active, agentProfileId = "" }) {
   if (!active) return null;
 
   const profiles = status?.profiles || {};
-  const profileOrder = ["grok", "_code", "glyph-agent"];
+  const orKey = status?.keys?.OPENROUTER_API_KEY;
+  const xaiKey = status?.keys?.XAI_API_KEY;
 
   return (
     <div className="bindings-panel" role="tabpanel" aria-label="Anbindung">
       <p className="bindings-lead">
         Glyph ist eine leere Hülle — hier knüpfst du Agenten an. Keys bleiben auf
-        diesem Rechner (<code>~/.glyph-ui/bindings.json</code>). OAuth (Grok)
-        läuft im Terminal, nicht in dieser Maske.
+        diesem Rechner (<code>~/.glyph-ui/bindings.json</code>).
       </p>
 
       {loading && !status ? (
-        <p className="summarize-status">Status wird geladen…</p>
+        <p className="bindings-flash bindings-flash--muted">
+          Status wird geladen…
+        </p>
       ) : null}
-      {error ? <p className="summarize-error">{error}</p> : null}
-      {okMsg ? <p className="summarize-success">{okMsg}</p> : null}
+      {error ? (
+        <p className="bindings-flash bindings-flash--error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {okMsg ? (
+        <p className="bindings-flash bindings-flash--ok" role="status">
+          {okMsg}
+        </p>
+      ) : null}
 
-      <section className="bindings-section">
-        <h4 className="bindings-section-title">Profile</h4>
-        <ul className="bindings-profile-list">
-          {profileOrder.map((id) => {
-            const p = profiles[id];
-            if (!p) return null;
-            return (
-              <li
-                key={id}
-                className={`bindings-profile ${p.ok ? "is-ok" : "is-bad"}`}
-              >
-                <div className="bindings-profile-head">
-                  <span className="bindings-dot" aria-hidden="true" />
-                  <strong>{p.label}</strong>
-                  <span className="bindings-auth">{p.auth}</span>
-                </div>
-                <ul className="bindings-checks">
-                  {(p.checks || []).map((c) => (
-                    <li key={c.id} className={c.ok ? "ok" : "bad"}>
-                      <span className="bindings-check-mark">
-                        {c.ok ? "✓" : "·"}
-                      </span>
-                      <span>{c.detail}</span>
-                    </li>
-                  ))}
-                </ul>
-                {p.hint ? <p className="bindings-hint">{p.hint}</p> : null}
-              </li>
-            );
-          })}
-        </ul>
-        {status?.voice ? (
-          <p className={`bindings-voice ${status.voice.ok ? "ok" : "bad"}`}>
-            Voice (Grok): {status.voice.detail}
-          </p>
-        ) : null}
-      </section>
+      {status ? (
+        <BindingsMap
+          profiles={profiles}
+          expandedId={expandedId}
+          onToggle={toggleNode}
+          loading={loading}
+        />
+      ) : null}
 
       <form className="bindings-form" onSubmit={(e) => void save(e)}>
-        <h4 className="bindings-section-title">OpenRouter Models (^_Code / °_Agent)</h4>
+        <h4 className="bindings-section-title">Stecker · Models</h4>
         {!openRouterProfiles ? (
           <p className="bindings-hint">
-            Profil <strong>Grok</strong> nutzt die CLI/OAuth — Model-IDs hier greifen
-            erst nach Wechsel auf <code>^_Code</code> oder <code>°_Agent</code>.
-            OAuth-Provider-Tausch (z. B. Claude) ist v1 nicht Teil dieses Menüs.
+            Profil <strong>Grok</strong> nutzt CLI/OAuth — Model-IDs greifen erst
+            nach Wechsel auf <code>^_Code</code> oder <code>°_Agent</code>.
           </p>
         ) : null}
         {status?.modelsMismatch ? (
           <p className="bindings-hint bindings-hint--warn">
-            Gespeicherte Models weichen vom laufenden Agent ab — Speichern oder
-            Connect synct (Mismatch).
+            Gespeicherte Models ≠ laufender Agent — Speichern oder Connect synct.
           </p>
         ) : null}
-        <label className="summarize-label" htmlFor="bind-model-primary">
-          Primary (OpenRouter Model-ID)
-        </label>
-        <input
-          id="bind-model-primary"
-          className="summarize-input"
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="deepseek/deepseek-v4-flash-0731"
-          value={primary}
-          disabled={saving || !openRouterProfiles}
-          onChange={(e) => {
-            markModelsDirty();
-            setPrimary(e.target.value);
-          }}
-        />
-        <label className="summarize-label" htmlFor="bind-model-fallback">
-          Fallback (optional — leer = kein Fallback)
-        </label>
-        <input
-          id="bind-model-fallback"
-          className="summarize-input"
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="inclusionai/ling-3.0-tiny:free"
-          value={fallback}
-          disabled={saving || !openRouterProfiles}
-          onChange={(e) => {
-            markModelsDirty();
-            setFallback(e.target.value);
-          }}
-        />
-        <details
-          className="bindings-advanced"
-          open={codeOpen}
-          onToggle={(e) => setCodeOpen(e.currentTarget.open)}
-        >
-          <summary>Erweitert: Code abweichend</summary>
-          <p className="bindings-hint">
-            Leer lassen = gleiches Paar wie Primary/Fallback (shared).
-          </p>
-          <label className="summarize-label" htmlFor="bind-code-primary">
-            Code Primary
+
+        <div className="bindings-plug">
+          <label className="bindings-label" htmlFor="bind-model-primary">
+            Primary (OpenRouter Model-ID)
           </label>
           <input
-            id="bind-code-primary"
-            className="summarize-input"
+            id="bind-model-primary"
+            className="bindings-input"
             type="text"
             autoComplete="off"
             spellCheck={false}
-            value={codePrimary}
+            placeholder="deepseek/deepseek-v4-flash-0731"
+            value={primary}
             disabled={saving || !openRouterProfiles}
             onChange={(e) => {
               markModelsDirty();
-              setCodePrimary(e.target.value);
+              setPrimary(e.target.value);
             }}
           />
-          <label className="summarize-label" htmlFor="bind-code-fallback">
-            Code Fallback
+          <label className="bindings-label" htmlFor="bind-model-fallback">
+            Fallback (optional — leer = keiner)
           </label>
           <input
-            id="bind-code-fallback"
-            className="summarize-input"
+            id="bind-model-fallback"
+            className="bindings-input"
             type="text"
             autoComplete="off"
             spellCheck={false}
-            value={codeFallback}
+            placeholder="inclusionai/ling-3.0-tiny:free"
+            value={fallback}
             disabled={saving || !openRouterProfiles}
             onChange={(e) => {
               markModelsDirty();
-              setCodeFallback(e.target.value);
+              setFallback(e.target.value);
             }}
           />
-        </details>
-        <div className="summarize-actions" style={{ marginBottom: "1rem" }}>
-          <button
-            type="button"
-            className="pill pill-btn"
-            disabled={saving || testing || loading || !openRouterProfiles}
-            onClick={() => void testModel()}
+          <details
+            className="bindings-advanced"
+            open={codeOpen}
+            onToggle={(e) => setCodeOpen(e.currentTarget.open)}
           >
-            {testing ? "Teste…" : "Testen"}
-          </button>
+            <summary>Erweitert: Code abweichend</summary>
+            <p className="bindings-hint">
+              Leer = gleiches Paar wie Primary/Fallback (shared).
+            </p>
+            <label className="bindings-label" htmlFor="bind-code-primary">
+              Code Primary
+            </label>
+            <input
+              id="bind-code-primary"
+              className="bindings-input"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={codePrimary}
+              disabled={saving || !openRouterProfiles}
+              onChange={(e) => {
+                markModelsDirty();
+                setCodePrimary(e.target.value);
+              }}
+            />
+            <label className="bindings-label" htmlFor="bind-code-fallback">
+              Code Fallback
+            </label>
+            <input
+              id="bind-code-fallback"
+              className="bindings-input"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={codeFallback}
+              disabled={saving || !openRouterProfiles}
+              onChange={(e) => {
+                markModelsDirty();
+                setCodeFallback(e.target.value);
+              }}
+            />
+          </details>
+          <div className="bindings-actions bindings-actions--inline">
+            <button
+              type="button"
+              className="pill pill-btn"
+              disabled={saving || testing || loading || !openRouterProfiles}
+              onClick={() => void testModel()}
+            >
+              {testing ? "Teste…" : "Testen"}
+            </button>
+          </div>
         </div>
 
-        <h4 className="bindings-section-title">Keys & URL</h4>
+        <h4 className="bindings-section-title">Stecker · Keys & URL</h4>
 
-        <label className="summarize-label" htmlFor="bind-or">
-          OPENROUTER_API_KEY (^_Code / °_Agent Cloud)
-          {status?.keys?.OPENROUTER_API_KEY?.set ? (
-            <span className="bindings-masked">
-              {" "}
-              · gesetzt {status.keys.OPENROUTER_API_KEY.masked} (
-              {status.keys.OPENROUTER_API_KEY.source})
-            </span>
-          ) : (
-            <span className="bindings-masked"> · fehlt</span>
-          )}
-        </label>
-        <input
-          id="bind-or"
-          className="summarize-input"
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="sk-or-… (leer lassen = unverändert)"
-          value={openrouter}
-          disabled={clearOpenrouter || saving}
-          onChange={(e) => setOpenrouter(e.target.value)}
-        />
-        <label className="bindings-clear">
-          <input
-            type="checkbox"
-            checked={clearOpenrouter}
-            onChange={(e) => {
-              setClearOpenrouter(e.target.checked);
-              if (e.target.checked) setOpenrouter("");
-            }}
+        <div className="bindings-plug">
+          <KeyField
+            id="bind-or"
+            label="OPENROUTER_API_KEY"
+            meta="^_Code / °_Agent Cloud · Voice-Fallback"
+            placeholder="sk-or-… (leer = unverändert)"
+            value={openrouter}
+            onChange={(e) => setOpenrouter(e.target.value)}
+            keySet={Boolean(orKey?.set)}
+            masked={orKey?.masked}
+            source={orKey?.source}
+            onRemove={() => removeKey("OPENROUTER_API_KEY")}
+            removing={removingKey === "OPENROUTER_API_KEY"}
+            saving={saving}
           />
-          Key löschen
-        </label>
 
-        <label className="summarize-label" htmlFor="bind-xai">
-          XAI_API_KEY (Voice STT/TTS)
-          {status?.keys?.XAI_API_KEY?.set ? (
-            <span className="bindings-masked">
-              {" "}
-              · gesetzt {status.keys.XAI_API_KEY.masked} (
-              {status.keys.XAI_API_KEY.source})
-            </span>
-          ) : (
-            <span className="bindings-masked"> · fehlt</span>
-          )}
-        </label>
-        <input
-          id="bind-xai"
-          className="summarize-input"
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="xai-… (console.x.ai)"
-          value={xai}
-          disabled={clearXai || saving}
-          onChange={(e) => setXai(e.target.value)}
-        />
-        <label className="bindings-clear">
-          <input
-            type="checkbox"
-            checked={clearXai}
-            onChange={(e) => {
-              setClearXai(e.target.checked);
-              if (e.target.checked) setXai("");
-            }}
+          <KeyField
+            id="bind-xai"
+            label="XAI_API_KEY"
+            meta="Voice STT/TTS Primary (Grok-Stimmen)"
+            placeholder="xai-… (console.x.ai)"
+            value={xai}
+            onChange={(e) => setXai(e.target.value)}
+            keySet={Boolean(xaiKey?.set)}
+            masked={xaiKey?.masked}
+            source={xaiKey?.source}
+            onRemove={() => removeKey("XAI_API_KEY")}
+            removing={removingKey === "XAI_API_KEY"}
+            saving={saving}
           />
-          Key löschen
-        </label>
 
-        <label className="summarize-label" htmlFor="bind-agent-url">
-          glyph-agent URL
-        </label>
-        <input
-          id="bind-agent-url"
-          className="summarize-input"
-          type="url"
-          autoComplete="off"
-          spellCheck={false}
-          value={agentUrl}
-          disabled={saving}
-          onChange={(e) => setAgentUrl(e.target.value)}
-        />
-
-        <div className="bindings-oauth-box">
-          <strong>Grok OAuth</strong>
-          <p>
-            Im Terminal auf diesem Mac/PC: <code>grok login</code>
-            <br />
-            Glyph liest nur den Status aus <code>~/.grok/auth.json</code> — kein
-            Token-Eingabe hier (gewollt). Provider-Wechsel (z. B. Claude) ist
-            kein OpenRouter-Model-String — eigenes Epic, nicht dieses Menü.
-          </p>
+          <label className="bindings-label" htmlFor="bind-agent-url">
+            glyph-agent URL
+          </label>
+          <input
+            id="bind-agent-url"
+            className="bindings-input"
+            type="url"
+            autoComplete="off"
+            spellCheck={false}
+            value={agentUrl}
+            disabled={saving}
+            onChange={(e) => setAgentUrl(e.target.value)}
+          />
         </div>
 
-        <div className="summarize-actions">
+        <div className="bindings-actions">
           <button
             type="submit"
-            className="pill pill-btn"
-            disabled={saving || loading}
+            className="pill pill-btn primary"
+            disabled={saving || loading || Boolean(removingKey)}
           >
             {saving ? "Speichern…" : "Speichern"}
           </button>
           <button
             type="button"
-            className="pill pill-btn"
-            disabled={loading || saving}
+            className="pill pill-btn ghost"
+            disabled={loading || saving || Boolean(removingKey)}
             onClick={() => void load()}
           >
             Status neu laden

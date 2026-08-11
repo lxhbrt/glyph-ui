@@ -10,7 +10,9 @@ import {
   buildCompact,
   cleanAssistantAnswer,
   formatSteps,
+  modelHudText,
   modelLabel,
+  shortModelLabel,
   splitStepBanner,
   STEP_BANNER_SENTINEL,
   stripLeakedToolCalls,
@@ -29,6 +31,41 @@ describe("modelLabel", () => {
 
   it("keeps a bare model name (no provider prefix)", () => {
     assert.equal(modelLabel("gpt-5.6-luna"), "gpt-5.6-luna");
+  });
+});
+
+describe("shortModelLabel / modelHudText", () => {
+  it("maps DeepSeek V4 Flash to DS-V4F", () => {
+    assert.equal(shortModelLabel("deepseek/deepseek-v4-flash-0731"), "DS-V4F");
+    assert.equal(shortModelLabel("deepseek-v4-flash"), "DS-V4F");
+  });
+
+  it("maps common families to short codes", () => {
+    assert.equal(shortModelLabel("openai/gpt-4o-mini"), "4o-mini");
+    assert.equal(shortModelLabel("anthropic/claude-sonnet-4"), "Sonnet");
+    assert.equal(shortModelLabel("google/gemini-2.5-flash"), "Gem-Flash");
+  });
+
+  it("falls back to first 4 chars for long unknown tokens", () => {
+    assert.equal(shortModelLabel("provider/superlongmodelname-v2"), "supe");
+  });
+
+  it("keeps short unknown tokens intact", () => {
+    assert.equal(shortModelLabel("ollama/qwen3"), "Qwen");
+    assert.equal(shortModelLabel("foo-bar"), "foo");
+  });
+
+  it("returns em-dash for empty", () => {
+    assert.equal(shortModelLabel(""), "—");
+    assert.equal(shortModelLabel(null), "—");
+  });
+
+  it("modelHudText joins primary → fallback as short codes", () => {
+    assert.equal(
+      modelHudText("deepseek/deepseek-v4-flash-0731", "openai/gpt-4o-mini"),
+      "DS-V4F → 4o-mini",
+    );
+    assert.equal(modelHudText("deepseek/deepseek-v4-flash-0731", ""), "DS-V4F");
   });
 });
 

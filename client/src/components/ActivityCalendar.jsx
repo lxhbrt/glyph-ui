@@ -1,20 +1,90 @@
 /**
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
+ *
+ * Panel hinter dem Kalender-Icon: Tabs „Plan“ (wiederkehrende To-dos) und „Aktivität“.
+ * Fertig-Status: klickbares „Fertig“ löscht die durchgestrichene To-do.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-function ActivityCalendar({ open, onClose, onOpenSession }) {
+const WEEKDAYS = [
+  { v: 0, l: "Mo" },
+  { v: 1, l: "Di" },
+  { v: 2, l: "Mi" },
+  { v: 3, l: "Do" },
+  { v: 4, l: "Fr" },
+  { v: 5, l: "Sa" },
+  { v: 6, l: "So" },
+];
+
+function emptyForm() {
+  return {
+    title: "",
+    prompt: "",
+    kind: "daily",
+    time: "09:00",
+    weekday: 0,
+    allow_write: false,
+  };
+}
+
+function scheduleLabel(s) {
+  if (!s) return "—";
+  if (s.kind === "weekly") {
+    const d = WEEKDAYS.find((w) => w.v === s.weekday)?.l || `T${s.weekday}`;
+    return `wöchentlich ${d} ${s.time}`;
+  }
+  return `täglich ${s.time}`;
+}
+
+/**
+ * @param {{
+ *   open: boolean,
+ *   onClose: () => void,
+ *   onOpenSession?: (json: object) => void,
+ *   canSeeActivity?: boolean,
+ * }} props
+ */
+function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [tab, setTab] = useState("plan");
+  const [todos, setTodos] = useState([]);
+  const [todosLoading, setTodosLoading] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
   const panelRef = useRef(null);
+
+  const loadTodos = useCallback(async () => {
+    setTodosLoading(true);
+    try {
+      const res = await fetch("/api/recurring");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "To-dos laden fehlgeschlagen");
+      setTodos(Array.isArray(json.items) ? json.items : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTodosLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;
     setSelected(null);
     setError("");
+    setTab("plan");
+    void loadTodos();
+    if (!canSeeActivity) {
+      setData(null);
+      setLoading(false);
+      requestAnimationFrame(() => panelRef.current?.focus());
+      return undefined;
+    }
     setLoading(true);
     let cancelled = false;
     (async () => {
@@ -36,7 +106,7 @@ function ActivityCalendar({ open, onClose, onOpenSession }) {
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, canSeeActivity, loadTodos]);
 
   if (!open) return null;
 
@@ -55,6 +125,81 @@ function ActivityCalendar({ open, onClose, onOpenSession }) {
     }
   };
 
+  async function act(path, opts = {}) {
+    setBusyId(opts.busyId || path);
+    setError("");
+    try {
+      const res = await fetch(path, {
+        method: opts.method || "POST",
+        headers: opts.body ? { "Content-Type": "application/json" } : undefined,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      await loadTodos();
+      return json;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return null;
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onSubmitForm(e) {
+    e.preventDefault();
+    const schedule =
+      form.kind === "weekly"
+        ? { kind: "weekly", time: form.time, weekday: Number(form.weekday) }
+        : { kind: "daily", time: form.time };
+    if (!editId && form.allow_write) {
+      const ok = window.confirm(
+        "Auto-Schreiben erlauben?\n\nNur unter HSEQ Sync: 00 Arbeitsfluss/, Vorlagen/, Themen/.\nOhne Bestätigung: nur Lesen.",
+      );
+      if (!ok) return;
+    }
+    if (editId) {
+      await act(`/api/recurring/${encodeURIComponent(editId)}`, {
+        method: "PATCH",
+        body: {
+          title: form.title.trim(),
+          prompt: form.prompt.trim(),
+          schedule,
+          allow_write: form.allow_write,
+        },
+        busyId: editId,
+      });
+    } else {
+      await act("/api/recurring", {
+        method: "POST",
+        body: {
+          title: form.title.trim(),
+          prompt: form.prompt.trim(),
+          schedule,
+          allow_write: form.allow_write,
+          paused: false,
+        },
+        busyId: "new",
+      });
+    }
+    setForm(emptyForm());
+    setEditId(null);
+    setShowForm(false);
+  }
+
+  function startEdit(t) {
+    setEditId(t.id);
+    setForm({
+      title: t.title || "",
+      prompt: t.prompt || "",
+      kind: t.schedule?.kind || "daily",
+      time: t.schedule?.time || "09:00",
+      weekday: t.schedule?.weekday ?? 0,
+      allow_write: Boolean(t.allow_write),
+    });
+    setShowForm(true);
+  }
+
   return (
     <div className="overview-scrim" role="presentation" onClick={onClose}>
       <section
@@ -62,7 +207,7 @@ function ActivityCalendar({ open, onClose, onOpenSession }) {
         className="overview-panel cal-panel"
         role="dialog"
         aria-modal="true"
-        aria-label="Aktivitäts-Kalender"
+        aria-label="Plan und Aktivität"
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
@@ -74,12 +219,14 @@ function ActivityCalendar({ open, onClose, onOpenSession }) {
       >
         <header className="overview-head">
           <div>
-            <p className="overview-kicker">Aktivität</p>
-            <h2>Kalender</h2>
+            <p className="overview-kicker">Übersicht</p>
+            <h2>Plan &amp; Aktivität</h2>
             <p className="overview-meta">
-              {data
-                ? `${data.activeDays} aktive Tage · ${data.totalEvents} Events · Peak ${data.peakDate || "—"}`
-                : "Wann du gearbeitet hast — und woran"}
+              {tab === "plan"
+                ? `${todos.length} wiederkehrende To-do${todos.length === 1 ? "" : "s"}`
+                : data
+                  ? `${data.activeDays} aktive Tage · ${data.totalEvents} Events · Peak ${data.peakDate || "—"}`
+                  : "Wann du gearbeitet hast — und woran"}
             </p>
           </div>
           <div className="overview-head-actions">
@@ -89,143 +236,400 @@ function ActivityCalendar({ open, onClose, onOpenSession }) {
           </div>
         </header>
 
-        <p className="overview-hint">
-          <strong>Gelb</strong> = aktiv.{" "}
-          <strong>Heller</strong> = weniger · <strong>Dunkler</strong> = häufiger.{" "}
-          <strong>Peak</strong> = dunkelstes Kästchen mit Auge. Klick = Sessions des Tages.
-        </p>
+        <div className="cal-tabs" role="tablist" aria-label="Plan oder Aktivität">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "plan"}
+            className={`cal-tab${tab === "plan" ? " cal-tab--active" : ""}`}
+            onClick={() => setTab("plan")}
+          >
+            Plan
+            {todos.length ? (
+              <span className="cal-tab-badge" aria-hidden="true">
+                {todos.length}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "activity"}
+            className={`cal-tab${tab === "activity" ? " cal-tab--active" : ""}`}
+            onClick={() => setTab("activity")}
+            disabled={!canSeeActivity}
+            title={
+              canSeeActivity
+                ? "Aktivitäts-Heatmap"
+                : "Aktivität nur mit Grok-Profil"
+            }
+          >
+            Aktivität
+          </button>
+        </div>
 
         {error ? <div className="banner">{error}</div> : null}
-        {loading ? (
-          <div className="empty-inline">Lade Aktivität…</div>
-        ) : data ? (
-          <div className="cal-body">
-            <div className="cal-chart" role="img" aria-label="Aktivitäts-Heatmap">
-              <div className="cal-day-labels" aria-hidden="true">
-                {dayLabels.map((lab, i) => (
-                  <span key={lab} className={i % 2 === 1 ? "cal-day-label" : "cal-day-label cal-day-label--dim"}>
-                    {i % 2 === 1 ? lab : ""}
-                  </span>
-                ))}
-              </div>
-              <div className="cal-grid-wrap">
-                <div className="cal-grid">
-                  {(data.weeks || []).map((week, wi) => (
-                    <div className="cal-week" key={`w-${wi}`}>
-                      {week.map((cell) => {
-                        if (cell.empty) {
-                          return (
-                            <span
-                              key={cell.date}
-                              className="cal-cell cal-cell--pad"
-                              aria-hidden="true"
-                            />
-                          );
+
+        {tab === "plan" ? (
+          <div className="cal-plan" role="tabpanel" aria-label="Wiederkehrende To-dos">
+            <div className="cal-plan-toolbar">
+              <p className="overview-hint" style={{ margin: 0, flex: 1 }}>
+                Täglich/wöchentlich · Pause · Einmal jetzt · Löschen. Nach erfolgreichem
+                Lauf: <strong>Fertig</strong> klicken löscht die To-do.
+              </p>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setEditId(null);
+                  setForm(emptyForm());
+                  setShowForm((v) => !v);
+                }}
+              >
+                {showForm ? "Abbrechen" : "Neu"}
+              </button>
+            </div>
+
+            {showForm ? (
+              <form className="cal-todo-form" onSubmit={onSubmitForm}>
+                <label className="cal-todo-field">
+                  <span>Titel</span>
+                  <input
+                    required
+                    value={form.title}
+                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    placeholder="Kurzname"
+                  />
+                </label>
+                <label className="cal-todo-field">
+                  <span>Prompt (an °_Agent)</span>
+                  <textarea
+                    required
+                    rows={4}
+                    value={form.prompt}
+                    onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
+                    placeholder="Was der Agent ausführen soll…"
+                  />
+                </label>
+                <div className="cal-todo-row">
+                  <label className="cal-todo-field">
+                    <span>Rhythmus</span>
+                    <select
+                      value={form.kind}
+                      onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}
+                    >
+                      <option value="daily">täglich</option>
+                      <option value="weekly">wöchentlich</option>
+                    </select>
+                  </label>
+                  {form.kind === "weekly" ? (
+                    <label className="cal-todo-field">
+                      <span>Tag</span>
+                      <select
+                        value={form.weekday}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, weekday: Number(e.target.value) }))
                         }
-                        const isSel = selected?.date === cell.date;
-                        return (
+                      >
+                        {WEEKDAYS.map((w) => (
+                          <option key={w.v} value={w.v}>
+                            {w.l}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  <label className="cal-todo-field">
+                    <span>Uhrzeit</span>
+                    <input
+                      type="time"
+                      required
+                      value={form.time}
+                      onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+                    />
+                  </label>
+                </div>
+                <label className="cal-todo-check">
+                  <input
+                    type="checkbox"
+                    checked={form.allow_write}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, allow_write: e.target.checked }))
+                    }
+                  />
+                  <span>
+                    Auto-Schreiben (nur HSEQ: Eingang/Fertig/Vorlagen/Themen) — bei Neu
+                    mit Bestätigung
+                  </span>
+                </label>
+                <button type="submit" className="ghost" disabled={!!busyId}>
+                  {editId ? "Speichern" : "Anlegen"}
+                </button>
+              </form>
+            ) : null}
+
+            {todosLoading ? (
+              <div className="empty-inline">Lade To-dos…</div>
+            ) : todos.length === 0 ? (
+              <p className="cal-detail-empty">
+                Noch keine wiederkehrenden To-dos. „Neu“ anlegen oder warten bis die
+                HSEQ-Migration greift.
+              </p>
+            ) : (
+              <ul className="cal-todo-list">
+                {todos.map((t) => {
+                  const done = t.last_status === "ok";
+                  const paused = Boolean(t.paused);
+                  return (
+                    <li
+                      key={t.id}
+                      className={[
+                        "cal-todo-item",
+                        done ? "cal-todo-item--done" : "",
+                        paused ? "cal-todo-item--paused" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <div className="cal-todo-main">
+                        <span
+                          className={`cal-todo-title${done ? " cal-todo-title--done" : ""}`}
+                        >
+                          {t.title}
+                        </span>
+                        <span className="cal-todo-meta">
+                          {scheduleLabel(t.schedule)}
+                          {t.allow_write ? " · write" : " · read"}
+                          {paused ? " · pausiert" : ""}
+                          {t.last_run_at
+                            ? ` · zuletzt ${String(t.last_run_at).slice(0, 16)}`
+                            : ""}
+                        </span>
+                        {t.last_answer_preview ? (
+                          <span className="cal-todo-preview" title={t.last_answer_preview}>
+                            {t.last_answer_preview}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="cal-todo-actions">
+                        {done ? (
                           <button
-                            key={cell.date}
                             type="button"
-                            className={[
-                              "cal-cell",
-                              `cal-cell--l${cell.level}`,
-                              cell.peak ? "cal-cell--peak" : "",
-                              isSel ? "cal-cell--selected" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            title={`${cell.date}: ${cell.count} Events${cell.peak ? " · Peak" : ""}`}
-                            aria-label={`${cell.date}, ${cell.count} Events${cell.peak ? ", Peak" : ""}`}
-                            aria-pressed={isSel}
-                            onClick={() => setSelected(cell)}
-                          />
-                        );
-                      })}
+                            className="cal-todo-fertig"
+                            title="Durchgestrichene To-do löschen"
+                            disabled={busyId === t.id}
+                            onClick={async () => {
+                              if (
+                                !window.confirm(
+                                  `„${t.title}“ löschen? (Fertig — endgültig)`,
+                                )
+                              ) {
+                                return;
+                              }
+                              await act(`/api/recurring/${encodeURIComponent(t.id)}`, {
+                                method: "DELETE",
+                                busyId: t.id,
+                              });
+                            }}
+                          >
+                            Fertig
+                          </button>
+                        ) : (
+                          <span className="cal-todo-status" aria-hidden="true">
+                            {paused ? "Pause" : t.last_status === "error" ? "Fehler" : "offen"}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="ghost cal-todo-btn"
+                          disabled={!!busyId}
+                          onClick={() =>
+                            void act(`/api/recurring/${encodeURIComponent(t.id)}/pause`, {
+                              body: { paused: !paused },
+                              busyId: t.id,
+                            })
+                          }
+                        >
+                          {paused ? "Fortsetzen" : "Pause"}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost cal-todo-btn"
+                          disabled={!!busyId}
+                          title="Einmal jetzt ausführen"
+                          onClick={() =>
+                            void act(`/api/recurring/${encodeURIComponent(t.id)}/run`, {
+                              body: { force: true },
+                              busyId: t.id,
+                            })
+                          }
+                        >
+                          Jetzt
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost cal-todo-btn"
+                          disabled={!!busyId}
+                          onClick={() => startEdit(t)}
+                        >
+                          Edit
+                        </button>
+                        {!done ? (
+                          <button
+                            type="button"
+                            className="ghost cal-todo-btn cal-todo-btn--danger"
+                            disabled={!!busyId}
+                            onClick={async () => {
+                              if (!window.confirm(`„${t.title}“ wirklich löschen?`)) return;
+                              await act(`/api/recurring/${encodeURIComponent(t.id)}`, {
+                                method: "DELETE",
+                                busyId: t.id,
+                              });
+                            }}
+                          >
+                            ×
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="overview-hint">
+              <strong>Gelb</strong> = aktiv.{" "}
+              <strong>Heller</strong> = weniger · <strong>Dunkler</strong> = häufiger.{" "}
+              <strong>Peak</strong> = dunkelstes Kästchen. Klick = Sessions des Tages.
+            </p>
+            {loading ? (
+              <div className="empty-inline">Lade Aktivität…</div>
+            ) : data ? (
+              <div className="cal-body">
+                <div className="cal-chart" role="img" aria-label="Aktivitäts-Heatmap">
+                  <div className="cal-day-labels" aria-hidden="true">
+                    {dayLabels.map((lab, i) => (
+                      <span
+                        key={lab}
+                        className={
+                          i % 2 === 1
+                            ? "cal-day-label"
+                            : "cal-day-label cal-day-label--dim"
+                        }
+                      >
+                        {i % 2 === 1 ? lab : ""}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="cal-grid-wrap">
+                    <div className="cal-grid">
+                      {(data.weeks || []).map((week, wi) => (
+                        <div className="cal-week" key={`w-${wi}`}>
+                          {week.map((cell) => {
+                            if (cell.empty) {
+                              return (
+                                <span
+                                  key={cell.date}
+                                  className="cal-cell cal-cell--pad"
+                                  aria-hidden="true"
+                                />
+                              );
+                            }
+                            const isSel = selected?.date === cell.date;
+                            return (
+                              <button
+                                key={cell.date}
+                                type="button"
+                                className={[
+                                  "cal-cell",
+                                  `cal-cell--l${cell.level}`,
+                                  cell.peak ? "cal-cell--peak" : "",
+                                  isSel ? "cal-cell--selected" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                title={`${cell.date}: ${cell.count} Events`}
+                                aria-pressed={isSel}
+                                onClick={() => setSelected(cell)}
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
+                  </div>
+                </div>
+                <div className="cal-legend" aria-hidden="true">
+                  <span className="cal-legend-label">weniger</span>
+                  {[0, 1, 2, 3, 4].map((lv) => (
+                    <span
+                      key={lv}
+                      className={`cal-cell cal-cell--l${lv}${lv === 4 ? " cal-cell--peak" : ""}`}
+                    />
                   ))}
+                  <span className="cal-legend-label">mehr · Peak</span>
+                </div>
+                <div className="cal-detail">
+                  {selected ? (
+                    <>
+                      <h3 className="cal-detail-title">{formatDay(selected.date)}</h3>
+                      <p className="cal-detail-meta">
+                        {selected.count} Events · {selected.sessions?.length || 0}{" "}
+                        Sessions
+                      </p>
+                      {selected.sessions?.length ? (
+                        <ul className="cal-session-list">
+                          {selected.sessions.map((s) => (
+                            <li key={s.id} className="cal-session-row">
+                              <div className="cal-session-main">
+                                <span className="cal-session-title">{s.title}</span>
+                                <span className="cal-session-count">{s.count}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="ghost cal-session-open"
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(
+                                      `/api/sessions/${s.id}/open`,
+                                      { method: "POST" },
+                                    );
+                                    const json = await res.json();
+                                    if (!res.ok) {
+                                      throw new Error(
+                                        json.error || "Session nicht öffnenbar",
+                                      );
+                                    }
+                                    onOpenSession?.(json);
+                                    onClose?.();
+                                  } catch (err) {
+                                    setError(
+                                      err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                                    );
+                                  }
+                                }}
+                              >
+                                Öffnen
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="cal-detail-empty">Keine Session-Details.</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="cal-detail-empty">Kästchen wählen für den Tag.</p>
+                  )}
                 </div>
               </div>
-            </div>
-
-            <div className="cal-legend" aria-hidden="true">
-              <span className="cal-legend-label">weniger</span>
-              {[0, 1, 2, 3, 4].map((lv) => (
-                <span
-                  key={lv}
-                  className={`cal-cell cal-cell--l${lv}${lv === 4 ? " cal-cell--peak" : ""}`}
-                />
-              ))}
-              <span className="cal-legend-label">mehr · Peak</span>
-            </div>
-
-            <div className="cal-detail">
-              {selected ? (
-                <>
-                  <h3 className="cal-detail-title">
-                    {formatDay(selected.date)}
-                    {selected.peak ? (
-                      <span className="cal-peak-badge" title="Peak-Tag">
-                        Peak
-                      </span>
-                    ) : null}
-                  </h3>
-                  <p className="cal-detail-meta">
-                    {selected.count} Events · {selected.sessions?.length || 0} Session
-                    {(selected.sessions?.length || 0) === 1 ? "" : "s"}
-                  </p>
-                  {selected.sessions?.length ? (
-                    <ul className="cal-session-list">
-                      {selected.sessions.map((s) => (
-                        <li key={s.id} className="cal-session-row">
-                          <div className="cal-session-main">
-                            <span className="cal-session-title">{s.title}</span>
-                            <span className="cal-session-count">{s.count}</span>
-                          </div>
-                          <button
-                            type="button"
-                            className="ghost cal-session-open"
-                            onClick={async () => {
-                              try {
-                                const res = await fetch(
-                                  `/api/sessions/${s.id}/open`,
-                                  { method: "POST" },
-                                );
-                                const json = await res.json();
-                                if (!res.ok) {
-                                  throw new Error(
-                                    json.error || "Session nicht öffnenbar",
-                                  );
-                                }
-                                onOpenSession?.(json);
-                                onClose?.();
-                              } catch (err) {
-                                setError(
-                                  err instanceof Error
-                                    ? err.message
-                                    : String(err),
-                                );
-                              }
-                            }}
-                            title="Session öffnen (falls noch auf Disk)"
-                          >
-                            Öffnen
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="cal-detail-empty">Keine Session-Details für diesen Tag.</p>
-                  )}
-                </>
-              ) : (
-                <p className="cal-detail-empty">
-                  Wähle ein Kästchen — dann siehst du, woran du an dem Tag gearbeitet hast.
-                </p>
-              )}
-            </div>
-          </div>
-        ) : null}
+            ) : null}
+          </>
+        )}
       </section>
     </div>
   );

@@ -984,9 +984,237 @@ app.get("/api/activity", async (req, res) => {
   }
 });
 
+/** Resolve glyph-agent base URL (bindings or env). */
+async function glyphAgentBaseUrl() {
+  try {
+    const file = await readBindingsFile(bindingsPath(STATE_DIR));
+    return (
+      String(
+        process.env.GLYPH_AGENT_URL || file.settings?.GLYPH_AGENT_URL || "",
+      ).trim() || "http://127.0.0.1:18899"
+    );
+  } catch {
+    return (
+      String(process.env.GLYPH_AGENT_URL || "").trim() || "http://127.0.0.1:18899"
+    );
+  }
+}
+
 /**
- * Grok Voice (xAI STT / TTS) — requires XAI_API_KEY (or grok auth fallback).
+ * Kabelsalat — Vault-Registry (glyph-agent /vaults → ~/.glyph/vaults.json).
+ */
+app.get("/api/vaults", async (_req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/vaults`, {
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/vaults", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/vaults`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(30000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.patch("/api/vaults/:id", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(req.params.id);
+    const r = await fetch(`${base}/vaults/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.delete("/api/vaults/:id", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(req.params.id);
+    const r = await fetch(`${base}/vaults/${id}`, {
+      method: "DELETE",
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Proxy againkehrende To-dos (glyph-agent /recurring).
+ * Plan-Tab in der UI — keine OpenClaw-Cron-Doppelbuchhaltung.
+ */
+app.get("/api/recurring", async (_req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/recurring`, {
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.get("/api/recurring/events", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const after = String(req.query.after || "");
+    const q = after ? `?after=${encodeURIComponent(after)}` : "";
+    const r = await fetch(`${base}/recurring/events${q}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/recurring", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/recurring`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.patch("/api/recurring/:id", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/recurring/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.delete("/api/recurring/:id", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/recurring/${id}`, {
+      method: "DELETE",
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 404).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/recurring/:id/run", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/recurring/${id}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || { force: true }),
+      signal: AbortSignal.timeout(900000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/recurring/:id/pause", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/recurring/${id}/pause`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || { paused: true }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Voice STT/TTS — xAI primary, OpenRouter fallback (same OR key as chat).
  * Docs: https://docs.x.ai/developers/model-capabilities/audio/voice
+ *       https://openrouter.ai/docs/guides/overview/multimodal/tts
  */
 app.get("/api/voice/status", async (_req, res) => {
   try {

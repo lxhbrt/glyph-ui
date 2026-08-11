@@ -72,7 +72,8 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - **Zwei Einstiege:** Slash-Popup bei `/` im Composer **und** volles Extensions-Modal (Button/Shortcut). Command-Legend bleibt vorerst eigenständig (Hilfe), wird nicht ersetzt.
 - **Menü-Auswahl:** Eintrag bestätigt → Text in den Composer (`/name `), Fokus zurück; **kein** automatisches Senden.
 - **Tastatur im Popup/Modal:** Solange die Liste offen ist, steuern Pfeile/Enter die Menü-Auswahl; Enter sendet **nicht** die Chat-Nachricht.
-- **Skill-Quellen:** profilabhängig (B) — grok → Grok-Skill-Pfade; ^_Code → code-skills/optional Claude-Skills; glyph-agent → eigene/leer mit Hinweis.
+- **Skill-Quellen:** profilabhängig **plus Shared SoT** — alle Profile scannen `~/.glyph/skills/`; zusätzlich profilspezifische Roots (grok → `.grok/skills`; ^_Code → code-skills/Claude; glyph-agent → `.glyph-agent/skills`).
+- **Shared SoT (2026-08-09):** `~/.glyph/AGENTS.md` = eine Wahrheit für Grok/^_Code/°_Agent; Grok lädt `~/.grok/rules/glyph-shared.md`. Geklärtes nicht pro Profil neu erzählen.
 - **Offline:** Modal und Slash-Popup nutzbar; Skills von Disk, Agent-Commands leer bis Verbindung.
 - **Öffnen Extensions-Modal:** Sidebar-Button **und** `Cmd/Ctrl+K` (kein `Ctrl+P` wegen Browser-Print).
 - **Slash-Popup-Trigger:** `/` am Zeilenanfang oder nach Whitespace; nicht mitten in Pfaden/URLs.

@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BindingsPanel } from "./BindingsPanel.jsx";
+import { VaultsPanel } from "./VaultsPanel.jsx";
 
 const COMMAND_LEGEND = [
   {
@@ -30,9 +31,9 @@ const COMMAND_LEGEND = [
         desc: "Kurzhandbuch und Befehls-Legende (Doku) ganz unten in der Leiste.",
       },
       {
-        cmd: "Glyph · Aktivität",
+        cmd: "Glyph · Plan & Aktivität",
         need: "optional",
-        desc: "Glyph-Symbol in der Leiste öffnet die Aktivitäts-Heatmap (gelb = aktiv, dunkler = häufiger, Peak mit Auge). Klick → Sessions des Tages.",
+        desc: "Kalender-Icon: Tab Plan = wiederkehrende To-dos (täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte). Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
       },
       {
         cmd: "Wiki (i)",
@@ -53,6 +54,11 @@ const COMMAND_LEGEND = [
         cmd: "Buch · Anbindung",
         need: "empfohlen",
         desc: "Buch → Tab Anbindung: API-Keys (OpenRouter, xAI Voice) und OAuth/Service-Status. Lokal: ~/.glyph-ui/bindings.json.",
+      },
+      {
+        cmd: "Buch · Vaults",
+        need: "empfohlen",
+        desc: "Buch → Tab Vaults (Kabelsalat): Obsidian-Vaults an °_Agent anbinden/lösen, r · r+w · 🔒 privat, Primär★. SoT: ~/.glyph/vaults.json.",
       },
       {
         cmd: "Refresh",
@@ -267,9 +273,10 @@ const SHORT_HANDBOOK = [
     id: "bind",
     title: "Anbindung (Keys / OAuth)",
     body: [
-      "**Buch** (unten) → Tab **Anbindung** (kein extra Leisten-Icon).",
+      "**Buch** (unten) → Tabs **Anbindung** · **Vaults** (kein extra Leisten-Icon).",
       "**Grok:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
       "**^_Code / °_Agent:** `OPENROUTER_API_KEY` hier oder in `.env`. Engine: `python server.py` (:18899).",
+      "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒. SoT: `~/.glyph/vaults.json`.",
       "**Voice:** optional `XAI_API_KEY` (console.x.ai).",
       "Gespeichert lokal: `~/.glyph-ui/bindings.json` (nie committen).",
     ],
@@ -290,7 +297,7 @@ const SHORT_HANDBOOK = [
       ["Lupe", "Sessions suchen/öffnen; Ja + Wiki · Löschen (/delete)"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
       ["Befehle", "Filterbare Legende (Mitte der Leiste)"],
-      ["Buch", "Handbuch · Befehle · Anbindung (Tabs)"],
+      ["Buch", "Handbuch · Befehle · Anbindung · Vaults (Tabs)"],
       ["Kalender", "Aktivitäts-Heatmap — Klick → Sessions des Tages"],
       ["Wiki", "Wiki-Index (.md) in Obsidian / Standard-App"],
       ["Ordner", "Aktuellen Workspace (cwd) im Finder öffnen"],
@@ -394,7 +401,8 @@ const SHORT_HANDBOOK = [
 ];
 
 function normalizeHelpTab(t) {
-  if (t === "commands" || t === "bindings" || t === "handbook") return t;
+  if (t === "commands" || t === "bindings" || t === "vaults" || t === "handbook")
+    return t;
   return "handbook";
 }
 
@@ -520,6 +528,15 @@ function CommandLegend({
           >
             Anbindung
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "vaults"}
+            className={`help-tab${tab === "vaults" ? " help-tab--active" : ""}`}
+            onClick={() => setTab("vaults")}
+          >
+            Vaults
+          </button>
         </div>
 
         {tab === "handbook" ? (
@@ -536,6 +553,11 @@ function CommandLegend({
             Keys lokal speichern · Grok-OAuth im Terminal · Status je Profil. Kein
             extra Leisten-Icon — alles unter dem <strong>Buch</strong>.
           </p>
+        ) : tab === "vaults" ? (
+          <p className="overview-hint">
+            Kabelsalat: Obsidian-Vaults an °_Agent. Anbinden / Lösen / r · r+w · 🔒.
+            SoT: <code>~/.glyph/vaults.json</code>.
+          </p>
         ) : (
           <p className="overview-hint">
             <strong>UI:</strong> Leiste &amp; Composer (statisch).{" "}
@@ -547,7 +569,7 @@ function CommandLegend({
           </p>
         )}
 
-        {tab !== "bindings" ? (
+        {tab !== "bindings" && tab !== "vaults" ? (
           <input
             className="overview-search"
             type="search"
@@ -597,6 +619,10 @@ function CommandLegend({
               active={open && tab === "bindings"}
               agentProfileId={agentProfileId}
             />
+          </div>
+        ) : tab === "vaults" ? (
+          <div className="overview-list handbook-list bindings-scroll">
+            <VaultsPanel />
           </div>
         ) : (
           <div className="overview-list legend-list" role="tabpanel">

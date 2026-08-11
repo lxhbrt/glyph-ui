@@ -58,6 +58,7 @@ import {
   uploadAttachmentFiles,
 } from "./utils/attachments.js";
 import { invalidateWsToken, wsUrl } from "./utils/format.js";
+import { modelHudText } from "./utils/assistantTrace.js";
 import {
   contextFillRatio,
   estimateTokensFromTexts,
@@ -122,6 +123,8 @@ export default function App() {
   /** ACP execution plan (agent todo list) — slim bar above composer. */
   const [planEntries, setPlanEntries] = useState([]);
   const [planCollapsed, setPlanCollapsed] = useState(false);
+  /** × an der Plan-Leiste: Leiste aus, Einträge bleiben unter Kalender → Tab Plan. */
+  const [planBarHidden, setPlanBarHidden] = useState(false);
   /** Live slash catalog from available_commands_update. */
   const [agentCommands, setAgentCommands] = useState([]);
   /** Flash "copied" on message action button. */
@@ -195,7 +198,7 @@ export default function App() {
     hasOverflow: false,
   });
 
-  // —— Grok Voice (xAI STT / TTS) ——
+  // —— Voice (xAI primary · OpenRouter fallback) ——
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [voiceHint, setVoiceHint] = useState("");
   const [voiceId, setVoiceId] = useState(() => {
@@ -294,19 +297,38 @@ export default function App() {
         const j = await res.json();
         if (cancelled) return;
         setVoiceAvailable(Boolean(j.available));
-        setVoiceHint(j.hint || "");
-        if (j.defaults?.voiceId && !localStorage.getItem("gbt-voice-id")) {
-          setVoiceId(j.defaults.voiceId);
-        }
+        const providerHint =
+          j.provider === "openrouter"
+            ? "OpenRouter Voice"
+            : j.provider === "xai"
+              ? "xAI Voice"
+              : "";
+        setVoiceHint(
+          j.hint ||
+            (providerHint
+              ? `${providerHint}${j.source ? ` · ${j.source}` : ""}`
+              : ""),
+        );
         if (j.available) {
           try {
             const vr = await fetch("/api/tts/voices");
             const vj = await vr.json();
             if (!cancelled && Array.isArray(vj.voices) && vj.voices.length) {
               setVoiceList(vj.voices);
+              const ids = new Set(vj.voices.map((v) => v.voice_id));
+              setVoiceId((cur) => {
+                if (ids.has(cur)) return cur;
+                const def = j.defaults?.voiceId;
+                if (def && ids.has(def)) return def;
+                return vj.voices[0].voice_id;
+              });
+            } else if (j.defaults?.voiceId && !localStorage.getItem("gbt-voice-id")) {
+              setVoiceId(j.defaults.voiceId);
             }
           } catch {
-            /* keep defaults */
+            if (j.defaults?.voiceId && !localStorage.getItem("gbt-voice-id")) {
+              setVoiceId(j.defaults.voiceId);
+            }
           }
         }
       } catch {
@@ -941,6 +963,8 @@ export default function App() {
             }
             // New session or opened history: plan is turn-scoped
             setPlanEntries([]);
+            setPlanBarHidden(false);
+            setPlanCollapsed(false);
             if (!msg.opened) {
               setAgentCommands([]);
               return;
@@ -1044,6 +1068,7 @@ export default function App() {
           lastActivityRef.current = Date.now();
           setSnackStuffed(false);
           setPlanEntries(normalizeClientPlanEntries(msg.entries));
+          setPlanBarHidden(false);
           return;
         }
 
@@ -1747,10 +1772,10 @@ export default function App() {
   }, [canDeepSearch, sendAction]);
 
   // Same for panels that are open when the agent changes under them.
+  // Kalender-Panel bleibt offen (Tab Plan gilt für alle Profile; Aktivität ggf. deaktiviert).
   useEffect(() => {
     if (!canBrowseSessions) setShowOverview(false);
-    if (!canSeeActivity) setShowCalendar(false);
-  }, [canBrowseSessions, canSeeActivity]);
+  }, [canBrowseSessions]);
 
   /**
    * Instant KO-Snack preview (no 2 min wait):
@@ -1903,6 +1928,55 @@ export default function App() {
     if (!el) return;
     requestAnimationFrame(() => setScrollHud(scrollMetrics(el)));
   }, [messages.length, isWorking]);
+
+  // Wiederkehrende To-dos: Systemzeile im Chat wenn UI offen (Q20=B)
+  const recurringEventsAfterRef = useRef("");
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const after = recurringEventsAfterRef.current;
+        const q = after ? `?after=${encodeURIComponent(after)}` : "";
+        const res = await fetch(`/api/recurring/events${q}`);
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || cancelled) return;
+        const events = Array.isArray(j.events) ? j.events : [];
+        if (!events.length) return;
+        // Erster Poll: nur Cursor setzen, keine Flut alter Events
+        if (!recurringEventsAfterRef.current) {
+          const last = events[events.length - 1];
+          recurringEventsAfterRef.current = String(last.ts || "");
+          return;
+        }
+        for (const ev of events) {
+          if (ev.ts) recurringEventsAfterRef.current = String(ev.ts);
+          if (ev.type !== "run") continue;
+          const title = String(ev.title || ev.id || "To-do");
+          const ok = Boolean(ev.ok);
+          const preview = String(ev.preview || "").trim();
+          const line = ok
+            ? `To-do fertig: ${title}${preview ? ` — ${preview.slice(0, 160)}` : ""}`
+            : `To-do Fehler: ${title}${preview ? ` — ${preview.slice(0, 160)}` : ""}`;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `recurring-${ev.ts || Date.now()}-${ev.id || ""}`,
+              role: "system",
+              text: line,
+            },
+          ]);
+        }
+      } catch {
+        /* offline ok */
+      }
+    };
+    void poll();
+    const id = window.setInterval(poll, 20000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   // Keep streaming mirror in sync (e.g. after history load / finalize)
   useEffect(() => {
@@ -2272,13 +2346,8 @@ export default function App() {
           type="button"
           className="side-rail-btn"
           onClick={() => setShowCalendar(true)}
-          disabled={!canSeeActivity}
-          title={
-            canSeeActivity
-              ? "Aktivität — Glyph"
-              : unavailableFor("Die Aktivitäts-Ansicht")
-          }
-          aria-label="Aktivität"
+          title="Plan & Aktivität — wiederkehrende To-dos + Heatmap"
+          aria-label="Plan und Aktivität"
         >
           <IconCalendar />
         </button>
@@ -2369,7 +2438,7 @@ export default function App() {
             setLegendTab("handbook");
             setShowLegend(true);
           }}
-          title="Kurzhandbuch · Befehle · Anbindung"
+          title="Kurzhandbuch · Befehle · Anbindung · Vaults"
           aria-label="Kurzhandbuch und Anbindung öffnen"
         >
           <IconBook />
@@ -2436,11 +2505,8 @@ export default function App() {
                   {modelHud.kind === "grok"
                     ? "Grok"
                     : modelHud.primary
-                      ? modelHud.primary.split("/").pop()
+                      ? modelHudText(modelHud.primary, modelHud.fallback)
                       : "Model"}
-                  {modelHud.kind !== "grok" && modelHud.fallback
-                    ? ` → ${String(modelHud.fallback).split("/").pop()}`
-                    : ""}
                   {modelHud.mismatch ? " ⚠" : ""}
                 </span>
               </button>
@@ -2630,7 +2696,7 @@ export default function App() {
                                 ? "Erzeuge Sprache…"
                                 : voiceAvailable
                                   ? "Mit Grok TTS vorlesen"
-                                  : voiceHint || "TTS: XAI_API_KEY setzen"
+                                  : voiceHint || "TTS: XAI- oder OpenRouter-Key"
                           }
                           aria-label={
                             speakingId === m.id
@@ -2751,15 +2817,18 @@ export default function App() {
         </div>
 
         <footer className="composer composer--grok">
-          <PlanBar
-            entries={planEntries}
-            collapsed={planCollapsed}
-            onToggle={() => setPlanCollapsed((c) => !c)}
-            onDismiss={() => {
-              setPlanEntries([]);
-              setPlanCollapsed(false);
-            }}
-          />
+          {!planBarHidden ? (
+            <PlanBar
+              entries={planEntries}
+              collapsed={planCollapsed}
+              onToggle={() => setPlanCollapsed((c) => !c)}
+              onDismiss={() => {
+                // Leiste aus — Plan bleibt unter Kalender-Icon → Tab Plan
+                setPlanBarHidden(true);
+                setPlanCollapsed(false);
+              }}
+            />
+          ) : null}
           {queue.length > 0 ? (
             <div className="msg-queue" role="list" aria-label="Warteschlange">
               <div className="msg-queue-head">
@@ -3068,7 +3137,7 @@ export default function App() {
                       ? "Transkript wird erstellt…"
                       : voiceAvailable
                         ? "Diktieren mit Grok STT"
-                        : voiceHint || "STT: XAI_API_KEY setzen"
+                        : voiceHint || "STT: XAI- oder OpenRouter-Key"
                 }
                 aria-label={recording ? "Aufnahme stoppen" : "Diktieren"}
                 aria-pressed={recording}
@@ -3306,6 +3375,7 @@ export default function App() {
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
         onOpenSession={handleOpenSession}
+        canSeeActivity={canSeeActivity}
       />
 
       {/* Aktive-Session-Zusammenfassung (glyph-agent; auch grok möglich) */}

@@ -639,6 +639,55 @@ export async function buildBindingsStatus(opts = {}) {
     agentHealth.ok &&
     modelsMismatch(modelsDesired, agentHealth.body);
 
+  // Priority matches server/voice.js: xAI → OpenRouter
+  const voiceProvider = xai.set
+    ? "xai"
+    : oauth
+      ? "xai"
+      : openrouter.set
+        ? "openrouter"
+        : null;
+  const voiceOk = Boolean(voiceProvider);
+  let voiceDetail = "XAI_API_KEY oder OPENROUTER_API_KEY";
+  if (xai.set) {
+    voiceDetail = `xAI ${xai.masked} (${xai.source})`;
+  } else if (oauth) {
+    voiceDetail = "xAI via grok login (Voice-Scopes ggf. fehlend)";
+  } else if (openrouter.set) {
+    voiceDetail = `OpenRouter ${openrouter.masked} (${openrouter.source})`;
+  }
+
+  const voiceProfile = {
+    id: "voice",
+    label: "Voice",
+    auth: voiceProvider === "openrouter" ? "openrouter" : "xai",
+    kind: "capability",
+    ok: voiceOk,
+    checks: [
+      {
+        id: "xai",
+        ok: xai.set || oauth,
+        detail: xai.set
+          ? `XAI_API_KEY ${xai.masked} (${xai.source}) · Primary`
+          : oauth
+            ? "grok login Token (Scopes ggf. dünn)"
+            : "XAI_API_KEY fehlt (console.x.ai)",
+      },
+      {
+        id: "openrouter",
+        ok: openrouter.set,
+        detail: openrouter.set
+          ? `OPENROUTER_API_KEY ${openrouter.masked} · Fallback STT/TTS`
+          : "OPENROUTER_API_KEY als Voice-Fallback (optional)",
+      },
+    ],
+    hint: voiceOk
+      ? voiceProvider === "openrouter"
+        ? "Voice über OpenRouter (Whisper / TTS). xAI-Key optional für Grok-Stimmen."
+        : "Voice über xAI. OpenRouter greift, wenn XAI_API_KEY fehlt."
+      : "Key setzen: XAI_API_KEY (Primary) oder OPENROUTER_API_KEY (Fallback) unter Stecker · Keys.",
+  };
+
   return {
     stateDir,
     bindingsPath: filePath,
@@ -733,14 +782,12 @@ export async function buildBindingsStatus(opts = {}) {
         ],
         hint: "Engine: cd ~/glyph-agent && python server.py · Key für Cloud-Antwort.",
       },
+      voice: voiceProfile,
     },
     voice: {
-      ok: xai.set || oauth,
-      detail: xai.set
-        ? `XAI_API_KEY ${xai.masked} (${xai.source})`
-        : oauth
-          ? "Fallback: grok login Token (Voice-Scopes ggf. fehlend)"
-          : "XAI_API_KEY (console.x.ai) oder grok login",
+      ok: voiceOk,
+      provider: voiceProvider,
+      detail: voiceDetail,
     },
   };
 }

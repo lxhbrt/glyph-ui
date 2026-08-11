@@ -186,7 +186,9 @@ app.onRequest(acp.methods.agent.logout, async () => ({}));
 
 app.onRequest(acp.methods.agent.session.new, async () => {
   const sessionId = newSessionId();
-  sessions.set(sessionId, { messages: [] });
+  // allowWriteTools: nach „Für diese Session erlauben“ keine Popups mehr
+  // für WriteFile/SearchReplace/RunCommand in dieser ACP-Session.
+  sessions.set(sessionId, { messages: [], allowWriteTools: false });
   return { sessionId };
 });
 
@@ -318,7 +320,9 @@ async function streamChat(body, client, sessionId, signal) {
 }
 
 /**
- * Ask Glyph (ACP client) for permission; returns true if allow_once/allow_always.
+ * Ask Glyph (ACP client) for permission.
+ * Returns { allowed: boolean, always?: boolean }.
+ * always=true → Session-Freigabe für alle Write/Shell-Tools.
  */
 async function askPermission(client, sessionId, pending) {
   const tool = pending?.tool || "tool";
@@ -339,19 +343,28 @@ async function askPermission(client, sessionId, pending) {
       },
       options: [
         { optionId: "allow-once", name: "Einmal erlauben", kind: "allow_once" },
+        {
+          optionId: "allow-always",
+          name: "Für diese Session erlauben",
+          kind: "allow_always",
+        },
         { optionId: "reject-once", name: "Ablehnen", kind: "reject_once" },
       ],
     });
     const outcome = res?.outcome;
-    if (!outcome) return false;
-    if (outcome.outcome === "cancelled") return false;
+    if (!outcome) return { allowed: false };
+    if (outcome.outcome === "cancelled") return { allowed: false };
     if (outcome.outcome === "selected") {
-      const id = outcome.optionId || "";
-      return id === "allow-once" || id === "allow-always" || id === "allow_once" || id === "allow_always";
+      const id = String(outcome.optionId || "");
+      const always =
+        id === "allow-always" || id === "allow_always";
+      const once =
+        id === "allow-once" || id === "allow_once" || always;
+      return { allowed: once, always };
     }
-    return false;
+    return { allowed: false };
   } catch {
-    return false;
+    return { allowed: false };
   }
 }
 
@@ -407,13 +420,14 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       abortController.signal,
     );
 
-    // CODE: Genehmigungsschleife (WriteFile / RunCommand)
+    // CODE: Genehmigungsschleife (WriteFile / SearchReplace / RunCommand)
+    // guard 24: Multi-File-Edits brauchen mehr als 8 Popups, wenn nicht allow-always.
     let guard = 0;
     while (
       IS_CODE &&
       final?.pending_confirmation &&
       final?.resume_token &&
-      guard < 8
+      guard < 24
     ) {
       guard += 1;
       const pending = final.pending || {
@@ -421,14 +435,29 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
         args: {},
         preview: final.answer || "",
       };
-      const allowed = await askPermission(client, sessionId, pending);
-      await streamStepChunk(
-        allowed
-          ? `⏹STEP⏹Permission · ${pending.tool} freigegeben`
-          : `⏹STEP⏹Permission · ${pending.tool} abgelehnt`,
-        client,
-        sessionId,
-      );
+      let allowed = false;
+      if (store.allowWriteTools) {
+        allowed = true;
+        await streamStepChunk(
+          `⏹STEP⏹Permission · ${pending.tool} freigegeben (Session)`,
+          client,
+          sessionId,
+        );
+      } else {
+        const decision = await askPermission(client, sessionId, pending);
+        allowed = Boolean(decision?.allowed);
+        if (decision?.always) {
+          store.allowWriteTools = true;
+        }
+        await streamStepChunk(
+          allowed
+            ? `⏹STEP⏹Permission · ${pending.tool} freigegeben` +
+                (decision?.always ? " (Session ab jetzt)" : "")
+            : `⏹STEP⏹Permission · ${pending.tool} abgelehnt`,
+          client,
+          sessionId,
+        );
+      }
       const resume = await streamChat(
         {
           message: "",

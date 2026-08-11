@@ -140,6 +140,72 @@ export function modelLabel(model) {
 }
 
 /**
+ * Kurzes Modell-Kürzel für die Header-Badge (Mobile: lange IDs verschieben das Layout).
+ * Volle ID bleibt im title-Attribut / in Details — hier nur Anzeige.
+ *
+ * Strategie: bekannte Familien → lesbare Kürzel; sonst erstes Token,
+ * bei >8 Zeichen die ersten 4 Buchstaben (wie z. B. „deep“).
+ *
+ * @param {string|null|undefined} model Provider/Modell oder bare ID
+ * @returns {string}
+ */
+export function shortModelLabel(model) {
+  const raw = String(model || "").trim();
+  if (!raw) return "—";
+  const bare = (raw.includes("/") ? raw.split("/").pop() : raw) || raw;
+  const s = bare.toLowerCase();
+
+  // Längere Patterns zuerst.
+  const rules = [
+    [/deepseek[-_.]?v?4[-_.]?flash/, "DS-V4F"],
+    [/deepseek[-_.]?v?3[-_.]?flash/, "DS-V3F"],
+    [/deepseek[-_.]?r1/, "DS-R1"],
+    [/deepseek[-_.]?chat/, "DS-Chat"],
+    [/deepseek[-_.]?coder/, "DS-Coder"],
+    [/deepseek/, "DS"],
+    [/gpt-?4o[-_.]?mini/, "4o-mini"],
+    [/gpt-?4o/, "GPT-4o"],
+    [/gpt-?4\.?1/, "GPT-4.1"],
+    [/gpt-?5\.?6/, "GPT-5.6"],
+    [/gpt-?5/, "GPT-5"],
+    [/claude[-_.]?sonnet/, "Sonnet"],
+    [/claude[-_.]?opus/, "Opus"],
+    [/claude[-_.]?haiku/, "Haiku"],
+    [/claude/, "Claude"],
+    [/gemini[-_.]?2\.?5[-_.]?pro/, "Gem-Pro"],
+    [/gemini[-_.]?2\.?5[-_.]?flash/, "Gem-Flash"],
+    [/gemini[-_.]?flash/, "Gem-Flash"],
+    [/gemini/, "Gemini"],
+    [/qwen/, "Qwen"],
+    [/llama[-_.]?3/, "Llama3"],
+    [/llama/, "Llama"],
+    [/mistral/, "Mistral"],
+    [/kimi/, "Kimi"],
+  ];
+  for (const [re, label] of rules) {
+    if (re.test(s)) return label;
+  }
+
+  // Unbekannt: erstes Segment; wenn zu lang → 4 Zeichen (Nutzerwunsch).
+  const token = bare.split(/[-_.]/)[0] || bare;
+  if (token.length <= 8) return token;
+  return token.slice(0, 4);
+}
+
+/**
+ * Kompakte HUD-Zeile: Primary [→ Fallback], jeweils als Kürzel.
+ * @param {string} primary
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export function modelHudText(primary, fallback) {
+  const p = shortModelLabel(primary);
+  const fb = String(fallback || "").trim();
+  if (!fb) return p;
+  return `${p} → ${shortModelLabel(fb)}`;
+}
+
+/**
  * Baut die kompakte Zeile: {Aktivität} · {Provider} / {Modell} · {Status}
  * Status-Unterscheidung: nicht verwendet / erfolgreich / fehlgeschlagen /
  * kein verwertbares Ergebnis. fallback_used wird sichtbar angehängt.
