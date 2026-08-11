@@ -322,26 +322,21 @@ async function streamChat(body, client, sessionId, signal) {
 /**
  * Ask Glyph (ACP client) for permission.
  * Returns { allowed: boolean, always?: boolean }.
- * always=true → Session-Freigabe für alle Write/Shell-Tools.
+ * Elevated (push/compound/service): nur Einmal/Ablehnen — kein Session-Always.
  */
 async function askPermission(client, sessionId, pending) {
   const tool = pending?.tool || "tool";
   const preview = String(pending?.preview || "").slice(0, 3500);
+  const elevated = Boolean(pending?.elevated);
+  const risk = String(pending?.risk || "").trim();
   const toolCallId = `code-${Date.now()}`;
-  try {
-    const res = await client.request(acp.methods.client.session.requestPermission, {
-      sessionId,
-      toolCall: {
-        toolCallId,
-        title: tool,
-        kind: tool === "RunCommand" ? "execute" : "edit",
-        status: "pending",
-        rawInput: pending?.args || {},
-        content: preview
-          ? [{ type: "content", content: { type: "text", text: preview } }]
-          : undefined,
-      },
-      options: [
+  const title = elevated && risk ? `${tool} · ${risk}` : tool;
+  const options = elevated
+    ? [
+        { optionId: "allow-once", name: "Einmal erlauben", kind: "allow_once" },
+        { optionId: "reject-once", name: "Ablehnen", kind: "reject_once" },
+      ]
+    : [
         { optionId: "allow-once", name: "Einmal erlauben", kind: "allow_once" },
         {
           optionId: "allow-always",
@@ -349,15 +344,30 @@ async function askPermission(client, sessionId, pending) {
           kind: "allow_always",
         },
         { optionId: "reject-once", name: "Ablehnen", kind: "reject_once" },
-      ],
+      ];
+  try {
+    const res = await client.request(acp.methods.client.session.requestPermission, {
+      sessionId,
+      toolCall: {
+        toolCallId,
+        title,
+        kind: tool === "RunCommand" ? "execute" : "edit",
+        status: "pending",
+        rawInput: pending?.args || {},
+        content: preview
+          ? [{ type: "content", content: { type: "text", text: preview } }]
+          : undefined,
+      },
+      options,
     });
     const outcome = res?.outcome;
     if (!outcome) return { allowed: false };
     if (outcome.outcome === "cancelled") return { allowed: false };
     if (outcome.outcome === "selected") {
       const id = String(outcome.optionId || "");
+      // Elevated: Session-Always ignorieren (Ernsthaftigkeit)
       const always =
-        id === "allow-always" || id === "allow_always";
+        !elevated && (id === "allow-always" || id === "allow_always");
       const once =
         id === "allow-once" || id === "allow_once" || always;
       return { allowed: once, always };
@@ -420,8 +430,8 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       abortController.signal,
     );
 
-    // CODE: Genehmigungsschleife (WriteFile / SearchReplace / RunCommand)
-    // guard 24: Multi-File-Edits brauchen mehr als 8 Popups, wenn nicht allow-always.
+    // CODE: Genehmigungsschleife — primär Elevated Shell (Write unter r+w ohne Popup).
+    // guard 24: mehrere Elevated nacheinander möglich.
     let guard = 0;
     while (
       IS_CODE &&
@@ -434,9 +444,21 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
         tool: "tool",
         args: {},
         preview: final.answer || "",
+        elevated: false,
+        risk: "",
       };
+      // pending from stream final may only have resume fields — merge elevated/risk
+      if (final.pending) {
+        pending.elevated = Boolean(final.pending.elevated);
+        pending.risk = final.pending.risk || "";
+        pending.preview = final.pending.preview || pending.preview;
+        pending.tool = final.pending.tool || pending.tool;
+        pending.args = final.pending.args || pending.args;
+      }
+      const isElevated = Boolean(pending.elevated);
       let allowed = false;
-      if (store.allowWriteTools) {
+      // Session-Always gilt nicht für Elevated (Ernsthaftigkeit)
+      if (store.allowWriteTools && !isElevated) {
         allowed = true;
         await streamStepChunk(
           `⏹STEP⏹Permission · ${pending.tool} freigegeben (Session)`,
@@ -446,13 +468,13 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       } else {
         const decision = await askPermission(client, sessionId, pending);
         allowed = Boolean(decision?.allowed);
-        if (decision?.always) {
+        if (decision?.always && !isElevated) {
           store.allowWriteTools = true;
         }
         await streamStepChunk(
           allowed
             ? `⏹STEP⏹Permission · ${pending.tool} freigegeben` +
-                (decision?.always ? " (Session ab jetzt)" : "")
+                (decision?.always && !isElevated ? " (Session ab jetzt)" : "")
             : `⏹STEP⏹Permission · ${pending.tool} abgelehnt`,
           client,
           sessionId,
@@ -482,9 +504,11 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       stepBlocks = stepBlocks.concat(resume.stepBlocks || []);
       if (resume.trace) trace = resume.trace;
       final = resume.final;
+      // Hard-error nach Allow: Schleife beenden
+      if (final?.hard_error) break;
     }
 
-    // Für Fallback-Clients ohne UI-Schritt-Rendering: dünner Zusammenfassungs-Header
+    // Für Fallback-Clients ohne UI-Steps-Rendering: dünner Zusammenfassungs-Header
     // nur, wenn noch KEINE Live-Stufen gezeigt wurden UND ein Banner gewünscht ist.
     let displayText = answerText;
     if (stepBlocks.length === 0 && SHOW_STEP_BANNER && trace) {
@@ -499,6 +523,9 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     if (trace) meta.trace = trace;
     if (final?.used_model) meta.used_model = final.used_model;
     if (final?.mode) meta.mode = final.mode;
+    if (final?.hard_error) {
+      meta.hardError = String(final.error || final.answer || "Code-Aktion fehlgeschlagen");
+    }
     await notifyAssistantMeta(client, sessionId, meta);
 
     return { stopReason: "end_turn" };

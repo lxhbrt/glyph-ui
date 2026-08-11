@@ -1180,6 +1180,41 @@ button.send .send-snack .snack-canvas {
   font-size: 0.9rem;
 }
 
+.banner--dismissible {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.banner-dismiss {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: -2px -4px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.75;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.banner-dismiss:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
 /* Stale UI vs bridge build — visible only when numbers diverge */
 .banner--warn {
   background: color-mix(in srgb, var(--gold) 14%, var(--panel));
@@ -1536,8 +1571,9 @@ button.send.send--stuffed .send-snack {
   border: none;
   border-radius: 0;
   background: var(--bg);
-  /* Bottom: full icon row (34px) + air so Copy/Speak sit above LVL, not on it */
-  padding: 8px 8px 44px 4px;
+  /* Thin air only (≈1/4 of former 44px): action buttons fill under text when open,
+     they do not need a reserved strip that pushes the reply off the LVL edge. */
+  padding: 8px 8px 11px 4px;
 }
 
 .empty {
@@ -1556,6 +1592,7 @@ button.send.send--stuffed .send-snack {
   - User prompts → right-aligned speech bubble
 */
 .msg {
+  position: relative;
   border-radius: 0;
   padding: 6px 4px 0;
   border: none;
@@ -1601,9 +1638,19 @@ button.send.send--stuffed .send-snack {
   box-shadow: none;
 }
 
-/* Message actions (copy / speak): collapsed until tapped — no dead air under reply. */
+/* Message actions (copy / speak): overlay under the msg, no reflow.
+   display:none↔flex used to push text up/down on every toggle. */
 .msg .msg-bottom-actions {
   display: none;
+  position: absolute;
+  z-index: 3;
+  left: 2px;
+  top: 100%;
+  margin-top: 2px;
+  padding: 2px 0 0;
+  /* slight plate so icons stay readable over the next message */
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border-radius: 9px;
 }
 
 .msg.is-actions-open .msg-bottom-actions {
@@ -1612,9 +1659,9 @@ button.send.send--stuffed .send-snack {
 
 /* Copy under user bubble: outside the rim, right-aligned */
 .msg-user .msg-bottom-actions {
+  left: auto;
+  right: 0;
   justify-content: flex-end;
-  margin-top: 4px;
-  padding-top: 0;
 }
 
 .msg-user .role {
@@ -1900,16 +1947,12 @@ button.send.send--stuffed .send-snack {
   cursor: not-allowed;
 }
 
-/* Untere Aktionsleiste (Kopieren/Vorlesen) unter dem vollständigen Antworttext.
-   Reine Icon-Buttons (wie die frühere obere Leiste, nur unten platziert),
-   keine Text-Labels. Desktop und Mobile dieselbe Größe (34px) —
-   Mobil hat weniger Fläche, Icons dürfen nicht größer werden. */
+/* Untere Aktionsleiste (Kopieren/Vorlesen) — Icon-only, 34px (Desktop = Mobil).
+   Layout/visibility: siehe .msg .msg-bottom-actions (absolute, kein Reflow). */
 .msg-bottom-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
-  padding-top: 8px;
 }
 
 .msg-bottom-actions .msg-bottom-btn {
@@ -4582,8 +4625,8 @@ button.cal-cell {
   }
 
   .messages.messages--borderless {
-    /* Phone: icon row + touch air above LVL strip */
-    padding: 6px 4px 48px;
+    /* Phone: same thin air as desktop (≈1/4 of former 48px) */
+    padding: 6px 4px 12px;
   }
 
   .composer.composer--grok {
@@ -5285,6 +5328,15 @@ button.cal-cell {
 .summarize-status { opacity: 0.7; font-size: 13px; }
 .summarize-error { color: #ff6b6b; font-size: 13px; }
 .summarize-success { color: #4ade80; font-size: 13px; }
+.summarize-success .summarize-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 8px 0 12px;
+  line-height: 1.4;
+}
+.summarize-success .summarize-actions {
+  margin-top: 4px;
+}
 .summarize-external-warning {
   border: 1px solid #f59e0b;
   background: rgba(245, 158, 11, 0.12);

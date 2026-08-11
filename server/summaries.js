@@ -7,7 +7,9 @@
  *  - Nur in `summaries/` schreiben; bestehende OpenClaw-Strukturen
  *    (index.md, sources/, concepts/, entities/, managed blocks) NIE anfassen.
  *  - Pfad-Traversal + unsichere Dateinamen verhindern.
- *  - Bestehende Datei NIEMALS überschreiben.
+ *  - Bestehende Datei NIEMALS überschreiben — jeder Commit = neuer Snapshot
+ *    (Zeitstempel im Namen), damit man nach weiteren Turns erneut
+ *    zusammenfassen kann (Checkpoints für °_Agent / ^_Code ohne Grok-Verlauf).
  *  - Atomar speichern: Temp-Datei + exklusives rename.
  *  - Kein automatischer Index-Eingriff (zunächst ohne Index-Update).
  *
@@ -69,16 +71,31 @@ function slugify(text, max = 50) {
     .toLowerCase() || "topic";
 }
 
+/** Lokales Datum/Zeit (nicht UTC) — Dateinamen folgen der Nutzer-Zeitzone. */
+export function localDateParts(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    /** HHmmss — macht jeden Commit innerhalb eines Tages eindeutig. */
+    time: `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`,
+  };
+}
+
 /**
- * Baut einen sicheren Dateinamen: YYYY-MM-DD--Titel--KI-Kürzel--SessionID.md
+ * Baut einen sicheren Dateinamen:
+ *   YYYY-MM-DD-HHmmss--Titel--KI-Kürzel--SessionID.md
+ * Zeitstempel = neuer Snapshot bei erneutem Zusammenfassen derselben Session.
  * Verhindert Pfad-Traversal: nur der (validierte) Basisname wird zurückgegeben.
  */
-export function buildFileName({ title, sessionId, profile, date }) {
-  const d = String(date || new Date().toISOString().slice(0, 10));
+export function buildFileName({ title, sessionId, profile, date, time, stamp }) {
+  const parts = localDateParts();
+  const d = String(date || parts.date);
+  // stamp: voller Zeit-Teil (default HHmmss); time: Alias für stamp.
+  const s = String(stamp || time || parts.time).replace(/[^0-9A-Za-z-]/g, "").slice(0, 16);
   const t = slugify(title);
   const slug = agentSlug(profile);
   const sid = String(sessionId || crypto.randomBytes(4).toString("hex")).slice(0, 8);
-  const base = `${d}--${t}--${slug}--${sid}.md`;
+  const base = `${d}-${s}--${t}--${slug}--${sid}.md`;
   // Sicherheits-Check: darf keinen Pfad-Trick enthalten.
   if (base !== path.basename(base) || base.includes("..")) {
     throw new Error("Unsicherer Dateiname.");
@@ -164,42 +181,53 @@ export function renderSummaryDocument(data) {
 }
 
 /**
- * ATOMAR speichern: schreibt eine Temp-Datei im selben Ordner und benennt sie
- * EXKLUSIV um (rename scheitert, wenn der Zielname schon existiert → kein
- * Überschreiben). Nicht gefunden → EXDEV-sicher auf Fallback.
- * @returns {Promise<{path:string, fileName:string, existed:boolean}>}
+ * ATOMAR speichern: Temp-Datei + rename. Nie überschreiben.
+ * Dateiname enthält HHmmss — erneutes Zusammenfassen derselben Session
+ * erzeugt einen neuen Snapshot (Checkpoints nach weiteren Turns).
+ * Bei Kollision (gleicher Sekunde / Race): Suffix -2, -3, …
+ * @returns {Promise<{path:string, fileName:string, existed:boolean, written:boolean}>}
  */
 export async function writeSummaryAtomically(data, wikiRoot = getWikiRoot()) {
-  const fileName = buildFileName({
-    title: data.title,
-    sessionId: data.meta?.sessionId,
-    profile: data.meta?.profile,
-    date: data.meta?.date,
-  });
-  const target = resolveTargetPath(fileName, wikiRoot);
   const summaries = resolveSummariesDir(wikiRoot);
   await fs.mkdir(summaries, { recursive: true });
 
-  // Niemals überschreiben: rename mit bestehendem Ziel würde FEHLSCHLAGEN;
-  // wir prüfen zusätzlich vorab, um eine klare Meldung zu liefern.
-  let existed = false;
-  try {
-    await fs.access(target);
-    existed = true;
-  } catch {
-    existed = false;
-  }
-  if (existed) {
-    return { path: target, fileName, existed: true, written: false };
-  }
+  const parts = localDateParts();
+  const baseStamp = data.meta?.stamp || data.meta?.time || parts.time;
+  const common = {
+    title: data.title,
+    sessionId: data.meta?.sessionId,
+    profile: data.meta?.profile,
+    date: data.meta?.date || parts.date,
+  };
 
-  const tmp = path.join(summaries, `.tmp-${crypto.randomBytes(6).toString("hex")}`);
-  try {
-    await fs.writeFile(tmp, renderSummaryDocument(data), "utf8");
-    await fs.rename(tmp, target); // exklusiv; schlägt fehl, falls Ziel inzwischen entstand
-  } catch (err) {
-    await fs.rm(tmp, { force: true }).catch(() => {});
-    throw err;
+  let lastErr = null;
+  for (let i = 0; i < 40; i++) {
+    const stamp = i === 0 ? baseStamp : `${baseStamp}-${i + 1}`;
+    const fileName = buildFileName({ ...common, stamp });
+    const target = resolveTargetPath(fileName, wikiRoot);
+
+    try {
+      await fs.access(target);
+      // belegt → nächster Stamp
+      continue;
+    } catch {
+      /* free */
+    }
+
+    const tmp = path.join(summaries, `.tmp-${crypto.randomBytes(6).toString("hex")}`);
+    try {
+      await fs.writeFile(tmp, renderSummaryDocument(data), "utf8");
+      await fs.rename(tmp, target);
+      return { path: target, fileName, existed: false, written: true };
+    } catch (err) {
+      await fs.rm(tmp, { force: true }).catch(() => {});
+      // EEXIST/race → nächster Versuch; sonst raus
+      if (err && (err.code === "EEXIST" || err.code === "ENOTEMPTY")) {
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
   }
-  return { path: target, fileName, existed: false, written: true };
+  throw lastErr || new Error("Kein freier Dateiname für die Zusammenfassung (zu viele Snapshots/s).");
 }

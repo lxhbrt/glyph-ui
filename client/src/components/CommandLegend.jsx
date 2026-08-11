@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BindingsPanel } from "./BindingsPanel.jsx";
 import { VaultsPanel } from "./VaultsPanel.jsx";
+import { WorkspacesPanel } from "./WorkspacesPanel.jsx";
 
 const COMMAND_LEGEND = [
   {
@@ -59,6 +60,11 @@ const COMMAND_LEGEND = [
         cmd: "Buch · Vaults",
         need: "empfohlen",
         desc: "Buch → Tab Vaults (Kabelsalat): Obsidian-Vaults an °_Agent anbinden/lösen, r · r+w · 🔒 privat, Primär★. SoT: ~/.glyph/vaults.json.",
+      },
+      {
+        cmd: "Buch · Workspaces",
+        need: "empfohlen",
+        desc: "Buch → Tab Workspaces (Kabelsalat): Code-Roots an ^_Code anbinden/lösen, r · r+w · 🔒 gesperrt, Primär★. SoT: ~/.glyph/workspaces.json.",
       },
       {
         cmd: "Refresh",
@@ -273,10 +279,11 @@ const SHORT_HANDBOOK = [
     id: "bind",
     title: "Anbindung (Keys / OAuth)",
     body: [
-      "**Buch** (unten) → Tabs **Anbindung** · **Vaults** (kein extra Leisten-Icon).",
+      "**Buch** (unten) → Tabs **Anbindung** · **Vaults** · **Workspaces** (kein extra Leisten-Icon).",
       "**Grok:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
       "**^_Code / °_Agent:** `OPENROUTER_API_KEY` hier oder in `.env`. Engine: `python server.py` (:18899).",
       "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒. SoT: `~/.glyph/vaults.json`.",
+      "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒 gesperrt. SoT: `~/.glyph/workspaces.json`.",
       "**Voice:** optional `XAI_API_KEY` (console.x.ai).",
       "Gespeichert lokal: `~/.glyph-ui/bindings.json` (nie committen).",
     ],
@@ -401,7 +408,13 @@ const SHORT_HANDBOOK = [
 ];
 
 function normalizeHelpTab(t) {
-  if (t === "commands" || t === "bindings" || t === "vaults" || t === "handbook")
+  if (
+    t === "commands" ||
+    t === "bindings" ||
+    t === "vaults" ||
+    t === "workspaces" ||
+    t === "handbook"
+  )
     return t;
   return "handbook";
 }
@@ -537,6 +550,15 @@ function CommandLegend({
           >
             Vaults
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "workspaces"}
+            className={`help-tab${tab === "workspaces" ? " help-tab--active" : ""}`}
+            onClick={() => setTab("workspaces")}
+          >
+            Workspaces
+          </button>
         </div>
 
         {tab === "handbook" ? (
@@ -558,6 +580,11 @@ function CommandLegend({
             Kabelsalat: Obsidian-Vaults an °_Agent. Anbinden / Lösen / r · r+w · 🔒.
             SoT: <code>~/.glyph/vaults.json</code>.
           </p>
+        ) : tab === "workspaces" ? (
+          <p className="overview-hint">
+            Kabelsalat: Code-Roots an ^_Code. Anbinden / Lösen / r · r+w · 🔒.
+            SoT: <code>~/.glyph/workspaces.json</code>.
+          </p>
         ) : (
           <p className="overview-hint">
             <strong>UI:</strong> Leiste &amp; Composer (statisch).{" "}
@@ -569,7 +596,7 @@ function CommandLegend({
           </p>
         )}
 
-        {tab !== "bindings" && tab !== "vaults" ? (
+        {tab !== "bindings" && tab !== "vaults" && tab !== "workspaces" ? (
           <input
             className="overview-search"
             type="search"
@@ -623,6 +650,10 @@ function CommandLegend({
         ) : tab === "vaults" ? (
           <div className="overview-list handbook-list bindings-scroll">
             <VaultsPanel />
+          </div>
+        ) : tab === "workspaces" ? (
+          <div className="overview-list handbook-list bindings-scroll">
+            <WorkspacesPanel />
           </div>
         ) : (
           <div className="overview-list legend-list" role="tabpanel">

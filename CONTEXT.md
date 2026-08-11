@@ -45,8 +45,12 @@ Eines der wählbaren ACP-Agenten in Glyph: **grok**, **`^_Code`** (`_code`), **`
 _Avoid_: OpenRouter (kein UI-Profil mehr), Claude (ersetzt durch ^_Code), Provider, Modell (als Profilname)
 
 **Anbindung**:
-Tab im **Buch**-Panel (Handbuch · Befehle · Anbindung) zum Prüfen von OAuth/Service-Status und Speichern von API-Keys (`OPENROUTER_API_KEY`, `XAI_API_KEY`) unter `~/.glyph-ui/bindings.json`. Kein eigenes Leisten-Icon. Grok-OAuth bleibt Terminal (`grok login`).
+Tab im **Buch**-Panel (Handbuch · Befehle · Anbindung · Vaults · Workspaces) zum Prüfen von OAuth/Service-Status und Speichern von API-Keys (`OPENROUTER_API_KEY`, `XAI_API_KEY`) unter `~/.glyph-ui/bindings.json`. Kein eigenes Leisten-Icon. Grok-OAuth bleibt Terminal (`grok login`).
 _Avoid_: Settings (zu generisch), Login-Dialog (impliziert eingebettetes OAuth), Kalender (nur Grok-Aktivität, oft disabled)
+
+**Workspaces (Kabelsalat)**:
+Tab im **Buch**-Panel: Code-Roots an **^_Code** anbinden/lösen, Rechte r · r+w · 🔒 gesperrt, Primär★. SoT `~/.glyph/workspaces.json` via glyph-agent `/workspaces` und UI-Proxy `/api/workspaces`. Analog **Vaults** (für °_Agent).
+_Avoid_: Vaults-Tab (Obsidian/°_Agent), Finder-„Workspace“-Leistenbutton (nur cwd öffnen)
 
 **^_Code**:
 Code-Profil (id `_code`): DeepSeek V4 Flash via OpenRouter, Workspace-Tools, Genehmigung in Glyph. Nutzt dieselbe ACP-Brücke wie `°_Agent` mit `GLYPH_AGENT_MODE=code`.

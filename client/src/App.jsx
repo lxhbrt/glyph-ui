@@ -437,6 +437,8 @@ export default function App() {
         return;
       }
     }
+    // 2nd click of a double-click = text selection, not action toggle
+    if (e?.detail != null && e.detail > 1) return;
     // Don't steal a text selection gesture
     try {
       const sel = window.getSelection?.();
@@ -444,7 +446,9 @@ export default function App() {
     } catch {
       /* ignore */
     }
-    setActionsMsgId((cur) => (cur === id ? null : id));
+    // Open only — never toggle closed on re-click (that hopped the layout
+    // and made double-click copy impossible). Close = click outside.
+    setActionsMsgId(id);
   }, []);
 
   const speakText = useCallback(
@@ -2606,7 +2610,20 @@ export default function App() {
             ) : null}
           </div>
         ) : null}
-        {error ? <div className="banner">{error}</div> : null}
+        {error ? (
+          <div className="banner banner--dismissible" role="alert">
+            <span className="banner-text">{error}</span>
+            <button
+              type="button"
+              className="banner-dismiss"
+              onClick={() => setError("")}
+              title="Fehler schließen"
+              aria-label="Fehler schließen"
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
 
         <div className="messages-shell messages-shell--col">
           <main
@@ -3265,7 +3282,9 @@ export default function App() {
             </h2>
             <p className="permission-modal-kind">
               {permissionReq.kind === "execute"
-                ? "Shell-Befehl (Whitelist)"
+                ? String(permissionReq.title || "").includes("·")
+                  ? "Elevated Shell — nur diese Aktion"
+                  : "Shell-Befehl"
                 : permissionReq.kind === "edit"
                   ? "Datei schreiben"
                   : "Aktion"}

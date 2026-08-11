@@ -1077,6 +1077,82 @@ app.delete("/api/vaults/:id", async (req, res) => {
 });
 
 /**
+ * Kabelsalat — Workspace-Registry (^_Code /workspaces → ~/.glyph/workspaces.json).
+ */
+app.get("/api/workspaces", async (_req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/workspaces`, {
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/workspaces", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/workspaces`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(30000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.patch("/api/workspaces/:id", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(req.params.id);
+    const r = await fetch(`${base}/workspaces/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.delete("/api/workspaces/:id", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(req.params.id);
+    const r = await fetch(`${base}/workspaces/${id}`, {
+      method: "DELETE",
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
  * Proxy againkehrende To-dos (glyph-agent /recurring).
  * Plan-Tab in der UI — keine OpenClaw-Cron-Doppelbuchhaltung.
  */
@@ -1575,38 +1651,51 @@ app.post("/api/sessions/:id/close", async (req, res) => {
 
 /**
  * Deterministische Zubereitung des Session-Transkripts zu einer Summary-Struktur.
- * Kein Modell nötig (robust): Titel, Kurzfassung, Entscheidungen, offene Punkte,
- * nächste Schritte werden aus User-/Assistant-Turns abgeleitet. Modell kann
- * optional in einem späteren Schritt nachschärfen.
- * @returns {{title:string, summary:string, decisions:string[], open_items:string[], next_steps:string[], references:string[]}}
+ * Kein Modell nötig (robust). Erneutes Zusammenfassen nach weiteren Turns:
+ * Entwurf basiert auf dem aktuellen Verlauf (Start + letzte Turns + Zähler).
+ * @returns {{title:string, summary:string, decisions:string[], open_items:string[], next_steps:string[], references:string[], turn_counts?:object}}
  */
 function buildDraftFromTurns(turns, meta = {}) {
   const userTurns = (turns || []).filter((t) => t.role === "user" && t.text && t.text.trim());
   const assistantTurns = (turns || []).filter((t) => t.role === "assistant" && t.text && t.text.trim());
+  const clean = (t, n) => String(t?.text || "").replace(/\s+/g, " ").trim().slice(0, n);
 
-  const title = meta.title || userTurns[0]?.text?.replace(/\s+/g, " ").slice(0, 80) || "Unbenannte Session";
-  const firstUser = userTurns[0]?.text?.replace(/\s+/g, " ") || "";
-  // Kurzfassung: erste User-Frage + letzte Assistant-Antwort als Kern.
+  const title =
+    meta.title || clean(userTurns[0], 80) || "Unbenannte Session";
+  const firstUser = clean(userTurns[0], 200);
+  const lastUser = userTurns.length ? clean(userTurns[userTurns.length - 1], 200) : "";
   const lastAssistant = assistantTurns.length
-    ? assistantTurns[assistantTurns.length - 1].text.replace(/\s+/g, " ").slice(0, 400)
+    ? clean(assistantTurns[assistantTurns.length - 1], 400)
     : "";
-  const summary = firstUser
-    ? `Die Session befasste sich mit: „${firstUser.slice(0, 160)}".` +
-      (lastAssistant ? ` Ergebnis: ${lastAssistant.slice(0, 240)}` : "")
-    : "Keine Nachrichten vorhanden.";
 
-  // Entscheidungen/offene Punkte/nächste Schritte: einfache Heuristik aus User-Turns,
-  // die als Anweisung/Ziel formuliert sind (kann später durch Modell verbessert werden).
-  const decisions = userTurns.slice(-3).map((t) => t.text.replace(/\s+/g, " ").slice(0, 180));
-  const next_steps = assistantTurns.slice(-2).map((t) => t.text.replace(/\s+/g, " ").slice(0, 160));
+  // Kurzfassung: Umfang + Start + ggf. letzte Arbeit (wichtig für Checkpoints).
+  let summary = "Keine Nachrichten vorhanden.";
+  if (firstUser) {
+    const parts = [
+      `Session mit ${userTurns.length} Nutzer- und ${assistantTurns.length} Antwort-Turns.`,
+      `Start: „${firstUser.slice(0, 160)}".`,
+    ];
+    if (userTurns.length > 1 && lastUser && lastUser !== firstUser) {
+      parts.push(`Zuletzt (Nutzer): „${lastUser.slice(0, 160)}".`);
+    }
+    if (lastAssistant) {
+      parts.push(`Letztes Ergebnis: ${lastAssistant.slice(0, 280)}`);
+    }
+    summary = parts.join(" ");
+  }
+
+  // Entscheidungen = letzte Nutzer-Turns (Anweisungen/Ziele); nächste Schritte = letzte Antworten.
+  const decisions = userTurns.slice(-5).map((t) => clean(t, 180)).filter(Boolean);
+  const next_steps = assistantTurns.slice(-3).map((t) => clean(t, 180)).filter(Boolean);
 
   return {
     title,
     summary,
-    decisions: decisions.length ? decisions : [],
+    decisions,
     open_items: [],
-    next_steps: next_steps.length ? next_steps : [],
+    next_steps,
     references: [],
+    turn_counts: { user: userTurns.length, assistant: assistantTurns.length },
   };
 }
 
@@ -1745,10 +1834,19 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
       return;
     }
 
-    // Entwurf aus dem vom Client ggf. bearbeiteten Body od. neu deterministisch.
-    const base = body.draft
+    // Live-Verlauf hat Vorrang — sonst steckt man auf dem Dialog-Entwurf von
+    // vor 10 Turns fest. Client-Draft nur bei explizitem Bearbeiten (use_client_draft).
+    const useClientDraft = body.use_client_draft === true && body.draft;
+    const base = useClientDraft
       ? body.draft
-      : buildDraftFromTurns(turns, { title: session?.title });
+      : buildDraftFromTurns(turns, {
+          title: session?.title || body.draft?.title,
+        });
+
+    if (!useClientDraft && !turns.length) {
+      res.status(404).json({ error: "Session nicht gefunden oder ohne Nachrichten" });
+      return;
+    }
 
     const data = {
       title: base.title || "Unbenannte Session",
@@ -1763,24 +1861,34 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
         profile,
         model: session?.model || body.model || "",
         external_processing: external,
+        turn_counts: base.turn_counts || undefined,
       },
     };
 
+    // Jeder Commit = neuer Snapshot (Zeitstempel im Dateinamen). Alte Dateien bleiben.
+    // So kann man nach weiteren Turns erneut zusammenfassen (°_Agent / ^_Code).
     const result = await writeSummaryAtomically(data, getSummaryWikiRoot());
     if (result.written) {
-      res.status(201).json({ ok: true, written: true, path: result.path, fileName: result.fileName });
+      res.status(201).json({
+        ok: true,
+        written: true,
+        path: result.path,
+        fileName: result.fileName,
+        snapshot: true,
+      });
     } else {
+      // Sollte mit Zeitstempel-Stamps kaum noch vorkommen.
       res.status(409).json({
         ok: false,
         written: false,
         existed: true,
         path: result.path,
-        error: "Es existiert bereits eine Zusammenfassung für diese Session — nicht überschrieben.",
+        error:
+          "Dateiname belegt — bitte erneut speichern (neuer Snapshot). Alte Zusammenfassungen werden nie überschrieben.",
       });
     }
   } catch (err) {
-    const status = /bereits|existed/i.test(err?.message || "") ? 409 : 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 
@@ -2365,6 +2473,13 @@ class GrokBridge {
       null;
     if (glyphMeta?.trace && typeof glyphMeta.trace === "object") {
       this.broadcast({ type: "assistant_meta", trace: glyphMeta.trace });
+    }
+    // ^_Code hard-stop after failed write/shell — red banner with real reason
+    if (glyphMeta?.hardError) {
+      this.broadcast({
+        type: "error",
+        message: String(glyphMeta.hardError).slice(0, 800),
+      });
     }
 
     if (kind === "agent_message_chunk") {
