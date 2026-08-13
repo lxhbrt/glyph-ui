@@ -415,6 +415,19 @@ export function WorkspacesPanel() {
             </button>
             <button
               type="button"
+              className="ghost"
+              onClick={() =>
+                void patchWorkspace(selected.id, {
+                  enabled: selected.enabled === false,
+                })
+              }
+              disabled={busy}
+              title="An/Ab — Kabel durchtrennen, Eintrag bleibt"
+            >
+              {selected.enabled === false ? "An" : "Ab"}
+            </button>
+            <button
+              type="button"
               className="ghost vaults-detach"
               onClick={() => void onDetach(selected.id)}
               disabled={busy}

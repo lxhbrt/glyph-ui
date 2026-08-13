@@ -59,12 +59,12 @@ const COMMAND_LEGEND = [
       {
         cmd: "Buch · Vaults",
         need: "empfohlen",
-        desc: "Buch → Tab Vaults (Kabelsalat): Obsidian-Vaults an °_Agent anbinden/lösen, r · r+w · 🔒 privat, Primär★. SoT: ~/.glyph/vaults.json.",
+        desc: "Buch → Tab Vaults (Kabelsalat): Obsidian-Vaults an °_Agent anbinden/lösen, r · r+w · 🔒 privat, Primär★, An/Ab = Kabel durchtrennen. SoT: ~/.glyph/vaults.json.",
       },
       {
         cmd: "Buch · Workspaces",
         need: "empfohlen",
-        desc: "Buch → Tab Workspaces (Kabelsalat): Code-Roots an ^_Code anbinden/lösen, r · r+w · 🔒 gesperrt, Primär★. SoT: ~/.glyph/workspaces.json.",
+        desc: "Buch → Tab Workspaces (Kabelsalat): Code-Roots an ^_Code anbinden/lösen, r · r+w · 🔒 gesperrt, Primär★, An/Ab = Kabel durchtrennen. SoT: ~/.glyph/workspaces.json.",
       },
       {
         cmd: "Refresh",
@@ -284,6 +284,7 @@ const SHORT_HANDBOOK = [
       "**^_Code / °_Agent:** `OPENROUTER_API_KEY` hier oder in `.env`. Engine: `python server.py` (:18899).",
       "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒. SoT: `~/.glyph/vaults.json`.",
       "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒 gesperrt. SoT: `~/.glyph/workspaces.json`.",
+      "**An/Ab** = Kabel durchtrennen, Eintrag bleibt.",
       "**Voice:** optional `XAI_API_KEY` (console.x.ai).",
       "Gespeichert lokal: `~/.glyph-ui/bindings.json` (nie committen).",
     ],
