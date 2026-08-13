@@ -427,6 +427,17 @@ export function VaultsPanel() {
             >
               ↓
             </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                void patchVault(selected.id, { enabled: selected.enabled === false })
+              }
+              disabled={busy}
+              title="An/Ab — Kabel durchtrennen, Eintrag bleibt"
+            >
+              {selected.enabled === false ? "An" : "Ab"}
+            </button>
             {selected.obsidian_uri ? (
               <a className="ghost vaults-open" href={selected.obsidian_uri}>
                 Obsidian
