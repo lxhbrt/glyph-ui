@@ -17,6 +17,7 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen | `client/src/components/SlashPopup.jsx`, `ExtensionsModal.jsx` | `server/skills.js`, `server/commands.js` |
 | **Sessions** | Session-Liste, Überblick, Summaries | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
 | **Bindings** | API-Keys / OAuth-Status speichern | `server/bindings.js`, `BindingsPanel.jsx` | `~/.glyph-ui/bindings.json` |
+| **BindPanel** | Gemeinsames Kabelsalat-UI (Vaults + Workspaces) | `BindPanel.jsx`, `useBindResource.js` | Vaults-UI, Workspaces-UI |
 | **Vaults-UI** | Kabelsalat °_Agent | `VaultsPanel.jsx` → Proxy `/api/…` | **glyph-agent** `/vaults` |
 | **Workspaces-UI** | Kabelsalat ^_Code | `WorkspacesPanel.jsx` → `/api/workspaces` | **glyph-agent** `/workspaces` |
 | **Plan / Recurring** | Kalender-Tab Plan | `server/plan.js`, `PlanBar.jsx` | glyph-agent `/recurring` |
