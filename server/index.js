@@ -1001,156 +1001,97 @@ async function glyphAgentBaseUrl() {
 }
 
 /**
+ * Shared proxy for glyph-agent bind registries (vaults / workspaces).
+ * POST 30s; GET/PATCH/DELETE 15s. Engine 400 only on POST/PATCH; else 502.
+ * Body forwarded on POST/PATCH/DELETE (DELETE pins needs `{path}`).
+ */
+function proxyAgent(
+  prefix,
+  { postTimeout = 30000, otherTimeout = 15000, extra = [] } = {},
+) {
+  const pass400 = (method) => method === "POST" || method === "PATCH";
+  const timeoutOf = (method) => (method === "POST" ? postTimeout : otherTimeout);
+  const withBody = (method) =>
+    method === "POST" || method === "PATCH" || method === "DELETE";
+
+  async function forward(req, res, relPath, method) {
+    try {
+      const base = await glyphAgentBaseUrl();
+      const init = {
+        method,
+        signal: AbortSignal.timeout(timeoutOf(method)),
+      };
+      if (withBody(method)) {
+        init.headers = { "Content-Type": "application/json" };
+        init.body = JSON.stringify(req.body || {});
+      }
+      const r = await fetch(`${base}${relPath}`, init);
+      const json = await r.json().catch(() => ({}));
+      const status = r.ok
+        ? 200
+        : pass400(method) && r.status === 400
+          ? 400
+          : 502;
+      res.status(status).json(json);
+    } catch (err) {
+      res.status(502).json({
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  app.get(`/api/${prefix}`, (req, res) =>
+    forward(req, res, `/${prefix}`, "GET"),
+  );
+  app.post(`/api/${prefix}`, (req, res) =>
+    forward(req, res, `/${prefix}`, "POST"),
+  );
+  app.patch(`/api/${prefix}/:id`, (req, res) =>
+    forward(
+      req,
+      res,
+      `/${prefix}/${encodeURIComponent(req.params.id)}`,
+      "PATCH",
+    ),
+  );
+  app.delete(`/api/${prefix}/:id`, (req, res) =>
+    forward(
+      req,
+      res,
+      `/${prefix}/${encodeURIComponent(req.params.id)}`,
+      "DELETE",
+    ),
+  );
+  for (const name of extra) {
+    app.post(`/api/${prefix}/:id/${name}`, (req, res) =>
+      forward(
+        req,
+        res,
+        `/${prefix}/${encodeURIComponent(req.params.id)}/${name}`,
+        "POST",
+      ),
+    );
+    app.delete(`/api/${prefix}/:id/${name}`, (req, res) =>
+      forward(
+        req,
+        res,
+        `/${prefix}/${encodeURIComponent(req.params.id)}/${name}`,
+        "DELETE",
+      ),
+    );
+  }
+}
+
+/**
  * Kabelsalat — Vault-Registry (glyph-agent /vaults → ~/.glyph/vaults.json).
  */
-app.get("/api/vaults", async (_req, res) => {
-  try {
-    const base = await glyphAgentBaseUrl();
-    const r = await fetch(`${base}/vaults`, {
-      signal: AbortSignal.timeout(15000),
-    });
-    const json = await r.json().catch(() => ({}));
-    res.status(r.ok ? 200 : 502).json(json);
-  } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
-
-app.post("/api/vaults", async (req, res) => {
-  try {
-    const base = await glyphAgentBaseUrl();
-    const r = await fetch(`${base}/vaults`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body || {}),
-      signal: AbortSignal.timeout(30000),
-    });
-    const json = await r.json().catch(() => ({}));
-    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
-  } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
-
-app.patch("/api/vaults/:id", async (req, res) => {
-  try {
-    const base = await glyphAgentBaseUrl();
-    const id = encodeURIComponent(req.params.id);
-    const r = await fetch(`${base}/vaults/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body || {}),
-      signal: AbortSignal.timeout(15000),
-    });
-    const json = await r.json().catch(() => ({}));
-    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
-  } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
-
-app.delete("/api/vaults/:id", async (req, res) => {
-  try {
-    const base = await glyphAgentBaseUrl();
-    const id = encodeURIComponent(req.params.id);
-    const r = await fetch(`${base}/vaults/${id}`, {
-      method: "DELETE",
-      signal: AbortSignal.timeout(15000),
-    });
-    const json = await r.json().catch(() => ({}));
-    res.status(r.ok ? 200 : 502).json(json);
-  } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
+proxyAgent("vaults", { extra: ["pins"] });
 
 /**
  * Kabelsalat — Workspace-Registry (^_Code /workspaces → ~/.glyph/workspaces.json).
  */
-app.get("/api/workspaces", async (_req, res) => {
-  try {
-    const base = await glyphAgentBaseUrl();
-    const r = await fetch(`${base}/workspaces`, {
-      signal: AbortSignal.timeout(15000),
-    });
-    const json = await r.json().catch(() => ({}));
-    res.status(r.ok ? 200 : 502).json(json);
-  } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
-
-app.post("/api/workspaces", async (req, res) => {
-  try {
-    const base = await glyphAgentBaseUrl();
-    const r = await fetch(`${base}/workspaces`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body || {}),
-      signal: AbortSignal.timeout(30000),
-    });
-    const json = await r.json().catch(() => ({}));
-    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
-  } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
-
-app.patch("/api/workspaces/:id", async (req, res) => {
-  try {
-    const base = await glyphAgentBaseUrl();
-    const id = encodeURIComponent(req.params.id);
-    const r = await fetch(`${base}/workspaces/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body || {}),
-      signal: AbortSignal.timeout(15000),
-    });
-    const json = await r.json().catch(() => ({}));
-    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
-  } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
-
-app.delete("/api/workspaces/:id", async (req, res) => {
-  try {
-    const base = await glyphAgentBaseUrl();
-    const id = encodeURIComponent(req.params.id);
-    const r = await fetch(`${base}/workspaces/${id}`, {
-      method: "DELETE",
-      signal: AbortSignal.timeout(15000),
-    });
-    const json = await r.json().catch(() => ({}));
-    res.status(r.ok ? 200 : 502).json(json);
-  } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
+proxyAgent("workspaces");
 
 /**
  * Proxy againkehrende To-dos (glyph-agent /recurring).
