@@ -2,6 +2,12 @@
 
 Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protocol). Profilneutraler Client für grok, claude und glyph-agent.
 
+## System map
+
+| Node | Tut | Quellen |
+|------|-----|---------|
+| **BindPanel** | Gemeinsames Kabelsalat-UI (Vaults + Workspaces) | `BindPanel.jsx`, `useBindResource.js` |
+
 ## Language
 
 **Composer**:
