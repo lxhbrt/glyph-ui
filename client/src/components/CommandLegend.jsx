@@ -22,14 +22,14 @@ const COMMAND_LEGEND = [
         desc: "Neue ACP-Session, Chat leeren. Entspricht TUI /new (Disk bleibt).",
       },
       {
-        cmd: "Befehle",
+        cmd: "Befehle und Skills",
         need: "optional",
-        desc: "Extensions-Modal: Skills + Agent-Commands. ⌘/Ctrl+K. Auswahl fügt /name in den Composer ein (sendet nicht).",
+        desc: "Leisten-Button (Mitte) / ⌘/Ctrl+K: ausführbare Skills + Agent-Commands. Auswahl fügt /name in den Composer ein — sendet nicht. Live-Katalog, keine Doku-Liste.",
       },
       {
-        cmd: "Buch · Handbuch",
+        cmd: "Buch · Handbuch / Legende",
         need: "optional",
-        desc: "Kurzhandbuch und Befehls-Legende (Doku) ganz unten in der Leiste.",
+        desc: "Kurzhandbuch und UI-Legende (Doku) ganz unten. Tab Legende = Bedienung erklären; Skills/Agent-Commands ausführen nur unter „Befehle und Skills“.",
       },
       {
         cmd: "Glyph · Plan & Aktivität",
@@ -54,7 +54,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Buch · Anbindung",
         need: "empfohlen",
-        desc: "Buch → Tab Anbindung: API-Keys (OpenRouter, xAI Voice) und OAuth/Service-Status. Lokal: ~/.glyph-ui/bindings.json.",
+        desc: "Buch → Tab Anbindung: API-Key (Direct) + Base-URL, OpenRouter-Fallback, xAI Voice. Lokal: ~/.glyph-ui/bindings.json.",
       },
       {
         cmd: "Buch · Vaults",
@@ -180,37 +180,14 @@ const COMMAND_LEGEND = [
   },
 ];
 
-/** Built after agentCommands are known (live ACP catalog). */
-function agentCommandGroup(agentCommands) {
-  if (agentCommands?.length) {
-    return {
-      group: "Agent-Befehle (live)",
-      items: agentCommands.map((c) => {
-        const slash = c.name.startsWith("/") ? c.name : `/${c.name}`;
-        const cmd = c.inputHint ? `${slash} ${c.inputHint}` : slash;
-        return {
-          cmd,
-          need: "agent",
-          desc: c.description || "—",
-        };
-      }),
-    };
-  }
-  return {
-    group: "Agent-Befehle (live)",
-    items: [
-      {
-        cmd: "noch leer",
-        need: "auto",
-        desc: "Erscheint nach Verbindung, sobald der Agent available_commands_update sendet — keine statische Pflege mehr.",
-      },
-    ],
-  };
-}
-
 const COMMAND_HINTS = {
   group: "Hinweis",
   items: [
+    {
+      cmd: "Befehle und Skills",
+      need: "hilfreich",
+      desc: "Live Skills + Agent-Commands: Leisten-Button „Befehle und Skills“ oder ⌘/Ctrl+K (oder / im Composer). Nicht in dieser Legende ausführen.",
+    },
     {
       cmd: "Slash in dieser UI",
       need: "hilfreich",
@@ -292,7 +269,7 @@ const SHORT_HANDBOOK = [
     id: "layout",
     title: "Oberfläche",
     body: [
-      "Links: Sessions, Neuer Chat, Befehle, Kalender, Wiki, Workspace, Theme, Refresh — **Buch** ganz unten (Handbuch · Befehle · **Anbindung**).",
+      "Links: Sessions, Neuer Chat, **Befehle und Skills**, Kalender, Wiki, Workspace, Theme, Refresh — **Buch** ganz unten (Handbuch · Legende · **Anbindung** · Vaults · Workspaces).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
       "Unten: Composer · Chat | Deep Search | Fork · **Mic** · Stimme · **↵**.",
     ],
@@ -303,8 +280,7 @@ const SHORT_HANDBOOK = [
     rows: [
       ["Lupe", "Sessions suchen/öffnen; Ja + Wiki · Löschen (/delete)"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
-      ["Befehle", "Filterbare Legende (Mitte der Leiste)"],
-      ["Buch", "Handbuch · Befehle · Anbindung · Vaults (Tabs)"],
+      ["Buch", "Handbuch · Legende (UI-Doku) · Anbindung · Vaults · Workspaces"],
       ["Kalender", "Aktivitäts-Heatmap — Klick → Sessions des Tages"],
       ["Wiki", "Wiki-Index (.md) in Obsidian / Standard-App"],
       ["Ordner", "Aktuellen Workspace (cwd) im Finder öffnen"],
@@ -408,13 +384,10 @@ const SHORT_HANDBOOK = [
 ];
 
 function normalizeHelpTab(t) {
-  if (
-    t === "commands" ||
-    t === "bindings" ||
-    t === "vaults" ||
-    t === "workspaces" ||
-    t === "handbook"
-  )
+  // "commands" / "befehle" = früherer Tab-Name → Legende (UI-Doku, keine Live-Skills)
+  if (t === "commands" || t === "befehle" || t === "legend" || t === "legende")
+    return "legend";
+  if (t === "bindings" || t === "vaults" || t === "workspaces" || t === "handbook")
     return t;
   return "handbook";
 }
@@ -423,9 +396,11 @@ function CommandLegend({
   open,
   onClose,
   initialTab = "handbook",
+  /** @deprecated Live-Katalog nur noch im Modal „Befehle und Skills“; prop bleibt für Call-Sites. */
   agentCommands = [],
   agentProfileId = "",
 }) {
+  void agentCommands;
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState(() => normalizeHelpTab(initialTab));
   const panelRef = useRef(null);
@@ -438,13 +413,10 @@ function CommandLegend({
     }
   }, [open, initialTab]);
 
+  // Nur UI-Legende + Hinweise. Live Skills/Agent-Commands → Modal „Befehle und Skills“.
   const commandGroups = useMemo(
-    () => [
-      ...COMMAND_LEGEND,
-      agentCommandGroup(agentCommands),
-      COMMAND_HINTS,
-    ],
-    [agentCommands],
+    () => [...COMMAND_LEGEND, COMMAND_HINTS],
+    [],
   );
 
   const filteredCommands = useMemo(() => {
@@ -501,9 +473,9 @@ function CommandLegend({
         <header className="overview-head">
           <div>
             <p className="overview-kicker">In der App</p>
-            <h2>Kurzhandbuch</h2>
+            <h2>Buch</h2>
             <p className="overview-meta">
-              Überblick · Bedienung · Sprache · Sessions · Tipps
+              Handbuch · UI-Legende · Anbindung · Vaults · Workspaces
             </p>
           </div>
           <div className="overview-head-actions">
@@ -526,11 +498,11 @@ function CommandLegend({
           <button
             type="button"
             role="tab"
-            aria-selected={tab === "commands"}
-            className={`help-tab${tab === "commands" ? " help-tab--active" : ""}`}
-            onClick={() => setTab("commands")}
+            aria-selected={tab === "legend"}
+            className={`help-tab${tab === "legend" ? " help-tab--active" : ""}`}
+            onClick={() => setTab("legend")}
           >
-            Befehle
+            Legende
           </button>
           <button
             type="button"
@@ -587,12 +559,12 @@ function CommandLegend({
           </p>
         ) : (
           <p className="overview-hint">
-            <strong>UI:</strong> Leiste &amp; Composer (statisch).{" "}
-            <strong>Agent:</strong> live aus der Session (
+            <strong>UI-Legende</strong> (Doku, nicht ausführen). Skills und Agent-Commands: Leisten-Button{" "}
+            <strong>Befehle und Skills</strong> oder ⌘/Ctrl+K
             {agentCommands.length
-              ? `${agentCommands.length} Befehle`
-              : "warte auf Katalog"}
-            ). <strong>Kopieren:</strong> Button an der Nachricht.
+              ? ` · Agent meldet gerade ${agentCommands.length} Commands`
+              : " · Agent-Commands erscheinen nach Verbindung"}
+            .
           </p>
         )}
 
@@ -603,7 +575,7 @@ function CommandLegend({
             placeholder={
               tab === "handbook"
                 ? "Filter: Mic, Queue, Sessions, offline…"
-                : "Filter: Lupe, /fork, Deep Search, compact…"
+                : "Filter: Lupe, Composer, Deep Search, Queue…"
             }
             value={query}
             onChange={(e) => setQuery(e.target.value)}

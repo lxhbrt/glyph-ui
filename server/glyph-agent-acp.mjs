@@ -67,6 +67,29 @@ async function streamChunks(text, client, sessionId, chunkSize = 400) {
   }
 }
 
+/** Draft channel: prefixed so Glyph UI keeps it out of the primary answer track. */
+const DRAFT_PREFIX = "⏺DRAFT⏺";
+const DRAFT_CONT = "⏺DRAFT+⏺";
+
+async function streamDraftChunks(text, client, sessionId, chunkSize = 1200) {
+  if (!text) return;
+  for (let i = 0; i < text.length; i += chunkSize) {
+    const slice = text.slice(i, i + chunkSize);
+    const prefixed = i === 0 ? `${DRAFT_PREFIX}${slice}` : `${DRAFT_CONT}${slice}`;
+    try {
+      await client.notify(acp.methods.client.session.update, {
+        sessionId,
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: prefixed },
+        },
+      });
+    } catch {
+      /* continue */
+    }
+  }
+}
+
 /**
  * Send effective server trace via ACP _meta (extensibility), not a fake
  * sessionUpdate type — `agent_message_complete` is not in the ACP schema and
@@ -110,7 +133,7 @@ const STEP_MARKERS = {
   MessageSend: ["MessageSend", "sendet Nachricht (openclaw)"],
   OpenRouter: [
     "Think",
-    IS_CODE ? "DeepSeek CODE (OpenRouter)" : "Cloud-Denker (OpenRouter)",
+    IS_CODE ? "DeepSeek CODE" : "Cloud-Denker",
   ],
   ReadNote: ["ReadNote", "liest Notiz aus dem Vault"],
   Summarize: ["Summarize", "fasst Notiz zusammen"],
@@ -287,9 +310,15 @@ async function streamChat(body, client, sessionId, signal) {
           const line = renderStepEnd(action, status, detail);
           await streamStepChunk(`⏹STEP⏹${line}`, client, sessionId);
         }
-      } else if (type === "answer") {
+      } else if (type === "draft") {
+        // Zwischen-LLM → Protokoll (nie Primärspur).
         if (typeof ev.text === "string" && ev.text) {
-          answerText += ev.text;
+          await streamDraftChunks(ev.text, client, sessionId);
+        }
+      } else if (type === "answer") {
+        // Nur Final/Status. Replace, nicht append (ein answer pro Turn).
+        if (typeof ev.text === "string" && ev.text) {
+          answerText = ev.text;
           await streamChunks(ev.text, client, sessionId);
         }
       } else if (type === "pending_confirmation") {

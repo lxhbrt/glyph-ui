@@ -32,11 +32,13 @@ test("maskSecret", () => {
 
 test("normalizeBindingsFile accepts nested and flat shapes", () => {
   const nested = normalizeBindingsFile({
-    keys: { OPENROUTER_API_KEY: " sk-a " },
-    settings: { GLYPH_AGENT_URL: "http://127.0.0.1:9" },
+    keys: { OPENROUTER_API_KEY: " sk-a ", DIRECT_API_KEY: " sk-ds " },
+    settings: { GLYPH_AGENT_URL: "http://127.0.0.1:9", DIRECT_API_URL: "https://api.deepseek.com" },
   });
   assert.equal(nested.keys.OPENROUTER_API_KEY, "sk-a");
+  assert.equal(nested.keys.DIRECT_API_KEY, "sk-ds");
   assert.equal(nested.settings.GLYPH_AGENT_URL, "http://127.0.0.1:9");
+  assert.equal(nested.settings.DIRECT_API_URL, "https://api.deepseek.com");
   assert.equal(nested.models.shared, null);
 
   const flat = normalizeBindingsFile({

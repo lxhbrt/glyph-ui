@@ -16,10 +16,14 @@ import path from "node:path";
 import { findOnPath } from "./agents.js";
 
 /** Writable key fields (stored in bindings.json → process.env). */
-export const BINDING_KEY_IDS = ["OPENROUTER_API_KEY", "XAI_API_KEY"];
+export const BINDING_KEY_IDS = [
+  "DIRECT_API_KEY",
+  "OPENROUTER_API_KEY",
+  "XAI_API_KEY",
+];
 
 /** Optional non-secret settings. */
-export const BINDING_SETTING_IDS = ["GLYPH_AGENT_URL"];
+export const BINDING_SETTING_IDS = ["GLYPH_AGENT_URL", "DIRECT_API_URL"];
 
 /**
  * @param {string} [stateDir]
@@ -407,8 +411,14 @@ export async function probeAgentHealth(baseUrl, opts = {}) {
 export async function pushModelsToAgent(baseUrl, models, opts = {}) {
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
   const timeoutMs = opts.timeoutMs ?? 8000;
-  const payload = modelsToAgentPayload(models);
-  if (!payload) {
+  const payload = modelsToAgentPayload(models) || {};
+  if (opts.direct && typeof opts.direct === "object") {
+    const d = {};
+    if (opts.direct.url) d.url = String(opts.direct.url).trim();
+    if (opts.direct.api_key) d.api_key = String(opts.direct.api_key).trim();
+    if (Object.keys(d).length) payload.direct = d;
+  }
+  if (!payload.shared && !payload.direct) {
     return { ok: false, error: "Kein shared.primary gesetzt", applied: false };
   }
   const base = String(baseUrl || "http://127.0.0.1:18899").replace(/\/$/, "");
@@ -616,6 +626,7 @@ export async function buildBindingsStatus(opts = {}) {
 
   const openrouter = resolveKeySource("OPENROUTER_API_KEY", file.keys, env);
   const xai = resolveKeySource("XAI_API_KEY", file.keys, env);
+  const direct = resolveKeySource("DIRECT_API_KEY", file.keys, env);
 
   const grokBin = resolveGrokBin(env.GROK_BIN || "grok", env);
   const oauth = await grokOAuthPresent(authPath);
@@ -628,8 +639,9 @@ export async function buildBindingsStatus(opts = {}) {
     (await probeAgentHealth(agentUrl, { fetchImpl: opts.fetchImpl }));
 
   const grokOk = Boolean(grokBin) && oauth;
-  const codeOk = openrouter.set && agentHealth.ok;
-  // °_Agent can run tools without OpenRouter for some paths, but Cloud-Antwort needs key
+  const cloudKeyOk = direct.set || openrouter.set;
+  const codeOk = cloudKeyOk && agentHealth.ok;
+  // °_Agent: Tools ohne Key, Cloud-Antwort braucht Direct- oder OpenRouter-Key
   const agentOk = agentHealth.ok;
 
   const modelsDesired = file.models || { shared: null, code: null };
@@ -692,10 +704,25 @@ export async function buildBindingsStatus(opts = {}) {
     stateDir,
     bindingsPath: filePath,
     keys: {
+      DIRECT_API_KEY: direct,
       OPENROUTER_API_KEY: openrouter,
       XAI_API_KEY: xai,
     },
     settings: {
+      DIRECT_API_URL: {
+        value:
+          String(
+            env.DIRECT_API_URL || file.settings.DIRECT_API_URL || "",
+          ).trim() || "https://api.deepseek.com",
+        source: env.DIRECT_API_URL
+          ? file.settings.DIRECT_API_URL &&
+            env.DIRECT_API_URL === file.settings.DIRECT_API_URL
+            ? "bindings"
+            : "env"
+          : file.settings.DIRECT_API_URL
+            ? "bindings"
+            : "default",
+      },
       GLYPH_AGENT_URL: {
         value: agentUrl,
         source: env.GLYPH_AGENT_URL
@@ -743,11 +770,18 @@ export async function buildBindingsStatus(opts = {}) {
         ok: codeOk,
         checks: [
           {
+            id: "direct",
+            ok: direct.set,
+            detail: direct.set
+              ? `DIRECT_API_KEY ${direct.masked} (${direct.source})`
+              : "DIRECT_API_KEY fehlt (Direct-Hop)",
+          },
+          {
             id: "openrouter",
             ok: openrouter.set,
             detail: openrouter.set
-              ? `OPENROUTER_API_KEY ${openrouter.masked} (${openrouter.source})`
-              : "OPENROUTER_API_KEY fehlt (openrouter.ai)",
+              ? `OPENROUTER_API_KEY ${openrouter.masked} (${openrouter.source}) · Fallback`
+              : "OPENROUTER_API_KEY als Fallback (optional)",
           },
           {
             id: "agent_service",
@@ -757,13 +791,13 @@ export async function buildBindingsStatus(opts = {}) {
               : `${agentHealth.url} · ${agentHealth.detail}`,
           },
         ],
-        hint: "Braucht OpenRouter-Key + laufenden glyph-agent (python server.py :18899).",
+        hint: "Direct-Key (DeepSeek/Grok/…) + laufender glyph-agent. OpenRouter nur Fallback.",
       },
       "glyph-agent": {
         id: "glyph-agent",
         label: "°_Agent",
         auth: "api_key",
-        ok: agentOk && openrouter.set,
+        ok: agentOk && cloudKeyOk,
         checks: [
           {
             id: "agent_service",
@@ -773,14 +807,21 @@ export async function buildBindingsStatus(opts = {}) {
               : `${agentHealth.url} · ${agentHealth.detail}`,
           },
           {
+            id: "direct",
+            ok: direct.set,
+            detail: direct.set
+              ? `Direct ${direct.masked} (${direct.source})`
+              : "DIRECT_API_KEY für Cloud-Antwort (Anbindung)",
+          },
+          {
             id: "openrouter",
             ok: openrouter.set,
             detail: openrouter.set
-              ? `Cloud-Antwort ${openrouter.masked}`
-              : "OPENROUTER_API_KEY für Cloud-Antwort (optional nur Tools, ohne Key oft dünn)",
+              ? `OpenRouter-Fallback ${openrouter.masked}`
+              : "OPENROUTER_API_KEY als Fallback",
           },
         ],
-        hint: "Engine: cd ~/glyph-agent && python server.py · Key für Cloud-Antwort.",
+        hint: "Engine: glyph-agent :18899 · Direct-Key für Cloud-Antwort, OpenRouter nur Fallback.",
       },
       voice: voiceProfile,
     },

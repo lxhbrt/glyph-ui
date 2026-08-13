@@ -176,8 +176,244 @@ export function renderSummaryDocument(data) {
     for (const r of data.references) body.push(`- ${String(r)}`);
     body.push("");
   }
+  if (data.skill?.name) {
+    body.push("## Gelerntes Skill");
+    body.push(
+      data.skill.written
+        ? `- Gespeichert: \`~/.glyph/skills/${data.skill.name}/SKILL.md\` (${data.skill.action || "write"})`
+        : `- Vorschlag: \`${data.skill.name}\`${data.skill.reason ? ` — ${data.skill.reason}` : ""}`,
+    );
+    body.push("");
+  }
   body.push(`_Erstellt per Glyph Session-Zusammenfassung (${new Date().toISOString()})._`);
   return body.join("\n");
+}
+
+/** Trivial-Titel: kein Skill-Spam aus Begrüßungen. */
+const TRIVIAL_TITLE_RE =
+  /^(hi|hallo|hey|test|ok|danke|thanks|ping|yo|sup|help|hilfe|\?+|…+)$/i;
+
+/**
+ * Skill-Name aus Session-Titel (a-z0-9-, 2–48 Zeichen).
+ * @param {string} title
+ * @returns {string}
+ */
+export function skillNameFromTitle(title) {
+  let s = slugify(title, 48);
+  s = s.replace(/^-+|-+$/g, "");
+  if (s.length < 2) s = "session-workflow";
+  // Reservierte / existierende System-Skills nicht überschreiben-Namen
+  if (["merken", "vault-ingest", "hseq-eingang", "hseq-handover", "hseq-aus-fertig-lernen"].includes(s)) {
+    s = `session-${s}`;
+  }
+  return s.slice(0, 48);
+}
+
+/**
+ * Ob aus dem Draft ein wiederverwendbarer Workflow-Skill lohnt.
+ * Deterministisch, kein LLM (wie buildDraftFromTurns).
+ *
+ * @param {object} draft
+ * @param {{ minUserTurns?: number }} [opts]
+ * @returns {{ eligible: boolean, name: string, description: string, body: string, reason: string }}
+ */
+export function proposeSkillFromDraft(draft, opts = {}) {
+  const minUser = Number(opts.minUserTurns) > 0 ? Number(opts.minUserTurns) : 3;
+  const title = String(draft?.title || "").trim() || "Unbenannte Session";
+  const name = skillNameFromTitle(title);
+  const userN = Number(draft?.turn_counts?.user) || 0;
+  const decisions = Array.isArray(draft?.decisions) ? draft.decisions.filter(Boolean) : [];
+  const next = Array.isArray(draft?.next_steps) ? draft.next_steps.filter(Boolean) : [];
+  const summary = String(draft?.summary || "").trim();
+
+  if (userN < minUser) {
+    return {
+      eligible: false,
+      name,
+      description: "",
+      body: "",
+      reason: `Zu kurz (${userN} Nutzer-Turns, min. ${minUser}) — kein Skill.`,
+    };
+  }
+  if (TRIVIAL_TITLE_RE.test(title) || title.length < 8) {
+    return {
+      eligible: false,
+      name,
+      description: "",
+      body: "",
+      reason: "Titel zu generisch — kein Skill.",
+    };
+  }
+  if (decisions.length < 2 && next.length < 1) {
+    return {
+      eligible: false,
+      name,
+      description: "",
+      body: "",
+      reason: "Zu wenig Schritte im Verlauf — kein Skill.",
+    };
+  }
+
+  const descCore = summary.slice(0, 160) || title;
+  const description =
+    `Workflow aus Session-Zusammenfassung. Use when /${name} or similar: ${descCore}`.slice(
+      0,
+      280,
+    );
+
+  const lines = [
+    `# ${name}`,
+    "",
+    "Wiederverwendbarer Ablauf — **automatisch** aus Glyph „Session zusammenfassen“.",
+    "Kein Chat-Dump: nur Schritte und Ergebnis-Hinweise.",
+    "",
+    "## Wann",
+    `Nutzer will denselben Ablauf wie in der Session „${title.slice(0, 80)}“.`,
+    "",
+    "## Schritte",
+  ];
+  const steps = decisions.length ? decisions : [title];
+  steps.forEach((d, i) => lines.push(`${i + 1}. ${String(d).slice(0, 240)}`));
+  if (next.length) {
+    lines.push("", "## Ergebnis / Hinweise");
+    for (const n of next) lines.push(`- ${String(n).slice(0, 240)}`);
+  }
+  lines.push("", "## Pflege");
+  lines.push(
+    "- Bei erneutem Zusammenfassen derselben Art: Skill erweitern (Nachtrag), nicht doppelte Skills.",
+  );
+  lines.push("- Hand-kuratierte Skills (ohne `source: session-summary`) werden nie überschrieben.");
+
+  return {
+    eligible: true,
+    name,
+    description,
+    body: lines.join("\n"),
+    reason: "Mehrstufiger Verlauf — Skill wird beim Speichern angelegt/erweitert.",
+  };
+}
+
+/**
+ * Schreibt oder erweitert `~/.glyph/skills/<name>/SKILL.md`.
+ * - Neu: volle Datei mit frontmatter source: session-summary
+ * - Existiert + source session-summary: Nachtrag anhängen
+ * - Existiert + hand-kuratiert: **kein** Überschreiben; nur references/
+ *
+ * @param {object} proposal return von proposeSkillFromDraft (eligible true)
+ * @param {{ home?: string, sessionId?: string, summaryPath?: string, profile?: string }} [ctx]
+ * @returns {Promise<{ written: boolean, action: string, path: string, name: string, skipped?: boolean, reason?: string }>}
+ */
+export async function writeSkillFromProposal(proposal, ctx = {}) {
+  if (!proposal?.eligible || !proposal.name) {
+    return {
+      written: false,
+      action: "skip",
+      path: "",
+      name: proposal?.name || "",
+      skipped: true,
+      reason: proposal?.reason || "nicht eligible",
+    };
+  }
+  const home = ctx.home || os.homedir();
+  const name = skillNameFromTitle(proposal.name);
+  const dir = path.join(home, ".glyph", "skills", name);
+  const skillPath = path.join(dir, "SKILL.md");
+  await fs.mkdir(dir, { recursive: true });
+
+  const stamp = localDateParts();
+  const sourceLine = [
+    ctx.sessionId ? `session:${ctx.sessionId}` : null,
+    ctx.summaryPath ? `summary:${ctx.summaryPath}` : null,
+    ctx.profile ? `profile:${ctx.profile}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  let existing = null;
+  try {
+    existing = await fs.readFile(skillPath, "utf8");
+  } catch {
+    existing = null;
+  }
+
+  if (!existing) {
+    const md = [
+      "---",
+      `name: ${name}`,
+      `description: ${JSON.stringify(proposal.description || name)}`,
+      "source: session-summary",
+      "user-invocable: true",
+      "---",
+      "",
+      proposal.body || `# ${name}`,
+      "",
+      sourceLine ? `_Quelle: ${sourceLine}_` : "",
+      "",
+    ]
+      .filter((l) => l !== undefined)
+      .join("\n");
+    const tmp = path.join(dir, `.tmp-${crypto.randomBytes(4).toString("hex")}`);
+    await fs.writeFile(tmp, md, "utf8");
+    await fs.rename(tmp, skillPath);
+    return { written: true, action: "create", path: skillPath, name };
+  }
+
+  const isLearned =
+    /^source:\s*session-summary\s*$/m.test(existing) ||
+    existing.includes("source: session-summary");
+
+  if (!isLearned) {
+    // Hand-Skill: nur Referenz ablegen, SKILL.md unangetastet
+    const refDir = path.join(dir, "references");
+    await fs.mkdir(refDir, { recursive: true });
+    const refName = `session-${stamp.date}-${stamp.time}.md`;
+    const refPath = path.join(refDir, refName);
+    await fs.writeFile(
+      refPath,
+      [
+        `# Session-Nachtrag (${stamp.date})`,
+        "",
+        proposal.body || "",
+        "",
+        sourceLine ? `_Quelle: ${sourceLine}_` : "",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    return {
+      written: true,
+      action: "reference",
+      path: refPath,
+      name,
+      reason: "Hand-kuratiertes Skill — nur references/",
+    };
+  }
+
+  // Learned Skill erweitern
+  const nachtrag = [
+    "",
+    `## Nachtrag ${stamp.date} ${stamp.time.slice(0, 2)}:${stamp.time.slice(2, 4)}`,
+    "",
+    ...(Array.isArray(proposal._decisions)
+      ? proposal._decisions.map((d) => `- ${String(d).slice(0, 200)}`)
+      : (proposal.body || "")
+          .split("\n")
+          .filter((l) => /^\d+\.\s/.test(l) || l.startsWith("- "))
+          .slice(0, 12)),
+    sourceLine ? "" : "",
+    sourceLine ? `_Quelle: ${sourceLine}_` : "",
+    "",
+  ].join("\n");
+
+  // Cap growth: max ~24k
+  let next = existing.trimEnd() + "\n" + nachtrag;
+  if (next.length > 24000) {
+    next = next.slice(0, 22000) + "\n\n_…ältere Nachträge gekürzt._\n";
+  }
+  const tmp = path.join(dir, `.tmp-${crypto.randomBytes(4).toString("hex")}`);
+  await fs.writeFile(tmp, next, "utf8");
+  await fs.rename(tmp, skillPath);
+  return { written: true, action: "extend", path: skillPath, name };
 }
 
 /**

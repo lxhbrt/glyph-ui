@@ -157,6 +157,7 @@ export function shortModelLabel(model) {
 
   // Längere Patterns zuerst.
   const rules = [
+    [/deepseek[-_.]?v?4[-_.]?pro/, "DS-V4P"],
     [/deepseek[-_.]?v?4[-_.]?flash/, "DS-V4F"],
     [/deepseek[-_.]?v?3[-_.]?flash/, "DS-V3F"],
     [/deepseek[-_.]?r1/, "DS-R1"],

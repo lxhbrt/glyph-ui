@@ -2,6 +2,32 @@
 
 Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protocol). Profilneutraler Client für grok, claude und glyph-agent.
 
+## Orient (für ^_Code / Agenten)
+
+1. Diese Datei zuerst lesen — **nicht** blind ListDir/Grep über das ganze Repo.
+2. Aufgabe → passende **Node** unten → nur deren Quellen öffnen.
+3. Struktur ändert sich (neuer Tab, neuer Server-Endpoint, Profil-Split) → Map hier nachziehen, nicht parallel erfinden.
+
+## System map
+
+| Node | Tut | Quellen (Einstieg) | Hängt an |
+|------|-----|--------------------|----------|
+| **Bridge** | Browser ↔ WebSocket ↔ ACP stdio (`grok agent` / glyph-agent-acp) | `server/index.js`, `server/glyph-agent-acp.mjs` | Sessions, Agents |
+| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel | `client/src/App.jsx`, `client/src/main.jsx` | Bridge-Events |
+| **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen | `client/src/components/SlashPopup.jsx`, `ExtensionsModal.jsx` | `server/skills.js`, `server/commands.js` |
+| **Sessions** | Session-Liste, Überblick, Summaries | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
+| **Bindings** | API-Keys / OAuth-Status speichern | `server/bindings.js`, `BindingsPanel.jsx` | `~/.glyph-ui/bindings.json` |
+| **Vaults-UI** | Kabelsalat °_Agent | `VaultsPanel.jsx` → Proxy `/api/…` | **glyph-agent** `/vaults` |
+| **Workspaces-UI** | Kabelsalat ^_Code | `WorkspacesPanel.jsx` → `/api/workspaces` | **glyph-agent** `/workspaces` |
+| **Plan / Recurring** | Kalender-Tab Plan | `server/plan.js`, `PlanBar.jsx` | glyph-agent `/recurring` |
+| **Domain-SoT** | Begriffe + settled decisions | **diese** `CONTEXT.md`, `docs/adr/` | `~/.glyph/AGENTS.md` |
+
+**Nicht hier:** Vault-Inhalte, HSEQ-Jobs, Embedding — das ist `glyph-agent`.
+
+**Crux (häufige Bugs):** Write/Shell-Genehmigung und Workspace-Modi leben in **glyph-agent** (`code_loop` / `code_tools`), nicht in der UI. UI zeigt nur Popup/Banner. ACP-Bridge ≠ HTTP-API der Engine.
+
+**Session zusammenfassen → Skill:** Beim Speichern (Lupe / Active-Session) wird bei ≥3 Nutzer-Turns ein Workflow-Skill unter `~/.glyph/skills/<slug>/` angelegt oder erweitert (`source: session-summary`). Hand-Skills ohne dieses Flag: nur `references/`. Opt-out im Dialog. Code: `server/summaries.js` + `SummarizeDialog.jsx`.
+
 ## Language
 
 **Composer**:
@@ -17,8 +43,8 @@ Ein modaler Dialog in Glyph zum Durchsuchen und Auswählen von Erweiterungen (Sk
 _Avoid_: Settings, Preferences, Command-Palette (andere Oberfläche)
 
 **Command-Legend**:
-Bestehendes Hilfe-Modal in Glyph (Kurzhandbuch + Befehlsliste inkl. Live-Agent-Commands). Dokumentiert und listet; führt nicht zwingend aus.
-_Avoid_: Extensions-Modal (anderes Produktziel)
+Hilfe-Modal **Buch**: Tabs Handbuch · **Legende** (UI-Doku) · Anbindung · Vaults · Workspaces. Dokumentiert Bedienung; führt Skills/Commands **nicht** aus.
+_Avoid_: Extensions-Modal / „Befehle und Skills“ (ausführbarer Katalog)
 
 **Command-Overview**:
 Bestehendes Modal zum Suchen und Öffnen von Sessions (Lupe).
@@ -45,7 +71,7 @@ Eines der wählbaren ACP-Agenten in Glyph: **grok**, **`^_Code`** (`_code`), **`
 _Avoid_: OpenRouter (kein UI-Profil mehr), Claude (ersetzt durch ^_Code), Provider, Modell (als Profilname)
 
 **Anbindung**:
-Tab im **Buch**-Panel (Handbuch · Befehle · Anbindung · Vaults · Workspaces) zum Prüfen von OAuth/Service-Status und Speichern von API-Keys (`OPENROUTER_API_KEY`, `XAI_API_KEY`) unter `~/.glyph-ui/bindings.json`. Kein eigenes Leisten-Icon. Grok-OAuth bleibt Terminal (`grok login`).
+Tab im **Buch**-Panel (Handbuch · Befehle · Anbindung · Vaults · Workspaces) zum Prüfen von OAuth/Service-Status und Speichern von API-Keys (`DIRECT_API_KEY` + `DIRECT_API_URL`, `OPENROUTER_API_KEY`, `XAI_API_KEY`) unter `~/.glyph-ui/bindings.json`. Direct-Key ist OpenAI-kompatibel (DeepSeek, Grok, …). Kein eigenes Leisten-Icon. Grok-OAuth bleibt Terminal (`grok login`).
 _Avoid_: Settings (zu generisch), Login-Dialog (impliziert eingebettetes OAuth), Kalender (nur Grok-Aktivität, oft disabled)
 
 **Workspaces (Kabelsalat)**:
@@ -81,7 +107,7 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - **Offline:** Modal und Slash-Popup nutzbar; Skills von Disk, Agent-Commands leer bis Verbindung.
 - **Öffnen Extensions-Modal:** Sidebar-Button **und** `Cmd/Ctrl+K` (kein `Ctrl+P` wegen Browser-Print).
 - **Slash-Popup-Trigger:** `/` am Zeilenanfang oder nach Whitespace; nicht mitten in Pfaden/URLs.
-- **Sidebar:** Button **Befehle** öffnet Extensions-Modal; **Buch** bleibt Command-Legend (Handbuch/Doku). Kein zweiter Erweiterungs-Button.
+- **Sidebar:** Button **Befehle und Skills** öffnet Extensions-Modal (Live Skills + Agent-Commands); **Buch** = Handbuch + UI-**Legende** (kein Live-Befehlskatalog). Kein zweiter Erweiterungs-Button.
 - **Listung:** Gruppen Skills → Agent-Commands; bei Filter Fuzzy-Score innerhalb der Gruppen.
 - **Einfügen:** Ersetzt das aktuelle `/partial`-Token durch `/{name} ` (Trailing Space); `inputHint` nur als UI-Hinweis, nicht als Text.
 - **v1-Scope:** Desktop-first; Skill-Scan-Pfade profilabhängig an Harness-Konventionen; siehe ADR `docs/adr/0001-extensions-slash-insert-only.md`.

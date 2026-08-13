@@ -7,6 +7,10 @@
  * Zusammenfassen nach weiteren Turns ist erlaubt und erwünscht (Checkpoints
  * für °_Agent / ^_Code ohne Grok-Disk-Verlauf). Alte Dateien bleiben.
  *
+ * Skill-Lernen (Hermes-/learn-Idee, ohne extra Slash): Bei mehrstufigem Verlauf
+ * wird beim Speichern automatisch ein Skill unter ~/.glyph/skills/ angelegt
+ * oder erweitert (Opt-out im Dialog).
+ *
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,6 +29,9 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
   const [editSummary, setEditSummary] = useState("");
   const [saved, setSaved] = useState(false);
   const [savedFile, setSavedFile] = useState("");
+  const [skillInfo, setSkillInfo] = useState(null); // draft proposal
+  const [saveSkill, setSaveSkill] = useState(true);
+  const [savedSkill, setSavedSkill] = useState(null); // commit result
 
   /** Entwurf anfordern (nicht-destruktiv, schreibt nichts). Aktueller Verlauf. */
   const generateDraft = useCallback(
@@ -35,6 +42,7 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
       setDraft(null);
       setSaved(false);
       setSavedFile("");
+      setSavedSkill(null);
       setEditMode(false);
       setExternalConsent(false);
       try {
@@ -54,6 +62,9 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
         setExternal(!!json.external_processing);
         setEditTitle(json.draft?.title ?? "");
         setEditSummary(json.draft?.summary ?? "");
+        const sk = json.skill || json.draft?.skill || null;
+        setSkillInfo(sk);
+        setSaveSkill(sk?.save_default !== false && !!sk?.eligible);
       } catch (err) {
         setErrorPhase("draft");
         setError(err instanceof Error ? err.message : String(err));
@@ -104,6 +115,7 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
           draft: payloadDraft,
           use_client_draft: editMode,
           external_consent: external ? externalConsent : undefined,
+          save_skill: saveSkill,
         }),
       });
       const json = await res.json();
@@ -112,6 +124,7 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
       }
       setSaved(true);
       setSavedFile(json.fileName || json.path || target?.fileName || "");
+      setSavedSkill(json.skill || null);
       if (typeof onSaved === "function") onSaved(json);
     } catch (err) {
       setErrorPhase("commit");
@@ -119,7 +132,19 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
     } finally {
       setSaving(false);
     }
-  }, [profile, draft, editMode, editTitle, editSummary, external, externalConsent, sessionId, onSaved, target]);
+  }, [
+    profile,
+    draft,
+    editMode,
+    editTitle,
+    editSummary,
+    external,
+    externalConsent,
+    sessionId,
+    onSaved,
+    target,
+    saveSkill,
+  ]);
 
   const close = useCallback(() => {
     if (saving) return;
@@ -174,6 +199,25 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
               <p>
                 Snapshot gespeichert: <code>{prettyPath}</code>
               </p>
+              {savedSkill?.written ? (
+                <p className="summarize-hint">
+                  Skill ({savedSkill.action || "write"}):{" "}
+                  <code>
+                    {savedSkill.name
+                      ? `~/.glyph/skills/${savedSkill.name}/`
+                      : savedSkill.path || "—"}
+                  </code>
+                  {savedSkill.action === "create"
+                    ? " — neu; Slash /" + (savedSkill.name || "…")
+                    : savedSkill.action === "extend"
+                      ? " — erweitert"
+                      : savedSkill.action === "reference"
+                        ? " — Nachtrag unter references/ (Hand-Skill unangetastet)"
+                        : null}
+                </p>
+              ) : savedSkill?.reason ? (
+                <p className="summarize-hint">Skill: {savedSkill.reason}</p>
+              ) : null}
               <p className="summarize-hint">
                 Weitere Nachrichten möglich — später erneut zusammenfassen erzeugt einen{" "}
                 <strong>neuen</strong> Snapshot (alte Dateien bleiben).
@@ -252,6 +296,24 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
               <p className="summarize-target">
                 Neuer Snapshot: <code>{prettyPath}</code>
               </p>
+
+              {skillInfo?.eligible ? (
+                <label className="summarize-consent summarize-skill">
+                  <input
+                    type="checkbox"
+                    checked={saveSkill}
+                    onChange={(e) => setSaveSkill(e.target.checked)}
+                    disabled={saving}
+                  />
+                  Skill lernen: <code>/{skillInfo.name}</code>
+                  <span className="summarize-hint">
+                    {" "}
+                    → ~/.glyph/skills/ (bei Speichern; Hand-Skills werden nicht überschrieben)
+                  </span>
+                </label>
+              ) : skillInfo?.reason ? (
+                <p className="summarize-hint">Skill: {skillInfo.reason}</p>
+              ) : null}
 
               <div className="summarize-actions">
                 <button

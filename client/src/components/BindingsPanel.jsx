@@ -45,7 +45,7 @@ function prefillModels(data, fields) {
     shared?.primary ||
     healthPrimary ||
     fields.primary ||
-    "deepseek/deepseek-v4-flash-0731";
+    "deepseek-v4-pro";
   const fallback =
     shared?.fallback != null && shared?.primary
       ? shared.fallback
@@ -262,6 +262,8 @@ function BindingsPanel({ active, agentProfileId = "" }) {
   const [okMsg, setOkMsg] = useState("");
   const [openrouter, setOpenrouter] = useState("");
   const [xai, setXai] = useState("");
+  const [directKey, setDirectKey] = useState("");
+  const [directUrl, setDirectUrl] = useState("");
   const [agentUrl, setAgentUrl] = useState("");
   const [primary, setPrimary] = useState("");
   const [fallback, setFallback] = useState("");
@@ -292,8 +294,12 @@ function BindingsPanel({ active, agentProfileId = "" }) {
       setAgentUrl(
         data?.settings?.GLYPH_AGENT_URL?.value || "http://127.0.0.1:18899",
       );
+      setDirectUrl(
+        data?.settings?.DIRECT_API_URL?.value || "https://api.deepseek.com",
+      );
       setOpenrouter("");
       setXai("");
+      setDirectKey("");
       const filled = prefillModels(data, {
         hasUserEdits: modelsDirty,
         primary,
@@ -333,7 +339,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
 
   /**
    * Immediate key delete — no checkbox + Speichern riddle.
-   * @param {"OPENROUTER_API_KEY" | "XAI_API_KEY"} keyId
+   * @param {"DIRECT_API_KEY" | "OPENROUTER_API_KEY" | "XAI_API_KEY"} keyId
    */
   async function removeKey(keyId) {
     setRemovingKey(keyId);
@@ -350,6 +356,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       setStatus(data);
+      if (keyId === "DIRECT_API_KEY") setDirectKey("");
       if (keyId === "OPENROUTER_API_KEY") setOpenrouter("");
       if (keyId === "XAI_API_KEY") setXai("");
       setOkMsg(`${keyId} entfernt.`);
@@ -367,6 +374,8 @@ function BindingsPanel({ active, agentProfileId = "" }) {
     setOkMsg("");
     try {
       const body = {};
+      if (directKey.trim()) body.DIRECT_API_KEY = directKey.trim();
+      if (directUrl.trim()) body.DIRECT_API_URL = directUrl.trim();
       if (openrouter.trim()) body.OPENROUTER_API_KEY = openrouter.trim();
       if (xai.trim()) body.XAI_API_KEY = xai.trim();
       if (agentUrl.trim()) body.GLYPH_AGENT_URL = agentUrl.trim();
@@ -395,7 +404,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
       }
 
       if (body.models && !body.models.shared?.primary) {
-        throw new Error("OpenRouter Primary-Model ist Pflicht");
+        throw new Error("Primary-Model ist Pflicht");
       }
 
       const res = await fetch("/api/bindings", {
@@ -410,6 +419,10 @@ function BindingsPanel({ active, agentProfileId = "" }) {
       setStatus(data);
       setOpenrouter("");
       setXai("");
+      setDirectKey("");
+      setDirectUrl(
+        data?.settings?.DIRECT_API_URL?.value || directUrl,
+      );
       setAgentUrl(data?.settings?.GLYPH_AGENT_URL?.value || agentUrl);
       setModelsDirty(false);
       if (data?.models?.shared?.primary) {
@@ -481,6 +494,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
   const profiles = status?.profiles || {};
   const orKey = status?.keys?.OPENROUTER_API_KEY;
   const xaiKey = status?.keys?.XAI_API_KEY;
+  const directMeta = status?.keys?.DIRECT_API_KEY;
 
   return (
     <div className="bindings-panel" role="tabpanel" aria-label="Anbindung">
@@ -530,7 +544,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
 
         <div className="bindings-plug">
           <label className="bindings-label" htmlFor="bind-model-primary">
-            Primary (OpenRouter Model-ID)
+            Primary (Direct Model-ID)
           </label>
           <input
             id="bind-model-primary"
@@ -538,7 +552,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
             type="text"
             autoComplete="off"
             spellCheck={false}
-            placeholder="deepseek/deepseek-v4-flash-0731"
+            placeholder="deepseek-v4-pro"
             value={primary}
             disabled={saving || !openRouterProfiles}
             onChange={(e) => {
@@ -547,7 +561,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
             }}
           />
           <label className="bindings-label" htmlFor="bind-model-fallback">
-            Fallback (optional — leer = keiner)
+            Fallback (OpenRouter-Slug, optional)
           </label>
           <input
             id="bind-model-fallback"
@@ -555,7 +569,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
             type="text"
             autoComplete="off"
             spellCheck={false}
-            placeholder="inclusionai/ling-3.0-tiny:free"
+            placeholder="deepseek/deepseek-v4-flash-0731"
             value={fallback}
             disabled={saving || !openRouterProfiles}
             onChange={(e) => {
@@ -621,9 +635,42 @@ function BindingsPanel({ active, agentProfileId = "" }) {
 
         <div className="bindings-plug">
           <KeyField
+            id="bind-direct"
+            label="API-Key (Direct)"
+            meta="OpenAI-kompatibel · DeepSeek, Grok, jeder andere Endpoint"
+            placeholder="sk-… oder xai-… (leer = unverändert)"
+            value={directKey}
+            onChange={(e) => setDirectKey(e.target.value)}
+            keySet={Boolean(directMeta?.set)}
+            masked={directMeta?.masked}
+            source={directMeta?.source}
+            onRemove={() => removeKey("DIRECT_API_KEY")}
+            removing={removingKey === "DIRECT_API_KEY"}
+            saving={saving}
+          />
+
+          <label className="bindings-label" htmlFor="bind-direct-url">
+            Base-URL (Direct)
+            <span className="bindings-label-meta">
+              Anbieter sitzt in der URL, nicht im Key-Namen
+            </span>
+          </label>
+          <input
+            id="bind-direct-url"
+            className="bindings-input"
+            type="url"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="https://api.deepseek.com"
+            value={directUrl}
+            disabled={saving}
+            onChange={(e) => setDirectUrl(e.target.value)}
+          />
+
+          <KeyField
             id="bind-or"
             label="OPENROUTER_API_KEY"
-            meta="^_Code / °_Agent Cloud · Voice-Fallback"
+            meta="Fallback-Hop · Voice-Fallback"
             placeholder="sk-or-… (leer = unverändert)"
             value={openrouter}
             onChange={(e) => setOpenrouter(e.target.value)}

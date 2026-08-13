@@ -42,9 +42,6 @@ import {
   IconLinkOff,
   IconSummarize,
 } from "./components/icons.jsx";
-
-/** Composer textarea grows down to this max height (px). */
-const COMPOSER_MAX_H = 180;
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
 import {
   MAX_ATTACHMENTS_PER_MSG,
@@ -644,6 +641,9 @@ export default function App() {
   const thoughtBuf = useRef("");
   // Live-Tool-/Denk-Stufen der laufenden Antwort: Array von {id, start, result}.
   const stepsRef = useRef([]);
+  /** Zwischen-LLM-Entwürfe (Protokoll · Entwürfe), nie Primärspur. */
+  const draftsRef = useRef([]);
+  const draftBuf = useRef("");
   /**
    * Sticky bottom:
    * 1) While pinned → every update/size change scrolls to latest output.
@@ -781,7 +781,17 @@ export default function App() {
         const next = [...prev];
         const last = next[next.length - 1];
         if (replaceLast && last && last.role === role && last.streaming) {
-          next[next.length - 1] = { ...last, text };
+          next[next.length - 1] = {
+            ...last,
+            text,
+            // Primär-Update: Steps/Drafts der laufenden Runde mitnehmen
+            ...(role === "assistant"
+              ? {
+                  steps: [...stepsRef.current],
+                  drafts: [...draftsRef.current],
+                }
+              : {}),
+          };
           return next;
         }
         next.push({
@@ -789,6 +799,13 @@ export default function App() {
           role,
           text,
           streaming: true,
+          ...(role === "assistant"
+            ? {
+                steps: [...stepsRef.current],
+                drafts: [...draftsRef.current],
+                protocolCollapsed: false,
+              }
+            : {}),
         });
         return next;
       });
@@ -803,12 +820,20 @@ export default function App() {
     setMessages((prev) =>
       prev.map((m) =>
         m.streaming
-          ? { ...m, streaming: false, ...(traceRef.current ? { trace: traceRef.current } : {}) }
+          ? {
+              ...m,
+              streaming: false,
+              // Q8: Protokoll nach Fertig zugeklappt
+              protocolCollapsed: true,
+              ...(traceRef.current ? { trace: traceRef.current } : {}),
+            }
           : m,
       ),
     );
     assistantBuf.current = "";
     thoughtBuf.current = "";
+    draftBuf.current = "";
+    draftsRef.current = [];
     stepsRef.current = []; // Live-Stufen gehören zur abgeschlossenen Antwort-Runde
     traceRef.current = null; // Trace nur an die letzte Message anhängen
   }, []);
@@ -816,11 +841,12 @@ export default function App() {
   // Aktualisiert die laufende (letzte) Assistant-Message mit den Live-Stufen.
   const upsertStreamingSteps = useCallback(() => {
     const steps = [...stepsRef.current];
+    const drafts = [...draftsRef.current];
     setMessages((prev) => {
       const next = [...prev];
       const last = next[next.length - 1];
       if (last && last.role === "assistant" && last.streaming) {
-        next[next.length - 1] = { ...last, steps };
+        next[next.length - 1] = { ...last, steps, drafts };
         return next;
       }
       // Keine laufende Assistant-Message (z.B. Stufen vor erstem Text): neue anlegen.
@@ -829,7 +855,34 @@ export default function App() {
         role: "assistant",
         text: assistantBuf.current || "",
         steps,
+        drafts,
         streaming: true,
+        protocolCollapsed: false,
+      });
+      return next;
+    });
+    scrollToBottom();
+  }, [scrollToBottom]);
+
+  /** Hängt Zwischen-LLM-Entwürfe an die laufende Assistant-Message (Protokoll). */
+  const upsertStreamingDrafts = useCallback(() => {
+    const drafts = [...draftsRef.current];
+    const steps = [...stepsRef.current];
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last && last.role === "assistant" && last.streaming) {
+        next[next.length - 1] = { ...last, drafts, steps };
+        return next;
+      }
+      next.push({
+        id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        role: "assistant",
+        text: assistantBuf.current || "",
+        steps,
+        drafts,
+        streaming: true,
+        protocolCollapsed: false,
       });
       return next;
     });
@@ -959,6 +1012,9 @@ export default function App() {
               setMessages([]);
               assistantBuf.current = "";
               thoughtBuf.current = "";
+              draftBuf.current = "";
+              draftsRef.current = [];
+              stepsRef.current = [];
               busyRef.current = false;
               setBusy(false);
               setCancelling(false);
@@ -1036,6 +1092,37 @@ export default function App() {
             stepsRef.current = steps;
           }
           upsertStreamingSteps();
+          return;
+        }
+
+        if (msg.type === "draft_chunk") {
+          // Zwischen-LLM → Protokoll · Entwürfe (nie Primärspur).
+          busyRef.current = true;
+          streamingRef.current = true;
+          setBusy(true);
+          lastActivityRef.current = Date.now();
+          setSnackStuffed(false);
+          const piece = msg.text || "";
+          if (msg.cont && draftsRef.current.length) {
+            const last = draftsRef.current[draftsRef.current.length - 1];
+            draftsRef.current = [
+              ...draftsRef.current.slice(0, -1),
+              {
+                ...last,
+                text: (last.text || "") + piece,
+              },
+            ];
+          } else {
+            draftsRef.current = [
+              ...draftsRef.current,
+              {
+                id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                text: piece,
+              },
+            ];
+          }
+          draftBuf.current = draftsRef.current.map((d) => d.text).join("\n\n");
+          upsertStreamingDrafts();
           return;
         }
 
@@ -1142,7 +1229,14 @@ export default function App() {
       }
       ws?.close();
     };
-  }, [finalizeStreaming, scheduleDrainQueue, scrollToBottom, upsertStreaming, upsertStreamingSteps]);
+  }, [
+    finalizeStreaming,
+    scheduleDrainQueue,
+    scrollToBottom,
+    upsertStreaming,
+    upsertStreamingDrafts,
+    upsertStreamingSteps,
+  ]);
 
   const clearPendingAttachments = useCallback(() => {
     setPendingAttachments((prev) => {
@@ -1317,6 +1411,9 @@ export default function App() {
       ]);
       assistantBuf.current = "";
       thoughtBuf.current = "";
+      draftBuf.current = "";
+      draftsRef.current = [];
+      stepsRef.current = [];
       setError("");
       lastActivityRef.current = Date.now();
       setSnackStuffed(false);
@@ -1576,6 +1673,9 @@ export default function App() {
           setMessages([]);
           assistantBuf.current = "";
           thoughtBuf.current = "";
+          draftBuf.current = "";
+          draftsRef.current = [];
+          stepsRef.current = [];
         }
       } else {
         throw new Error(json.error || "Grok ist nach dem Start noch offline");
@@ -1636,6 +1736,9 @@ export default function App() {
           setMessages([]);
           assistantBuf.current = "";
           thoughtBuf.current = "";
+          draftBuf.current = "";
+          draftsRef.current = [];
+          stepsRef.current = [];
           queueRef.current = [];
           setQueue([]);
           // Fresh bridge session after agent switch — drop previous id so
@@ -1704,6 +1807,9 @@ export default function App() {
       );
       assistantBuf.current = "";
       thoughtBuf.current = "";
+      draftBuf.current = "";
+      draftsRef.current = [];
+      stepsRef.current = [];
       // Pin live id only after a successful session/load (or already-active open).
       if (liveOk && payload?.sessionId) {
         setSessionId(payload.sessionId);
@@ -2202,7 +2308,7 @@ export default function App() {
     setSlashIndex((i) => Math.min(Math.max(0, i), slashItems.length - 1));
   }, [slashOpen, slashItems.length, slashQuery]);
 
-  /** SuperGrok-style: 1-line default, grow downward up to COMPOSER_MAX_H.
+  /** 1-line default; grow *up* (toolbar stays put) to CSS --composer-max-h.
    *  Mirror must match textarea *content* box (clientWidth/Height), not the
    *  border box — otherwise scrollbar / gutter shifts wraps by ~10–15 chars
    *  from line 2 onward and the caret drifts from the visible text.
@@ -2225,6 +2331,8 @@ export default function App() {
     const minH = minVar.endsWith("rem")
       ? parseFloat(minVar) * rootFs
       : parseFloat(minVar) || rootFs * 2.25;
+    const maxCss = parseFloat(getComputedStyle(ta).maxHeight);
+    const maxH = Number.isFinite(maxCss) && maxCss > 0 ? maxCss : 448;
 
     ta.style.height = "auto";
     ta.style.minHeight = "";
@@ -2232,7 +2340,7 @@ export default function App() {
     const empty = ta.value.length === 0;
     const h = empty
       ? minH
-      : Math.min(Math.max(ta.scrollHeight, minH), COMPOSER_MAX_H);
+      : Math.min(Math.max(ta.scrollHeight, minH), maxH);
     ta.style.height = `${h}px`;
     ta.style.minHeight = `${h}px`;
 
@@ -2442,7 +2550,7 @@ export default function App() {
             setLegendTab("handbook");
             setShowLegend(true);
           }}
-          title="Kurzhandbuch · Befehle · Anbindung · Vaults"
+          title="Kurzhandbuch · Legende · Anbindung · Vaults · Workspaces"
           aria-label="Kurzhandbuch und Anbindung öffnen"
         >
           <IconBook />
@@ -2802,8 +2910,14 @@ export default function App() {
                               {m.streaming ? " …" : ""}
                             </span>
                           </div>
-                          {m.text || m.steps?.length ? (
-                            <AssistantText text={m.text} steps={m.steps} />
+                          {m.text || m.steps?.length || m.drafts?.length ? (
+                            <AssistantText
+                              text={m.text}
+                              steps={m.steps}
+                              drafts={m.drafts}
+                              streaming={Boolean(m.streaming)}
+                              protocolCollapsed={Boolean(m.protocolCollapsed)}
+                            />
                           ) : null}
                           {copyActions}
                           {m.trace ? <AssistantMeta trace={m.trace} /> : null}
@@ -2945,7 +3059,7 @@ export default function App() {
                 ) : null}
               </div>
             ) : null}
-            {/* SuperGrok pill: [+] [textarea] [Mode ▾] [🎤] [↵] */}
+            {/* Composer card: textarea on top (grows up), toolbar stays on the bottom. */}
             <div className="composer-row">
               <input
                 ref={fileInputRef}

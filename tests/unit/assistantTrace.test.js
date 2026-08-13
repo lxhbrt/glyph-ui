@@ -40,6 +40,10 @@ describe("shortModelLabel / modelHudText", () => {
     assert.equal(shortModelLabel("deepseek-v4-flash"), "DS-V4F");
   });
 
+  it("maps DeepSeek V4 Pro to DS-V4P", () => {
+    assert.equal(shortModelLabel("deepseek-v4-pro"), "DS-V4P");
+  });
+
   it("maps common families to short codes", () => {
     assert.equal(shortModelLabel("openai/gpt-4o-mini"), "4o-mini");
     assert.equal(shortModelLabel("anthropic/claude-sonnet-4"), "Sonnet");
@@ -66,6 +70,10 @@ describe("shortModelLabel / modelHudText", () => {
       "DS-V4F → 4o-mini",
     );
     assert.equal(modelHudText("deepseek/deepseek-v4-flash-0731", ""), "DS-V4F");
+    assert.equal(
+      modelHudText("deepseek-v4-pro", "deepseek/deepseek-v4-flash-0731"),
+      "DS-V4P → DS-V4F",
+    );
   });
 });
 

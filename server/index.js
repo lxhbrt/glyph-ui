@@ -19,6 +19,7 @@
  * Server → browser:
  *   { type: "status", connected, busy, reconnecting?, ... }
  *   { type: "assistant_chunk", text }
+ *   { type: "draft_chunk", text }   // Zwischen-LLM / Entwürfe (°_Agent / ^_Code)
  *   { type: "thought_chunk", text }
  *   { type: "tool", title, status, kind?, toolCallId? }
  *   { type: "plan", entries: PlanEntry[], planId? }  // ACP agent plan (full replace)
@@ -75,8 +76,10 @@ import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
 import {
   buildFileName,
   getWikiRoot as getSummaryWikiRoot,
+  proposeSkillFromDraft,
   renderSummaryDocument,
   resolveTargetPath,
+  writeSkillFromProposal,
   writeSummaryAtomically,
 } from "./summaries.js";
 import {
@@ -1304,8 +1307,8 @@ app.get("/api/voice/status", async (_req, res) => {
 
 /**
  * Connection bindings: OAuth/key status + local secret store (~/.glyph-ui/bindings.json).
- * GET never returns raw secrets. PUT accepts OPENROUTER_API_KEY, XAI_API_KEY,
- * GLYPH_AGENT_URL (empty string clears).
+ * GET never returns raw secrets. PUT accepts DIRECT_API_KEY, DIRECT_API_URL,
+ * OPENROUTER_API_KEY, XAI_API_KEY, GLYPH_AGENT_URL (empty string clears).
  */
 app.get("/api/bindings", async (_req, res) => {
   try {
@@ -1351,14 +1354,20 @@ app.put("/api/bindings", async (req, res) => {
     clearApiKeyCache();
 
     let modelsApply = null;
-    if (body.models && saved.models?.shared?.primary) {
-      const agentUrl =
-        String(
-          process.env.GLYPH_AGENT_URL ||
-            saved.settings?.GLYPH_AGENT_URL ||
-            "",
-        ).trim() || "http://127.0.0.1:18899";
-      modelsApply = await pushModelsToAgent(agentUrl, saved.models);
+    const agentUrl =
+      String(
+        process.env.GLYPH_AGENT_URL ||
+          saved.settings?.GLYPH_AGENT_URL ||
+          "",
+      ).trim() || "http://127.0.0.1:18899";
+    const directPush = {};
+    if (saved.keys?.DIRECT_API_KEY) directPush.api_key = saved.keys.DIRECT_API_KEY;
+    if (saved.settings?.DIRECT_API_URL) directPush.url = saved.settings.DIRECT_API_URL;
+    const hasDirectPush = Object.keys(directPush).length > 0;
+    if ((body.models && saved.models?.shared?.primary) || hasDirectPush) {
+      modelsApply = await pushModelsToAgent(agentUrl, saved.models, {
+        direct: hasDirectPush ? directPush : undefined,
+      });
     }
 
     res.json(
@@ -1757,6 +1766,15 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
       // session kann bei In-Memory-Session (openrouter-1) null sein → title optional.
       title: session?.title || session?.transcriptTitle || undefined,
     });
+    const skill = proposeSkillFromDraft(draft);
+    draft.skill = {
+      eligible: skill.eligible,
+      name: skill.name,
+      description: skill.description,
+      reason: skill.reason,
+      // Default: speichern wenn eligible (Nutzer kann im Dialog abwählen)
+      save_default: skill.eligible,
+    };
     const wikiRoot = getSummaryWikiRoot();
     const fileName = buildFileName({
       title: draft.title,
@@ -1769,6 +1787,7 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
     // Vorschau (gespeicherter Inhalt) zur Anzeige in der UI.
     const previewDocument = renderSummaryDocument({
       ...draft,
+      skill: draft.skill,
       meta: {
         sessionId: session?.id || req.params.id,
         profile,
@@ -1780,6 +1799,7 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
     res.json({
       ok: true,
       draft,
+      skill: draft.skill,
       external_processing: external,
       include_attachments: includeAttachments,
       target: { absolutePath: target, fileName, wikiRoot },
@@ -1848,6 +1868,24 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
       return;
     }
 
+    // Skill-Vorschlag aus Live-Draft (nicht aus evtl. abgespecktem Client-Edit).
+    const liveForSkill = useClientDraft
+      ? {
+          ...base,
+          turn_counts:
+            base.turn_counts ||
+            buildDraftFromTurns(turns, {}).turn_counts,
+          decisions: Array.isArray(base.decisions) ? base.decisions : [],
+          next_steps: Array.isArray(base.next_steps) ? base.next_steps : [],
+        }
+      : base;
+    const skillProposal = proposeSkillFromDraft(liveForSkill);
+    // Default: auto speichern wenn eligible; Client kann save_skill: false senden.
+    const wantSkill =
+      body.save_skill === false || body.save_skill === "false"
+        ? false
+        : skillProposal.eligible;
+
     const data = {
       title: base.title || "Unbenannte Session",
       summary: base.summary || "",
@@ -1856,18 +1894,56 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
       next_steps: Array.isArray(base.next_steps) ? base.next_steps : [],
       references: Array.isArray(base.references) ? base.references : [],
       tags: Array.isArray(body.tags) ? body.tags : [],
+      skill: wantSkill
+        ? { name: skillProposal.name, reason: skillProposal.reason }
+        : skillProposal.eligible
+          ? { name: skillProposal.name, reason: "abgewählt", written: false }
+          : undefined,
       meta: {
         sessionId: session?.id || req.params.id,
         profile,
         model: session?.model || body.model || "",
         external_processing: external,
-        turn_counts: base.turn_counts || undefined,
+        turn_counts: base.turn_counts || liveForSkill.turn_counts || undefined,
       },
     };
 
     // Jeder Commit = neuer Snapshot (Zeitstempel im Dateinamen). Alte Dateien bleiben.
     // So kann man nach weiteren Turns erneut zusammenfassen (°_Agent / ^_Code).
     const result = await writeSummaryAtomically(data, getSummaryWikiRoot());
+    let skillResult = null;
+    if (result.written && wantSkill) {
+      skillProposal._decisions = data.decisions;
+      try {
+        skillResult = await writeSkillFromProposal(skillProposal, {
+          sessionId: data.meta.sessionId,
+          summaryPath: result.path,
+          profile,
+        });
+        data.skill = {
+          name: skillResult.name,
+          written: skillResult.written,
+          action: skillResult.action,
+          path: skillResult.path,
+          reason: skillResult.reason || skillProposal.reason,
+        };
+        // Snapshot nachträglich mit Skill-Zeile anreichern (best effort, non-fatal)
+        try {
+          await fs.writeFile(result.path, renderSummaryDocument({ ...data }), "utf8");
+        } catch {
+          /* summary ohne Skill-Zeile bleibt ok */
+        }
+      } catch (skillErr) {
+        skillResult = {
+          written: false,
+          action: "error",
+          path: "",
+          name: skillProposal.name,
+          reason: skillErr instanceof Error ? skillErr.message : String(skillErr),
+        };
+      }
+    }
+
     if (result.written) {
       res.status(201).json({
         ok: true,
@@ -1875,6 +1951,7 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
         path: result.path,
         fileName: result.fileName,
         snapshot: true,
+        skill: skillResult,
       });
     } else {
       // Sollte mit Zeitstempel-Stamps kaum noch vorkommen.
@@ -2487,14 +2564,25 @@ class GrokBridge {
       if (!text) return;
       // Live-Tool-/Denk-Stufen (von glyph-agent-adapter) vom normalen Antworttext
       // trennen: ⏺STEP⏺... = Stufe beginnt, ⏹STEP⏹... = Ergebnis derselben Stufe.
+      // ⏺DRAFT⏺ / ⏺DRAFT+⏺ = Zwischen-LLM (Protokoll · Entwürfe), nie Primär.
       const STEP_START = "⏺STEP⏺";
       const STEP_END = "⏹STEP⏹";
+      const DRAFT_START = "⏺DRAFT⏺";
+      const DRAFT_CONT = "⏺DRAFT+⏺";
       if (text.startsWith(STEP_START)) {
         this.broadcast({ type: "step_chunk", phase: "start", text: text.slice(STEP_START.length) });
         return;
       }
       if (text.startsWith(STEP_END)) {
         this.broadcast({ type: "step_chunk", phase: "end", text: text.slice(STEP_END.length) });
+        return;
+      }
+      if (text.startsWith(DRAFT_START)) {
+        this.broadcast({ type: "draft_chunk", text: text.slice(DRAFT_START.length), cont: false });
+        return;
+      }
+      if (text.startsWith(DRAFT_CONT)) {
+        this.broadcast({ type: "draft_chunk", text: text.slice(DRAFT_CONT.length), cont: true });
         return;
       }
       this.broadcast({ type: "assistant_chunk", text });

@@ -28,10 +28,10 @@
   --composer-line-height: 1.42;
   --composer-letter-spacing: normal;
   --composer-tab-size: 4;
-  --composer-pad-y: 5px;
-  --composer-pad-x: 8px;
-  --composer-min-h: 2rem;
-  --composer-max-h: 180px;
+  --composer-pad-y: 8px;
+  --composer-pad-x: 10px;
+  --composer-min-h: 2.25rem;
+  --composer-max-h: min(42vh, 28rem);
 }
 
 :root,
@@ -309,8 +309,8 @@ body,
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* Flush: no air between transcript and composer (LVL + input) */
-  gap: 0;
+  /* Kleiner Abstand Transcript → LVL/Composer (nicht flush, nicht die alten 44px) */
+  gap: 12px;
   overflow: hidden;
   /* Content column centered with max width, padding away from rail */
   max-width: 920px;
@@ -1434,7 +1434,7 @@ button.send.send--stuffed .send-snack {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 14px 0;
+  padding: 14px 18px 0;
 }
 
 .attach-chip {
@@ -1832,6 +1832,89 @@ button.send.send--stuffed .send-snack {
   padding: 0 0 0 6px;
   word-break: break-word;
   color: var(--muted);
+}
+
+/*
+  Arbeitsprotokoll: Steps + Entwürfe, live offen, nach Final zugeklappt.
+  Primärspur (md-body) bleibt darunter in voller Lesestärke.
+*/
+.work-protocol {
+  display: block;
+  margin: 0 0 10px 0;
+  padding: 0;
+  max-width: min(100%, 48rem);
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+
+.work-protocol-summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  padding: 2px 0 4px;
+  outline: none;
+}
+
+.work-protocol-summary::-webkit-details-marker {
+  display: none;
+}
+
+.work-protocol-summary::before {
+  content: "▸ ";
+  display: inline-block;
+  width: 0.9em;
+  color: color-mix(in srgb, var(--muted) 80%, var(--text));
+}
+
+.work-protocol[open] > .work-protocol-summary::before {
+  content: "▾ ";
+}
+
+.work-protocol-body {
+  padding: 2px 0 6px 2px;
+  border-left: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+  margin-left: 2px;
+  padding-left: 8px;
+}
+
+.drafts-rail {
+  display: block;
+  margin: 6px 0 0;
+  padding: 0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.drafts-rail-label {
+  font-style: normal;
+  font-weight: 550;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 4px;
+  opacity: 0.85;
+}
+
+.draft-block + .draft-block {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed color-mix(in srgb, var(--muted) 30%, transparent);
+}
+
+.draft-body {
+  white-space: pre-wrap;
+  max-height: 12rem;
+  overflow: auto;
+  opacity: 0.92;
 }
 
 .agent-step-line {
@@ -2561,8 +2644,8 @@ button.send.send--stuffed .send-snack {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--user-rim);
-  /* Pill sides — rounder than a card, still flat top/bottom with attach strip */
-  border-radius: 1.85rem;
+  /* Copilot-like card: rounder sides; toolbar stays on the floor */
+  border-radius: 2.35rem;
   background: var(--bg);
   overflow: visible;
   box-shadow: none;
@@ -2584,21 +2667,23 @@ button.send.send--stuffed .send-snack {
   */
 }
 
-/* SuperGrok pill row: [+] [textarea] [Mode] [mic] [send] */
+/* Composer card: textarea full width on top, [+] [Chat] … [mic] [send] on the floor.
+   Long drafts grow the textarea upward; the toolbar row does not move. */
 .composer-row {
   display: flex;
-  /* Center + / Chat / Mic with the text line (send is slightly taller) */
-  align-items: center;
-  /* Tight: less air between textarea (Text) and Chat mode */
-  gap: 2px;
-  padding: 8px 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px 2px;
+  padding: 14px 18px 12px;
   min-width: 0;
 }
 
 .composer-row .composer-input-wrap {
-  flex: 1 1 auto;
-  min-width: 0;
-  align-self: center;
+  flex: 1 0 100%;
+  order: 0;
+  width: 100%;
+  min-width: 100%;
+  align-self: stretch;
   display: block;
 }
 
@@ -2946,6 +3031,7 @@ button.send.send--stuffed .send-snack {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  order: 1;
   width: 2.25rem;
   height: 2.25rem;
   box-sizing: border-box;
@@ -2978,6 +3064,13 @@ button.send.send--stuffed .send-snack {
 .composer-mode-wrap {
   position: relative;
   flex-shrink: 0;
+  order: 2;
+  margin-right: auto;
+  z-index: 5;
+}
+
+.composer-mode-wrap:has(.composer-mode-menu) {
+  z-index: 50;
 }
 
 .composer-mode-btn {
@@ -3030,17 +3123,18 @@ button.send.send--stuffed .send-snack {
 
 .composer-mode-menu {
   position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: auto;
   z-index: 40;
-  min-width: 10.5rem;
+  min-width: max(10.5rem, 100%);
   display: flex;
   flex-direction: column;
   padding: 4px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: var(--panel);
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 55%, transparent);
+  background: var(--bg);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 70%, #000);
 }
 
 .composer-mode-option {
@@ -3064,7 +3158,7 @@ button.send.send--stuffed .send-snack {
 
 .composer-mode-option.is-active {
   color: var(--send-fg, var(--text));
-  background: color-mix(in srgb, var(--accent) 28%, var(--panel));
+  background: color-mix(in srgb, var(--accent) 42%, var(--bg));
 }
 
 .composer-mode-option.is-blocked,
@@ -3132,6 +3226,7 @@ button.send.send--stuffed .send-snack {
 
 .composer.composer--grok .send {
   position: relative;
+  order: 4;
   width: 3.25rem;
   height: 3.25rem;
   min-height: 3.25rem;
@@ -3176,6 +3271,7 @@ button.send.send--stuffed .send-snack {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  order: 3;
   width: 2.25rem;
   height: 2.25rem;
   box-sizing: border-box;
@@ -4460,8 +4556,8 @@ button.cal-cell {
     /* Bottom: 0 — no air between composer and keyboard / home indicator */
     padding: 16px 10px 0;
     max-width: none;
-    /* Flush transcript → LVL/composer */
-    gap: 0;
+    /* Gleicher kleiner Abstand wie Desktop */
+    gap: 12px;
   }
 
   .top {
@@ -4551,40 +4647,28 @@ button.cal-cell {
   }
 
   /*
-    Composer (phone) — layout + iOS zoom floor:
-    - Font size floored at 16px so iOS Safari never auto-zooms on focus
-    - Row 1: textarea full width (no crushed placeholder)
-    - Row 2: [+] [Chat] …… [mic] [send]
+    Composer (phone) — iOS zoom floor + slightly larger hit targets.
+    Two-row layout (textarea / toolbar) is the desktop default too.
   */
   .composer-input-wrap {
     --composer-font-size: 16px;
     --composer-pad-y: 10px;
     --composer-pad-x: 4px;
     --composer-min-h: 2.5rem;
-    --composer-max-h: 140px;
-    flex: 1 0 100%;
-    order: 0;
-    width: 100%;
-    min-width: 100%;
+    --composer-max-h: min(36vh, 18rem);
   }
 
   .composer-row {
-    flex-wrap: wrap;
-    align-items: center;
-    /* Row 1 Text / Row 2 Chat: less vertical + horizontal air */
-    gap: 4px 2px;
     padding: 8px 10px 10px;
   }
 
   .composer-plus-btn {
-    order: 1;
     width: 2.5rem;
     height: 2.5rem;
   }
 
   .composer-mode-wrap {
-    order: 2;
-    margin-right: auto; /* push mic + send to the right */
+    margin-right: auto;
   }
 
   .composer-mode-btn {
