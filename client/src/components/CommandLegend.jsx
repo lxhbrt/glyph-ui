@@ -3,9 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BindingsPanel } from "./BindingsPanel.jsx";
-import { VaultsPanel } from "./VaultsPanel.jsx";
-import { WorkspacesPanel } from "./WorkspacesPanel.jsx";
 
 const COMMAND_LEGEND = [
   {
@@ -52,19 +49,9 @@ const COMMAND_LEGEND = [
         desc: "Hell / Dunkel umschalten.",
       },
       {
-        cmd: "Buch · Anbindung",
+        cmd: "Graph",
         need: "empfohlen",
-        desc: "Buch → Tab Anbindung: API-Key (Direct) + Base-URL, OpenRouter-Fallback, xAI Voice. Lokal: ~/.glyph-ui/bindings.json.",
-      },
-      {
-        cmd: "Buch · Vaults",
-        need: "empfohlen",
-        desc: "Buch → Tab Vaults (Kabelsalat): Obsidian-Vaults an °_Agent anbinden/lösen, r · r+w · 🔒 privat, Primär★, An/Ab = Kabel durchtrennen. SoT: ~/.glyph/vaults.json.",
-      },
-      {
-        cmd: "Buch · Workspaces",
-        need: "empfohlen",
-        desc: "Buch → Tab Workspaces (Kabelsalat): Code-Roots an ^_Code anbinden/lösen, r · r+w · 🔒 gesperrt, Primär★, An/Ab = Kabel durchtrennen. SoT: ~/.glyph/workspaces.json.",
+        desc: "Leiste · Graph: Köpfe um Glyph. Punkt klicken → Legende.",
       },
       {
         cmd: "Refresh",
@@ -79,7 +66,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Enter",
         need: "normal",
-        desc: "Senden (ohne Shift). Shift+Enter = neue Zeile. Slash-Popup offen: Enter = auswählen. Während der Agent arbeitet → Warteschlange.",
+        desc: "Desk: Senden (ohne Shift), Shift+Enter = Zeile. Handy: Tastatur-Enter = Zeile, ↵-Button = senden. Slash-Popup: Enter = auswählen. Agent arbeitet → Warteschlange.",
       },
       {
         cmd: "/ · Slash-Popup",
@@ -125,6 +112,11 @@ const COMMAND_LEGEND = [
         cmd: "Kopieren",
         need: "optional",
         desc: "Nachricht in die Zwischenablage (Button neben Vorlesen). Ersetzt TUI /copy.",
+      },
+      {
+        cmd: "Tool-Karte",
+        need: "auto",
+        desc: "Live-Tools: Verb + Ziel. Klick öffnet Input/Diff/Ausgabe. Fehlgeschlagene Tools öffnen sich selbst.",
       },
     ],
   },
@@ -238,7 +230,7 @@ const SHORT_HANDBOOK = [
       "**Mac & Windows:** Node.js 22+ · `git clone` · `npm install` · `npm run build` · `npm start`.",
       "Browser: **http://127.0.0.1:5174** (Prod). Dev: `npm run dev` → UI :5173, Bridge :5174.",
       "macOS-Extras (LaunchAgent, Dock) sind optional — unter Windows weglassen.",
-      "**Buch → Tab Anbindung**: Status prüfen · Keys speichern · Grok = `grok login` im Terminal.",
+      "**Graph**: Bind prüfen — Grok = `grok login`. Agent/Code = Direct in der Legende.",
       "Profil wählen (Header) → **Kette** verbinden → chatten.",
     ],
   },
@@ -247,7 +239,7 @@ const SHORT_HANDBOOK = [
     title: "Schnellstart",
     body: [
       "Oben rechts **Ketten-Icon** (gold) = Agent läuft. Offline (durchgestrichen)? Icon klicken.",
-      "Nachricht tippen → **Enter** senden · **Shift+Enter** = neue Zeile.",
+      "Nachricht tippen → Desk **Enter** senden · **Shift+Enter** = Zeile. Handy: Tastatur-Enter = Zeile, ↵-Button = senden.",
       "Ohne Verbindung ist das Eingabefeld deaktiviert.",
       "Sicherheit: Bridge mit vollen Tool-Rechten — **nur localhost**.",
     ],
@@ -256,10 +248,10 @@ const SHORT_HANDBOOK = [
     id: "bind",
     title: "Anbindung (Keys / OAuth)",
     body: [
-      "**Buch** (unten) → Tabs **Anbindung** · **Vaults** · **Workspaces** (kein extra Leisten-Icon).",
+      "**Graph** (Leiste): pechschwarz. Köpfe um Glyph; Vaults/Roots als Punkte. Klick → Legende.",
       "**Grok:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
       "**^_Code / °_Agent:** `OPENROUTER_API_KEY` hier oder in `.env`. Engine: `python server.py` (:18899).",
-      "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒. SoT: `~/.glyph/vaults.json`.",
+      "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒 · Kabel an/ab. SoT: `~/.glyph/vaults.json`.",
       "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒 gesperrt. SoT: `~/.glyph/workspaces.json`.",
       "**An/Ab** = Kabel durchtrennen, Eintrag bleibt.",
       "**Voice:** optional `XAI_API_KEY` (console.x.ai).",
@@ -270,7 +262,7 @@ const SHORT_HANDBOOK = [
     id: "layout",
     title: "Oberfläche",
     body: [
-      "Links: Sessions, Neuer Chat, **Befehle und Skills**, Kalender, Wiki, Workspace, Theme, Refresh — **Buch** ganz unten (Handbuch · Legende · **Anbindung** · Vaults · Workspaces).",
+      "Links: Sessions, Neuer Chat, **Befehle und Skills**, Kalender, Wiki, Workspace, Theme, Refresh, **Graph**, **Buch** (Handbuch · UI-Legende).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
       "Unten: Composer · Chat | Deep Search | Fork · **Mic** · Stimme · **↵**.",
     ],
@@ -281,7 +273,8 @@ const SHORT_HANDBOOK = [
     rows: [
       ["Lupe", "Sessions suchen/öffnen; Ja + Wiki · Löschen (/delete)"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
-      ["Buch", "Handbuch · Legende (UI-Doku) · Anbindung · Vaults · Workspaces"],
+      ["Buch", "Handbuch · UI-Legende"],
+      ["Graph", "Köpfe um Glyph · Punkt → Legende"],
       ["Kalender", "Aktivitäts-Heatmap — Klick → Sessions des Tages"],
       ["Wiki", "Wiki-Index (.md) in Obsidian / Standard-App"],
       ["Ordner", "Aktuellen Workspace (cwd) im Finder öffnen"],
@@ -296,8 +289,8 @@ const SHORT_HANDBOOK = [
       ["Chat", "Normale Nachricht an den aktiven Agenten"],
       ["Deep Search", "Strukturierte Multi-Quellen-Recherche"],
       ["Fork", "Session branchen; Text = optionale Directive"],
-      ["Enter", "Senden · während Arbeit → Warteschlange"],
-      ["Shift+Enter", "Neue Zeile ohne Senden"],
+      ["Enter", "Desk: senden · Handy: Zeile (↵-Button sendet)"],
+      ["Shift+Enter", "Neue Zeile ohne Senden (Desk)"],
     ],
   },
   {
@@ -359,7 +352,7 @@ const SHORT_HANDBOOK = [
     id: "tips",
     title: "Probleme & Tipps",
     rows: [
-      ["offline", "Kette klicken · Buch→Anbindung · `grok` im PATH? · `grok login`?"],
+      ["offline", "Kette klicken · Graph → Grok · `grok login`?"],
       ["Eingabe grau", "Erst verbinden"],
       [
         "hängt",
@@ -368,16 +361,16 @@ const SHORT_HANDBOOK = [
       ["Disk voll", "Lupe → Schließen → Ja + Wiki oder Löschen (/delete)"],
       ["UI veraltet", "Refresh in der Leiste"],
       ["Slash „tut nichts“", "Viele /Befehle sind TUI-only — Freitext oder Tabs"],
-      ["Code/Agent rot", "OpenRouter-Key + glyph-agent :18899 (Buch→Anbindung)"],
+      ["Code/Agent rot", "Graph → Agent/Code · Direct-Key · glyph-agent :18899"],
     ],
   },
   {
     id: "check",
     title: "Checkliste",
     body: [
-      "✓ Buch→Anbindung grün oder Keys gesetzt · `grok` eingeloggt · Status **verbunden**",
+      "✓ Graph: Grok OAuth / Agent Direct · Status **verbunden**",
       "✓ Workspace passt (Header-Pfad)",
-      "✓ Enter = senden · Shift+Enter = Zeile",
+      "✓ Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, ↵ = senden",
       "✓ Arbeit: Text → Queue, leer → Stop",
       "✓ Lupe · Kalender · Wiki · Mic / Lautsprecher",
     ],
@@ -388,8 +381,7 @@ function normalizeHelpTab(t) {
   // "commands" / "befehle" = früherer Tab-Name → Legende (UI-Doku, keine Live-Skills)
   if (t === "commands" || t === "befehle" || t === "legend" || t === "legende")
     return "legend";
-  if (t === "bindings" || t === "vaults" || t === "workspaces" || t === "handbook")
-    return t;
+  if (t === "handbook") return t;
   return "handbook";
 }
 
@@ -400,7 +392,10 @@ function CommandLegend({
   /** @deprecated Live-Katalog nur noch im Modal „Befehle und Skills“; prop bleibt für Call-Sites. */
   agentCommands = [],
   agentProfileId = "",
+  onOpenLage,
 }) {
+  void agentProfileId;
+  void onOpenLage;
   void agentCommands;
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState(() => normalizeHelpTab(initialTab));
@@ -458,7 +453,11 @@ function CommandLegend({
     <div className="overview-scrim" role="presentation" onClick={onClose}>
       <section
         ref={panelRef}
-        className="overview-panel legend-panel handbook-panel"
+        className={`overview-panel legend-panel handbook-panel${
+          tab === "vaults" || tab === "workspaces" || tab === "bindings"
+            ? " handbook-panel--wide"
+            : ""
+        }`}
         role="dialog"
         aria-modal="true"
         aria-label="Hilfe und Kurzhandbuch"
@@ -475,9 +474,6 @@ function CommandLegend({
           <div>
             <p className="overview-kicker">In der App</p>
             <h2>Buch</h2>
-            <p className="overview-meta">
-              Handbuch · UI-Legende · Anbindung · Vaults · Workspaces
-            </p>
           </div>
           <div className="overview-head-actions">
             <button type="button" className="ghost" onClick={onClose}>
@@ -505,33 +501,6 @@ function CommandLegend({
           >
             Legende
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "bindings"}
-            className={`help-tab${tab === "bindings" ? " help-tab--active" : ""}`}
-            onClick={() => setTab("bindings")}
-          >
-            Anbindung
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "vaults"}
-            className={`help-tab${tab === "vaults" ? " help-tab--active" : ""}`}
-            onClick={() => setTab("vaults")}
-          >
-            Vaults
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "workspaces"}
-            className={`help-tab${tab === "workspaces" ? " help-tab--active" : ""}`}
-            onClick={() => setTab("workspaces")}
-          >
-            Workspaces
-          </button>
         </div>
 
         {tab === "handbook" ? (
@@ -542,21 +511,6 @@ function CommandLegend({
               Agent-Profile · Diagramme
             </a>
             .
-          </p>
-        ) : tab === "bindings" ? (
-          <p className="overview-hint">
-            Keys lokal speichern · Grok-OAuth im Terminal · Status je Profil. Kein
-            extra Leisten-Icon — alles unter dem <strong>Buch</strong>.
-          </p>
-        ) : tab === "vaults" ? (
-          <p className="overview-hint">
-            Kabelsalat: Obsidian-Vaults an °_Agent. Anbinden / Lösen / r · r+w · 🔒.
-            SoT: <code>~/.glyph/vaults.json</code>.
-          </p>
-        ) : tab === "workspaces" ? (
-          <p className="overview-hint">
-            Kabelsalat: Code-Roots an ^_Code. Anbinden / Lösen / r · r+w · 🔒.
-            SoT: <code>~/.glyph/workspaces.json</code>.
           </p>
         ) : (
           <p className="overview-hint">
@@ -569,20 +523,18 @@ function CommandLegend({
           </p>
         )}
 
-        {tab !== "bindings" && tab !== "vaults" && tab !== "workspaces" ? (
-          <input
-            className="overview-search"
-            type="search"
-            placeholder={
-              tab === "handbook"
-                ? "Filter: Mic, Queue, Sessions, offline…"
-                : "Filter: Lupe, Composer, Deep Search, Queue…"
-            }
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            autoFocus
-          />
-        ) : null}
+        <input
+          className="overview-search"
+          type="search"
+          placeholder={
+            tab === "handbook"
+              ? "Filter: Mic, Queue, Sessions, offline…"
+              : "Filter: Lupe, Composer, Deep Search, Queue…"
+          }
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
 
         {tab === "handbook" ? (
           <div className="overview-list handbook-list" role="tabpanel">
@@ -612,21 +564,6 @@ function CommandLegend({
                 </section>
               ))
             )}
-          </div>
-        ) : tab === "bindings" ? (
-          <div className="overview-list handbook-list bindings-scroll">
-            <BindingsPanel
-              active={open && tab === "bindings"}
-              agentProfileId={agentProfileId}
-            />
-          </div>
-        ) : tab === "vaults" ? (
-          <div className="overview-list handbook-list bindings-scroll">
-            <VaultsPanel />
-          </div>
-        ) : tab === "workspaces" ? (
-          <div className="overview-list handbook-list bindings-scroll">
-            <WorkspacesPanel />
           </div>
         ) : (
           <div className="overview-list legend-list" role="tabpanel">

@@ -64,9 +64,29 @@ export function formatToolText(msg, prevText = "") {
  * @param {() => number} [now]
  * @returns {typeof prev}
  */
+/**
+ * Merge incremental ACP fields; keep previous when the update omits them.
+ * @param {object} msg
+ * @param {object} [prev]
+ */
+function mergeToolMsgFields(msg, prev = {}) {
+  const pick = (k) => (msg?.[k] !== undefined ? msg[k] : prev[k]);
+  return {
+    title: pick("title"),
+    status: pick("status"),
+    kind: pick("kind"),
+    name: pick("name"),
+    rawInput: pick("rawInput"),
+    rawOutput: pick("rawOutput"),
+    content: pick("content"),
+    locations: pick("locations"),
+  };
+}
+
 export function upsertToolMessage(prev, msg, now = Date.now) {
   const toolCallId = msg?.toolCallId || "";
   const id = toolMessageId(toolCallId || null, now);
+  const fields = mergeToolMsgFields(msg, {});
 
   if (!toolCallId) {
     return [
@@ -76,6 +96,7 @@ export function upsertToolMessage(prev, msg, now = Date.now) {
         role: "tool",
         text: formatToolText(msg),
         streaming: false,
+        ...fields,
       },
     ];
   }
@@ -83,13 +104,19 @@ export function upsertToolMessage(prev, msg, now = Date.now) {
   const idx = prev.findIndex(
     (m) => m.id === id || m.toolCallId === toolCallId,
   );
-  const prevText = idx >= 0 ? prev[idx].text : "";
+  const prevMsg = idx >= 0 ? prev[idx] : {};
+  const merged = mergeToolMsgFields(msg, prevMsg);
   const entry = {
+    ...prevMsg,
     id,
     role: "tool",
-    text: formatToolText(msg, prevText),
+    text: formatToolText(
+      { title: merged.title, status: merged.status, kind: merged.kind },
+      prevMsg.text || "",
+    ),
     streaming: false,
     toolCallId,
+    ...merged,
   };
 
   if (idx < 0) {
@@ -97,6 +124,6 @@ export function upsertToolMessage(prev, msg, now = Date.now) {
   }
 
   const next = prev.slice();
-  next[idx] = { ...prev[idx], ...entry };
+  next[idx] = entry;
   return next;
 }

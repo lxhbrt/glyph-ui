@@ -9,7 +9,7 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatContextTooltip } from "../utils/contextMeter.js";
 
 const CELL = 10;
@@ -68,6 +68,7 @@ export function ContextLvlBar({
   const canvasRef = useRef(null);
   const animRef = useRef({ key: null, from: 0, t0: 0 });
   const displayFillRef = useRef(0);
+  const [open, setOpen] = useState(false);
 
   const tooltip = formatContextTooltip({
     used,
@@ -186,7 +187,10 @@ export function ContextLvlBar({
       displayFillRef.current = 0;
     }
 
-    const DURATION = 420;
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const DURATION = reduceMotion ? 0 : 240;
     const tick = (now) => {
       let dispFill = targetFill;
       const anim = animRef.current;
@@ -223,23 +227,46 @@ export function ContextLvlBar({
     };
   }, [contextFill, goldFill, softCapRatio, animateKey]);
 
+  function toggleOpen() {
+    setOpen((v) => !v);
+  }
+
   return (
     <div
       ref={wrapRef}
-      className="context-lvl-bar"
+      className={`context-lvl-bar${open ? " is-open" : ""}`}
       role="meter"
+      tabIndex={0}
       aria-label="Kontext-Füllung"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={pct}
       aria-valuetext={tooltip}
+      aria-expanded={open}
       title={tooltip}
+      onClick={toggleOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggleOpen();
+        }
+      }}
     >
-      <canvas ref={canvasRef} className="context-lvl-bar-canvas" />
-      <div className="context-lvl-bar-meta" aria-hidden="true">
-        <span className="context-lvl-bar-tag">LVL</span>
-        <span className="context-lvl-bar-label">{label}</span>
+      <div className="context-lvl-bar-track">
+        <canvas ref={canvasRef} className="context-lvl-bar-canvas" />
+        <div className="context-lvl-bar-meta" aria-hidden="true">
+          <span className="context-lvl-bar-tag">LVL</span>
+          <span className="context-lvl-bar-label">{label}</span>
+        </div>
       </div>
+      {open ? (
+        <p className="context-lvl-bar-legend">
+          <span>Steine = Kontext</span>
+          <span>Schlange = Leseposition</span>
+          <span>Strich = Soft-Cap</span>
+          <span>{tooltip}</span>
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -133,4 +133,26 @@ describe("upsertToolMessage", () => {
     assert.notEqual(next, prev);
     assert.equal(prev.length, 0);
   });
+
+  it("keeps rawInput / content / kind across status-only updates", () => {
+    let list = upsertToolMessage([], {
+      toolCallId: "t1",
+      title: "read_file",
+      kind: "read",
+      status: "pending",
+      rawInput: { target_file: "/tmp/a.js" },
+    });
+    list = upsertToolMessage(list, {
+      toolCallId: "t1",
+      status: "completed",
+      content: [
+        { type: "content", content: { type: "text", text: "ok" } },
+      ],
+    });
+    assert.equal(list.length, 1);
+    assert.equal(list[0].kind, "read");
+    assert.equal(list[0].status, "completed");
+    assert.deepEqual(list[0].rawInput, { target_file: "/tmp/a.js" });
+    assert.equal(list[0].content[0].content.text, "ok");
+  });
 });

@@ -27,6 +27,12 @@ const CLOSED_LOG = path.join(STATE_DIR, "closed-sessions.json");
 
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function isProtectedSession(sessionId, protectId) {
+  if (!protectId) return false;
+  if (Array.isArray(protectId)) return protectId.includes(sessionId);
+  return sessionId === protectId;
+}
+
 /**
  * Read Grok models_cache entry for window + soft-cap.
  * @param {string} modelId
@@ -640,7 +646,7 @@ export async function cleanupEmptySessions({
   const inventory = await listSessions({ includeClosed: false });
   const empties = inventory.sessions.filter((s) => {
     if (!s.empty) return false;
-    if (protectId && s.id === protectId) return false;
+    if (isProtectedSession(s.id, protectId)) return false;
     return true;
   });
 
@@ -718,7 +724,7 @@ export async function closeSession(sessionId, {
   if (!isSessionId(sessionId)) {
     throw new Error("Invalid session id");
   }
-  if (protectId && sessionId === protectId) {
+  if (isProtectedSession(sessionId, protectId)) {
     throw new Error("Aktive Chat-Session kann nicht geschlossen werden. Starte zuerst eine neue Session.");
   }
   if (!writeWiki && !deleteDisk) {

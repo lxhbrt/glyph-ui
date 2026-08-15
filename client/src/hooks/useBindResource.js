@@ -49,13 +49,13 @@ function useBindResource({ apiBase, listKey }) {
   }, [refresh]);
 
   const attach = useCallback(
-    async (input, mode) => {
+    async (input, mode, extra = {}) => {
       const raw = String(input ?? "").trim();
       if (!raw || busy) return false;
       setBusy(true);
       setError("");
       try {
-        await api("POST", apiBase, { input: raw, mode });
+        await api("POST", apiBase, { input: raw, mode, ...extra });
         await refresh();
         return true;
       } catch (err) {

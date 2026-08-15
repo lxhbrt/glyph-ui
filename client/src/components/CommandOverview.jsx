@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatWhen } from "../utils/format.js";
+import { seatFetch } from "../utils/seat.js";
 import { SummarizeDialog } from "./SummarizeDialog.jsx";
 
 function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, profile = "grok" }) {
@@ -28,7 +29,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/sessions");
+      const res = await seatFetch("/api/sessions");
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Laden fehlgeschlagen");
       setData(json);
@@ -84,7 +85,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
       setError("");
       setLastResult(null);
       try {
-        const res = await fetch(`/api/sessions/${id}/close`, {
+        const res = await seatFetch(`/api/sessions/${id}/close`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ writeWiki, deleteDisk }),
@@ -109,7 +110,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
       setOpening(true);
       setError("");
       try {
-        const res = await fetch(`/api/sessions/${id}/open`, { method: "POST" });
+        const res = await seatFetch(`/api/sessions/${id}/open`, { method: "POST" });
         const json = await res.json();
         if (!res.ok) {
           throw new Error(json.error || "Session konnte nicht geladen werden");

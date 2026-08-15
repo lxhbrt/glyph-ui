@@ -131,7 +131,7 @@ Auf `main` und bei Pull Requests läuft dasselbe über GitHub Actions (Node 22 �
 
 ## Nutzung
 
-1. Nachricht tippen, **Enter** senden (Shift+Enter = Zeilenumbruch)
+1. Nachricht tippen: Desk **Enter** senden (Shift+Enter = Zeile). Handy: Tastatur-Enter = Zeile, ↵-Button = senden
 2. Streaming: Antwort, Thoughts, Tool-Aufrufe
 3. Composer-Aktion wählen: **Chat** (normal), **Deep Search** (nur grok), **Fork** (Session branchen)
 4. Status-Button **verbunden** / **offline**: klicken startet den aktiven Agenten neu

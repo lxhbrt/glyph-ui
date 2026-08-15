@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { useCallback, useEffect, useId, useState } from "react";
+import { cablePath } from "../utils/cables.js";
+import { GlyphMark } from "./EgyptMarks.jsx";
 
 /** Agent profiles on the map (full nodes). */
 const PROFILE_ORDER = ["grok", "_code", "glyph-agent"];
@@ -103,27 +105,17 @@ function BindingsMap({ profiles, expandedId, onToggle, loading }) {
             const ok = Boolean(p?.ok);
             const thin = p?.kind === "capability" || id === "voice";
             return (
-              <line
+              <path
                 key={id}
                 className={`bindings-cable${thin ? " is-thin" : ""}${ok ? " is-live" : " is-cut"}`}
-                x1={MAP_POS.hub.x}
-                y1={MAP_POS.hub.y}
-                x2={to.x}
-                y2={to.y}
+                d={cablePath(MAP_POS.hub.x, MAP_POS.hub.y, to.x, to.y)}
               />
             );
           })}
         </svg>
 
         <div className="bindings-map-hub" aria-hidden="true">
-          <img
-            className="bindings-map-mark"
-            src="/glyph-mark.png"
-            alt=""
-            width={40}
-            height={40}
-            draggable={false}
-          />
+          <GlyphMark size={40} className="bindings-map-mark" />
           <span className="bindings-map-hub-label">Glyph</span>
         </div>
 

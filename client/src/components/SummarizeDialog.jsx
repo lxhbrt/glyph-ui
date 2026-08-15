@@ -14,6 +14,7 @@
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { seatFetch } from "../utils/seat.js";
 
 function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
@@ -46,7 +47,7 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
       setEditMode(false);
       setExternalConsent(false);
       try {
-        const res = await fetch(`/api/sessions/${sessionId}/summarize/draft`, {
+        const res = await seatFetch(`/api/sessions/${sessionId}/summarize/draft`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ profile: prof }),
@@ -107,7 +108,7 @@ function SummarizeDialog({ sessionId, sessionTitle, profile = "glyph-agent", onC
             references: draft?.references,
           }
         : undefined;
-      const res = await fetch(`/api/sessions/${sessionId}/summarize/commit`, {
+      const res = await seatFetch(`/api/sessions/${sessionId}/summarize/commit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

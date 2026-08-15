@@ -270,18 +270,26 @@ body,
   display: block;
 }
 
-/* Glyph mark (rail: activity calendar) — silhouette from public/glyph-mark-mask.png */
 .icon-glyph-mark {
   flex: 0 0 auto;
-  background-color: currentColor;
-  -webkit-mask-image: url("/glyph-mark-mask.png");
-  mask-image: url("/glyph-mark-mask.png");
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
+  color: inherit;
+}
+
+/* Rail: no plate fill — signs follow the other icons (muted / text). */
+.icon-glyph-mark .tablet-plate,
+:root[data-theme="light"] .icon-glyph-mark .tablet-plate {
+  fill: none;
+}
+
+.icon-glyph-mark path.tablet-plate,
+:root[data-theme="light"] .icon-glyph-mark path.tablet-plate {
+  stroke: currentColor;
+  stroke-width: 1.35;
+}
+
+.icon-glyph-mark .tablet-sign,
+:root[data-theme="light"] .icon-glyph-mark .tablet-sign {
+  fill: currentColor;
 }
 
 .side-rail-sep {
@@ -461,23 +469,63 @@ body,
 }
 /* —— Kabelsalat · Vaults (Buch → Vaults) —— */
 .vaults-panel {
-  padding: 0 0 1rem;
+  padding: 0 0 0.25rem;
+}
+
+.vaults-lede {
+  margin: 0 0 0.55rem;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: var(--muted);
 }
 
 .vaults-hint {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.55rem;
 }
 
 .vaults-map-stage {
   position: relative;
-  width: 100%;
-  height: min(42vh, 320px);
-  min-height: 240px;
-  margin: 0 0 0.75rem;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+  display: block;
+  width: 10.5rem;
+  height: 10.5rem;
+  min-height: 10.5rem;
+  margin: 0 auto 0.1rem;
+  border: 0;
+  background: transparent;
   overflow: hidden;
+}
+
+.vaults-map-stage[data-loading] {
+  opacity: 0.72;
+}
+
+.vaults-map-stage[data-loading]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 8px,
+    color-mix(in srgb, var(--gold) 7%, transparent) 8px,
+    color-mix(in srgb, var(--gold) 7%, transparent) 16px
+  );
+}
+
+.vaults-map-empty {
+  position: absolute;
+  left: 50%;
+  bottom: 0.2rem;
+  z-index: 2;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: 90%;
+  text-align: center;
+  font-size: 0.62rem;
+  color: var(--muted);
+  pointer-events: none;
 }
 
 .vaults-map-cables {
@@ -492,6 +540,7 @@ body,
 .vaults-cable {
   stroke-linecap: round;
   fill: none;
+  vector-effect: non-scaling-stroke;
 }
 
 /* r = angebunden, nur Lesen: Gold-Zebra (gestrichelt), nie Grau = offline */
@@ -517,7 +566,21 @@ body,
 
 .vaults-cable.is-selected {
   stroke-width: 1.55;
+  stroke-dasharray: 2.4 1.6;
   filter: drop-shadow(0 0 2.5px color-mix(in srgb, var(--gold) 45%, transparent));
+  animation: vaults-cable-hum 1.1s linear infinite;
+}
+
+@keyframes vaults-cable-hum {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vaults-cable.is-selected {
+    animation: none;
+  }
 }
 
 .vaults-cable.is-cut {
@@ -528,9 +591,10 @@ body,
 .vaults-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem 0.9rem;
-  margin: -0.35rem 0 0.7rem;
-  font-size: 0.68rem;
+  gap: 0.35rem 0.85rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
   color: var(--muted);
 }
 
@@ -598,175 +662,249 @@ body,
   top: 50%;
   transform: translate(-50%, -50%);
   z-index: 2;
-  width: 4.2rem;
-  height: 4.2rem;
+  min-width: 2.6rem;
+  height: 1.55rem;
+  padding: 0 0.45rem;
   border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--gold) 18%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--border));
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--bg) 50%, transparent);
+  background: color-mix(in srgb, var(--gold) 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, var(--border));
   pointer-events: none;
 }
 
 .vaults-hub-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
   color: var(--gold-bright, var(--gold));
 }
 
-.vaults-node {
+.vaults-dot {
   position: absolute;
   z-index: 3;
+  width: 22px;
+  height: 22px;
   transform: translate(-50%, -50%);
-  max-width: 7.5rem;
-  padding: 0.35rem 0.45rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
-  color: var(--text);
-  font: inherit;
-  font-size: 0.68rem;
-  line-height: 1.25;
-  text-align: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
   cursor: pointer;
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--bg) 40%, transparent);
 }
 
-.vaults-node:hover,
-.vaults-node.is-selected {
-  border-color: color-mix(in srgb, var(--gold) 50%, var(--border));
+.vaults-dot-mark {
+  display: block;
+  width: 7px;
+  height: 7px;
+  margin: 7.5px auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gold) 72%, var(--text));
+  box-shadow: 0 0 0 3px var(--bg);
 }
 
-.vaults-node.is-primary {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 55%, transparent);
+.vaults-dot.is-r .vaults-dot-mark {
+  background: color-mix(in srgb, var(--gold) 62%, var(--muted));
 }
 
-.vaults-node.is-private {
-  border-style: dashed;
+.vaults-dot.is-rw .vaults-dot-mark {
+  background: color-mix(in srgb, var(--gold) 88%, var(--text));
 }
 
-.vaults-node.is-missing {
-  opacity: 0.55;
+.vaults-dot.is-private .vaults-dot-mark {
+  background: color-mix(in srgb, var(--danger) 80%, var(--muted));
+}
+
+.vaults-dot.is-primary .vaults-dot-mark {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 3.5px color-mix(in srgb, var(--gold) 70%, transparent);
+}
+
+.vaults-list-item.is-open .vaults-list-mode {
+  display: none;
+}
+
+.vaults-dot.is-selected .vaults-dot-mark {
+  width: 9px;
+  height: 9px;
+  margin: 6.5px auto;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.vaults-dot:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 0;
+  border-radius: 999px;
+}
+
+.vaults-dot.is-missing,
+.vaults-dot.is-cut {
+  opacity: 0.4;
+}
+
+.vaults-node {
+  display: none;
 }
 
 .vaults-star {
   color: var(--gold);
-  font-size: 0.65rem;
-}
-
-.vaults-node-name {
-  display: block;
-  font-weight: 650;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vaults-node-mode {
-  display: flex;
-  justify-content: center;
-  margin-top: 0.15rem;
-  font-size: 0.62rem;
-}
-
-.vaults-node.is-r .vaults-node-mode {
-  color: color-mix(in srgb, var(--gold) 70%, var(--muted));
-}
-
-.vaults-node.is-rw .vaults-node-mode {
-  color: color-mix(in srgb, var(--gold) 85%, var(--text));
-}
-
-.vaults-node.is-private .vaults-node-mode {
-  color: color-mix(in srgb, var(--danger, #c44) 75%, var(--muted));
-}
-
-.vaults-node-pins {
-  display: block;
-  margin-top: 0.15rem;
-  font-size: 0.55rem;
-  color: color-mix(in srgb, var(--muted) 90%, var(--text));
-  max-height: 2.2em;
-  overflow: hidden;
+  font-size: 0.7rem;
+  margin-right: 0.28rem;
 }
 
 .vaults-attach {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.15rem 0.25rem;
   align-items: center;
-  margin: 0 0 0.75rem;
+  margin: 0.65rem 0 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .vaults-attach-input {
-  flex: 1 1 12rem;
+  flex: 1 1 10rem;
   min-width: 0;
+  min-height: 44px;
   font: inherit;
   font-size: 0.8rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  padding: 0.35rem 0.15rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
+}
+
+.vaults-attach-input:focus {
+  outline: none;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--gold) 55%, var(--border));
 }
 
 .vaults-attach-mode {
   font: inherit;
-  font-size: 0.78rem;
-  padding: 0.3rem 0.4rem;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
+  font-size: 0.75rem;
+  min-height: 44px;
+  padding: 0.25rem 0.2rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
 }
 
 .vaults-detail {
-  margin: 0 0 0.75rem;
-  padding: 0.55rem 0.65rem;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-  background: color-mix(in srgb, var(--panel) 90%, var(--bg));
-}
-
-.vaults-detail-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-  margin-bottom: 0.25rem;
+  display: none;
 }
 
 .vaults-badge {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 650;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--gold) 18%, transparent);
+  margin-left: 0.4rem;
   color: var(--gold-bright, var(--gold));
 }
 
 .vaults-badge--warn {
-  background: color-mix(in srgb, var(--danger, #c44) 15%, transparent);
-  color: var(--danger, #c44);
+  color: var(--danger);
 }
 
 .vaults-path {
-  margin: 0 0 0.45rem;
-  font-size: 0.72rem;
-  word-break: break-all;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0;
+  font-size: var(--type-secondary);
+  color: var(--muted);
 }
 
-.vaults-actions {
+.vaults-path code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: inherit;
+  color: inherit;
+}
+
+.vaults-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.15rem 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.vaults-toolbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.vaults-tool-pair {
+  display: inline-flex;
+}
+
+.vaults-tool {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-height: 44px;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.vaults-tool:hover:not(:disabled),
+.vaults-tool:focus-visible {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.vaults-tool:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.vaults-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.vaults-tool-next {
+  color: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.vaults-tool--danger {
+  color: var(--danger);
+  flex-shrink: 0;
 }
 
 .vaults-detach {
   color: var(--danger, #c44) !important;
+}
+
+.vaults-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--type-secondary);
+  color: var(--text);
 }
 
 .vaults-open {
@@ -774,23 +912,20 @@ body,
 }
 
 .vaults-pin-list {
-  margin: 0.5rem 0 0;
-  padding: 0 0 0 1rem;
-  font-size: 0.75rem;
-}
-
-.vaults-pin-src {
-  font-size: 0.62rem;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-secondary);
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
+.vaults-pin-list li + li {
+  margin-top: 0.1rem;
+}
+
+.vaults-pin-src,
 .vaults-pin-path {
-  display: block;
-  font-size: 0.65rem;
-  color: var(--muted);
-  margin-top: 0.05rem;
+  display: none;
 }
 
 .vaults-list {
@@ -799,7 +934,14 @@ body,
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+}
+
+.vaults-list-item + .vaults-list-item {
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.vaults-list-item.is-cut .vaults-list-name {
+  color: var(--muted);
 }
 
 .vaults-list-row {
@@ -807,26 +949,41 @@ body,
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.4rem 0.05rem;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   cursor: pointer;
   text-align: left;
 }
 
+.vaults-list-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .vaults-list-row:hover,
 .vaults-list-row.is-selected {
-  border-color: color-mix(in srgb, var(--border) 90%, transparent);
-  background: color-mix(in srgb, var(--panel) 80%, var(--bg));
+  color: var(--text);
+}
+
+.vaults-list-item.is-open .vaults-list-name {
+  font-weight: 600;
+}
+
+.vaults-inspect {
+  padding: 0 0.05rem 0.7rem;
 }
 
 .vaults-list-mode {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--muted);
   flex-shrink: 0;
 }
@@ -855,7 +1012,7 @@ body,
   color: var(--muted, #999);
 }
 .bindings-hint--warn {
-  color: #e6c35c;
+  color: var(--gold-bright, var(--gold));
 }
 .agent-pick-select:disabled {
   opacity: 0.5;
@@ -1319,8 +1476,13 @@ button.send.send--stuffed .send-snack {
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  cursor: pointer;
   cursor: help;
   user-select: none;
+}
+
+.context-lvl-bar-track {
+  position: relative;
 }
 
 /* Overlay: LVL left, % right — same vertical band as the pixel track */
@@ -1369,6 +1531,28 @@ button.send.send--stuffed .send-snack {
   height: auto;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.context-lvl-bar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.context-lvl-bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.7rem;
+  margin: 4px 2px 0;
+  padding: 0;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.context-lvl-bar-legend span:last-child {
+  flex: 1 1 100%;
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  font-variant-numeric: tabular-nums;
 }
 
 /* Drag-and-drop target on the transcript (no toolbar button needed) */
@@ -1582,6 +1766,8 @@ button.send.send--stuffed .send-snack {
   align-self: center;
   text-align: center;
   max-width: 28rem;
+  padding: 0 12px;
+  overflow-wrap: anywhere;
   font-size: var(--type-chat);
   line-height: var(--type-chat-leading);
 }
@@ -1820,6 +2006,106 @@ button.send.send--stuffed .send-snack {
 
 .msg-tool {
   font-size: var(--type-secondary);
+}
+
+/* Tool-Karte: stiller Disclosure, gleiche Palette (kein extra Grün). */
+.tool-card {
+  display: block;
+  max-width: min(100%, 48rem);
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+.tool-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35em 0.5em;
+  width: 100%;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+button.tool-card-summary {
+  cursor: pointer;
+}
+button.tool-card-summary:hover .tool-card-target,
+button.tool-card-summary:hover .tool-card-verb {
+  color: var(--text);
+}
+.tool-card-verb {
+  color: var(--muted);
+}
+.tool-card-target {
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  color: var(--text);
+  opacity: 0.78;
+  word-break: break-all;
+}
+.tool-card-delta-add {
+  color: var(--ok);
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.92em;
+}
+.tool-card-delta-del {
+  color: var(--danger);
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.92em;
+}
+.tool-card-status {
+  opacity: 0.7;
+}
+.tool-card-chev {
+  opacity: 0.5;
+  font-size: 0.85em;
+}
+.tool-card--failed .tool-card-status {
+  color: var(--danger);
+  opacity: 1;
+}
+.tool-card--in_progress .tool-card-status {
+  color: var(--gold);
+  opacity: 0.9;
+}
+.tool-card-details {
+  margin: 2px 0 6px;
+  padding: 4px 0 2px 2px;
+  border-left: 1px solid var(--border);
+}
+.tool-card-section + .tool-card-section {
+  margin-top: 6px;
+}
+.tool-card-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.tool-card-pre {
+  margin: 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow: auto;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tool-card-line--add {
+  color: var(--ok);
+}
+.tool-card-line--del {
+  color: var(--danger);
 }
 
 /* Step banners / live rail: muted mono secondary track */
@@ -3570,6 +3856,13 @@ button.danger {
   min-height: 160px;
 }
 
+.overview-list--flat {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-height: 0;
+}
+
 .session-row {
   display: flex;
   justify-content: space-between;
@@ -4298,6 +4591,10 @@ button.cal-cell {
   width: min(560px, 100%);
 }
 
+.handbook-panel--wide {
+  width: min(640px, 100%);
+}
+
 .help-tabs {
   display: flex;
   gap: 4px;
@@ -4646,6 +4943,22 @@ button.cal-cell {
     font-size: 0.65rem;
   }
 
+  .context-lvl-bar-legend {
+    font-size: 0.65rem;
+  }
+
+  .vaults-map-stage {
+    width: 9.5rem;
+    min-height: 9.5rem;
+    height: 9.5rem;
+  }
+
+  .vaults-attach-input,
+  .vaults-attach-mode,
+  .vaults-attach .ghost {
+    min-height: 44px;
+  }
+
   /*
     Composer (phone) — iOS zoom floor + slightly larger hit targets.
     Two-row layout (textarea / toolbar) is the desktop default too.
@@ -4894,6 +5207,7 @@ button.cal-cell {
 }
 
 .bindings-map-mark {
+  display: block;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -4931,7 +5245,7 @@ button.cal-cell {
   font: inherit;
   cursor: pointer;
   text-align: left;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--bg) 55%, transparent);
   /* Positions match MAP_POS % in BindingsPanel.jsx (cable ends) */
   transform: translate(-50%, -50%);
   transition:
@@ -5535,12 +5849,12 @@ button.cal-cell {
 .assistant-meta-list li { margin: 1px 0; }
 .assistant-meta-list ul { padding-left: 14px; }
 
-/* ^_Code permission modal */
+/* ^_Code permission modal — gold allow, danger reject, no extra hues */
 .permission-modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 1200;
-  background: rgba(0, 0, 0, 0.55);
+  background: color-mix(in srgb, var(--bg) 72%, #000);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5550,12 +5864,12 @@ button.cal-cell {
   width: min(520px, 100%);
   max-height: min(80vh, 640px);
   overflow: auto;
-  background: var(--panel, #1a1a1a);
-  color: var(--text, #eee);
-  border: 1px solid var(--line, #444);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--border));
   border-radius: 12px;
   padding: 16px 18px 14px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--bg) 70%, transparent);
 }
 .permission-modal h2 {
   margin: 0 0 6px;
@@ -5565,7 +5879,7 @@ button.cal-cell {
 .permission-modal-kind {
   margin: 0 0 10px;
   font-size: 12px;
-  opacity: 0.7;
+  color: var(--muted);
 }
 .permission-modal-preview {
   margin: 0 0 14px;
@@ -5575,8 +5889,8 @@ button.cal-cell {
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--bg, #0f0f0f);
-  border: 1px solid var(--line, #333);
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
 }
@@ -5588,23 +5902,1019 @@ button.cal-cell {
 }
 .permission-btn {
   border-radius: 8px;
-  border: 1px solid var(--line, #444);
+  border: 1px solid var(--border);
   padding: 8px 14px;
+  min-height: 44px;
+  font: inherit;
   font-size: 13px;
   cursor: pointer;
-  background: var(--bg, #222);
+  background: var(--bg);
   color: inherit;
 }
 .permission-btn--allow {
-  background: #1a5c2e;
-  border-color: #2a7a40;
-  color: #e8ffe8;
+  background: var(--send-idle-bg);
+  border-color: var(--send-idle-border);
+  color: var(--gold-bright, var(--gold));
 }
 .permission-btn--reject {
-  background: #4a2020;
-  border-color: #6a3030;
-  color: #ffe8e8;
+  background: color-mix(in srgb, var(--danger) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: var(--danger-bright, var(--danger));
 }
 .permission-btn:hover {
   filter: brightness(1.08);
+}
+.permission-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* —— Graph · pechschwarz, Obsidian-Feld —— */
+.lage-stage {
+  --lage-ink: #000000;
+  --lage-line: color-mix(in srgb, var(--gold) 42%, #000);
+  --lage-line-hot: color-mix(in srgb, var(--gold) 86%, #fff);
+  --lage-mute: color-mix(in srgb, var(--gold) 34%, #5c5648);
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 48px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--lage-ink);
+  color: color-mix(in srgb, var(--gold) 78%, #fff);
+}
+
+:root[data-theme="light"] .lage-stage {
+  background: var(--lage-ink);
+  color: color-mix(in srgb, var(--gold) 78%, #fff);
+}
+
+.lage-kicker {
+  margin: 0;
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lage-mute);
+}
+
+.lage-dock-card h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+}
+
+.lage-close,
+.lage-tool,
+.lage-attach button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--lage-mute);
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+}
+
+.lage-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 6;
+}
+
+.lage-close:hover,
+.lage-tool:hover,
+.lage-attach button:hover:not(:disabled) {
+  color: var(--gold);
+}
+
+.lage-close:focus-visible,
+.lage-tool:focus-visible,
+.lage-node:focus-visible,
+.lage-attach input:focus-visible,
+.lage-attach button:focus-visible,
+.lage-link:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 3px;
+}
+
+.lage-alert {
+  margin: 0;
+  padding: 0.55rem 3.5rem 0 1rem;
+  color: var(--gold);
+  font-size: var(--type-secondary);
+}
+
+.lage-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.lage-canvas {
+  position: relative;
+  container-type: size;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1200 / 780;
+  width: min(100%, calc(100dvh * 1200 / 780));
+  max-height: 100%;
+  margin: auto;
+  overflow: visible;
+}
+
+.lage-node--hub.is-idle-glyph .lage-node-core,
+.lage-node--hub.is-holding .lage-node-core,
+.lage-node--hub.is-center .lage-node-core {
+  min-width: 0;
+  padding: 0;
+}
+
+.lage-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.glyph-medal-fill {
+  fill: color-mix(in srgb, var(--gold) 38%, #ffffff);
+}
+
+.glyph-medal-ring {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.35;
+}
+
+:root[data-theme="light"] .glyph-medal-fill {
+  fill: color-mix(in srgb, var(--text) 82%, var(--gold));
+}
+
+.lage-stone {
+  fill: var(--gold);
+}
+
+.lage-stone.is-gold-bright {
+  fill: var(--gold-bright);
+}
+
+.lage-stone.is-gold {
+  fill: var(--gold);
+}
+
+.lage-stone.is-gold-dim {
+  fill: var(--gold-dim);
+}
+
+.lage-stone.is-gold-deep {
+  fill: var(--gold-deep);
+}
+
+.lage-stone.is-gray {
+  fill: color-mix(in srgb, var(--muted) 42%, var(--border));
+}
+
+.lage-stone.is-dark {
+  fill: color-mix(in srgb, var(--border) 78%, #000);
+}
+
+.lage-cable {
+  fill: none;
+  stroke: var(--lage-line);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 160ms ease, opacity 160ms ease, stroke-width 160ms ease;
+}
+
+.lage-cable.is-axis {
+  stroke: color-mix(in srgb, var(--gold) 28%, #000);
+  stroke-dasharray: 16 12;
+  opacity: 0.42;
+}
+
+.lage-cable.is-r {
+  stroke: var(--lage-line);
+  stroke-dasharray: 4 5.2;
+  opacity: 0.92;
+}
+
+.lage-cable.is-rw {
+  stroke: color-mix(in srgb, var(--gold) 62%, #000);
+  stroke-dasharray: none;
+  opacity: 0.96;
+}
+
+.lage-cable.is-private {
+  stroke: color-mix(in srgb, var(--gold) 34%, #000);
+  stroke-dasharray: 0.75 3.8;
+  opacity: 0.9;
+}
+
+.lage-cable.is-active {
+  opacity: 1;
+  stroke: var(--lage-line-hot);
+}
+
+.lage-cable.is-dim {
+  opacity: 0.12;
+}
+
+.lage-cable.is-axis.is-dim {
+  opacity: 0.08;
+}
+
+.lage-node.is-dim {
+  opacity: 0.18;
+}
+
+.lage-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.lage-node:hover,
+.lage-node:focus-visible,
+.lage-node.is-hot,
+.lage-node.is-selected {
+  z-index: 3;
+}
+
+.lage-node-core {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--lage-ink);
+  color: var(--gold);
+}
+
+.lage-node--hub .lage-node-core,
+.lage-node--profile .lage-node-core {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--gold) 48%, #000);
+}
+
+.lage-node--hub .lage-node-core {
+  width: 3.35rem;
+  height: 3.35rem;
+  border-color: color-mix(in srgb, var(--gold) 62%, #000);
+}
+
+.lage-node--hub.is-holding .lage-node-core,
+.lage-node--profile.is-selected .lage-node-core,
+.lage-node--hub.is-selected .lage-node-core,
+.lage-node--profile:hover .lage-node-core,
+.lage-node--hub:hover .lage-node-core {
+  border-color: var(--gold);
+}
+
+.lage-node--vault,
+.lage-node--workspace,
+.lage-node--plug {
+  width: 44px;
+  height: 44px;
+}
+
+.lage-node--vault .lage-node-core,
+.lage-node--workspace .lage-node-core {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.lage-folder-mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  overflow: visible;
+}
+
+.lage-folder-o {
+  fill: color-mix(in srgb, var(--gold) 8%, #000);
+  stroke: color-mix(in srgb, var(--gold) 42%, #000);
+  stroke-width: 1.15;
+}
+
+.lage-folder-mark.is-step-dim .lage-folder-o {
+  fill: color-mix(in srgb, var(--gold) 3%, #000);
+  stroke: color-mix(in srgb, var(--gold) 22%, #000);
+}
+
+.lage-folder-star {
+  fill: var(--gold);
+}
+
+.lage-folder-mark line {
+  stroke: var(--gold);
+  stroke-width: 1.35;
+  stroke-linecap: square;
+}
+
+.lage-folder-dot {
+  fill: color-mix(in srgb, var(--gold) 72%, #000);
+}
+
+.lage-node--vault:hover .lage-folder-o,
+.lage-node--workspace:hover .lage-folder-o,
+.lage-node--vault.is-hot .lage-folder-o,
+.lage-node--workspace.is-hot .lage-folder-o {
+  stroke: var(--gold);
+}
+
+.lage-node.is-star,
+.lage-node.is-primary,
+.lage-node.is-selected {
+  z-index: 6;
+}
+
+.lage-node.is-star .lage-folder-star {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gold) 70%, transparent));
+}
+
+.lage-folder {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--gold) 55%, #3a2a08);
+}
+
+.lage-gate {
+  position: absolute;
+  left: 1.35rem;
+  bottom: 0.12rem;
+  display: flex;
+  color: color-mix(in srgb, var(--gold) 70%, #3a2a08);
+}
+
+.lage-gate.is-private {
+  color: color-mix(in srgb, var(--danger) 70%, #3a2a08);
+}
+
+
+
+.lage-node.is-selected .lage-node-core,
+.lage-node.is-working .lage-node-core,
+.lage-node--hub.is-reach:not(.is-dim) .lage-node-core,
+.lage-node--profile.is-reach:not(.is-dim) .lage-node-core {
+  border-color: var(--gold);
+}
+
+.lage-inspect.is-right {
+  left: auto;
+  right: 1rem;
+}
+
+.lage-heads {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.lage-head-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.lage-head-name {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lage-mute);
+}
+
+.lage-head-modes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.3rem;
+}
+
+.lage-head-modes.is-three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.lage-head-modes .lage-right {
+  min-height: 44px;
+  padding: 0.32rem 0.08rem 0.28rem;
+  font-size: 0.6rem;
+}
+
+.lage-node-label {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  color: var(--gold);
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.lage-node:hover .lage-node-label,
+.lage-node:focus-visible .lage-node-label,
+.lage-node.is-selected .lage-node-label,
+.lage-node.is-hot .lage-node-label {
+  opacity: 1;
+}
+
+.lage-node-mode {
+  display: flex;
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--gold) 70%, var(--muted));
+}
+
+.lage-node-mode.is-private {
+  color: color-mix(in srgb, var(--danger) 75%, var(--muted));
+}
+
+.lage-tool--mode {
+  gap: 0.35rem;
+}
+
+.lage-mark {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.lage-star {
+  flex-shrink: 0;
+  color: var(--gold);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.egypt-plate {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  color: var(--gold);
+}
+
+.egypt-plate-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.egypt-plate-slot {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  line-height: 0;
+  pointer-events: none;
+}
+
+.lage-arrive {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  line-height: 0;
+}
+
+.lage-node.is-selected .lage-cartouche .egypt-plate-frame {
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--gold) 42%, transparent));
+}
+
+.graph-face--apple .snack-apple-body {
+  fill: color-mix(in srgb, var(--danger) 48%, #2a2630);
+}
+
+.graph-face--apple .snack-apple-pit {
+  fill: color-mix(in srgb, var(--bg) 30%, #000);
+}
+
+.graph-face--apple .snack-apple-stem {
+  fill: color-mix(in srgb, #000 88%, var(--text));
+}
+
+.scarab-cut {
+  fill: none;
+  stroke: color-mix(in srgb, var(--bg) 26%, #000);
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.graph-face {
+  display: block;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.graph-ink {
+  fill: color-mix(in srgb, var(--bg) 22%, #000);
+}
+
+.tablet-plate {
+  fill: color-mix(in srgb, var(--gold) 38%, #ffffff);
+}
+
+.tablet-sign {
+  fill: color-mix(in srgb, var(--bg) 22%, #000000);
+}
+
+:root[data-theme="light"] .tablet-plate {
+  fill: color-mix(in srgb, var(--text) 82%, var(--gold));
+}
+
+:root[data-theme="light"] .tablet-sign {
+  fill: color-mix(in srgb, var(--gold) 16%, #ffffff);
+}
+
+.vaults-mode-glyph-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  line-height: 0;
+}
+
+.lage-stage .glyph-medal-fill {
+  fill: #000;
+}
+
+.lage-stage .glyph-medal-ring {
+  stroke: var(--gold);
+  stroke-width: 1.05;
+}
+
+.lage-stage .tablet-sign {
+  fill: var(--gold);
+}
+
+.lage-stage .graph-ink {
+  fill: #000;
+}
+
+.lage-node--profile:not(.is-center) .lage-node-core {
+  min-width: 0;
+  padding: 0;
+}
+
+.lage-node.is-center .graph-face {
+  color: var(--gold);
+}
+
+.lage-key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.65rem;
+  font-size: var(--type-secondary);
+  color: var(--muted);
+}
+
+.lage-key-row {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.lage-key input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.lage-bind {
+  margin-top: 0.35rem;
+}
+
+.lage-inspect {
+  position: absolute;
+  top: 3.1rem;
+  left: 1rem;
+  z-index: 5;
+  width: min(19.5rem, calc(100% - 2rem));
+  max-height: calc(100% - 4.2rem);
+  overflow: auto;
+  padding: 0.95rem 1.05rem 1.15rem;
+  background: var(--lage-ink);
+  border: 1px solid color-mix(in srgb, var(--gold) 22%, #000);
+}
+
+.lage-dock {
+  min-width: 0;
+}
+
+.lage-deps {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, #000);
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.lage-deps .lage-link {
+  min-height: 36px;
+  font-size: 0.74rem;
+  color: var(--lage-mute);
+}
+
+.lage-deps .lage-link:hover {
+  color: var(--gold);
+}
+
+.lage-dock-empty {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+
+.lage-dock-card h3 {
+  margin: 0.15rem 0 0.25rem;
+}
+
+.lage-path,
+.lage-hint,
+.lage-lede,
+.lage-live {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--lage-mute);
+}
+
+.lage-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lage-lede code {
+  font-size: 0.74rem;
+  color: var(--text);
+}
+
+.lage-rights {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem;
+  margin: 0.9rem 0 0;
+}
+
+.lage-rights--tools {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+.lage-right.is-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.lage-right.is-danger {
+  color: var(--muted);
+}
+
+.lage-right.is-danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.lage-right-mark {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.lage-right {
+  appearance: none;
+  text-decoration: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  min-height: 44px;
+  padding: 0.45rem 0.2rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--gold) 18%, #000);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--lage-mute);
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.lage-right:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+}
+
+.lage-right.is-on,
+.lage-right.is-on:disabled {
+  color: var(--gold);
+  background: transparent;
+  border: 1.5px solid var(--gold);
+  opacity: 1;
+}
+
+.lage-right:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.lage-fact {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  color: var(--gold);
+}
+
+.lage-fact.is-off {
+  color: var(--lage-mute);
+}
+
+.lage-keyline {
+  margin-top: 1.15rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, #000);
+}
+
+.lage-keyline-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.lage-keyline-head strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.lage-pill {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.lage-pill.is-on {
+  color: color-mix(in srgb, var(--gold) 70%, var(--text));
+}
+
+.lage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.85rem;
+  margin-top: 0.7rem;
+}
+
+.lage-link {
+  appearance: none;
+  border: 0;
+  padding: 0.35rem 0;
+  min-height: 36px;
+  background: transparent;
+  color: color-mix(in srgb, var(--gold) 70%, #fff);
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.lage-link:hover:not(:disabled) {
+  color: var(--gold-bright, var(--gold));
+}
+
+.lage-link.is-star {
+  color: var(--gold);
+}
+
+.lage-link:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lage-link.is-danger {
+  color: var(--muted);
+}
+
+.lage-link.is-danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.lage-key-reveal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.45rem;
+}
+
+.lage-key-reveal input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  min-height: 36px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 35%, var(--border));
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.lage-keylist {
+  list-style: none;
+  margin: 1.4rem 0 0;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.lage-keylist li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.lage-live {
+  color: var(--gold-bright, var(--gold));
+}
+
+.lage-checks {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: var(--type-secondary);
+}
+
+.lage-checks li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  color: var(--text);
+}
+
+.lage-checks .is-bad {
+  color: var(--muted);
+}
+
+.lage-checks .is-ok span {
+  color: var(--gold);
+}
+
+.lage-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem;
+  margin-top: 0.7rem;
+}
+
+.lage-tool {
+  padding: 0.3rem 0.55rem;
+}
+
+.lage-tool.is-danger {
+  color: var(--danger);
+  margin-left: auto;
+}
+
+.lage-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.4rem 0 0;
+  font-size: var(--type-secondary);
+}
+
+.lage-pins {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+}
+
+.lage-attach {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, #000);
+}
+
+.lage-attach input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 28%, #000);
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--gold) 80%, #fff);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.lage-attach button:disabled {
+  opacity: 0.4;
+}
+
+@media (max-width: 720px) {
+  .lage-stage {
+    left: 0;
+    top: 52px;
+  }
+
+  .lage-body {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-x: hidden;
+  }
+
+  .lage-canvas {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 56%;
+    margin-top: 2.6rem;
+  }
+
+  .lage-inspect {
+    top: auto;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    max-height: 38%;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .lage-node--hub .lage-node-core {
+    width: 2.85rem;
+    height: 2.85rem;
+  }
+
+  .lage-node--profile .lage-node-core {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .lage-node-label {
+    font-size: 0.55rem;
+  }
+
+  .lage-gate {
+    display: none;
+  }
 }

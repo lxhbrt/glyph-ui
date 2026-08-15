@@ -2,6 +2,8 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
+import { GlyphMark } from "./EgyptMarks.jsx";
+import { TabletPhoto } from "./GraphFaces.jsx";
 
 function IconSearch({ size = 20 }) {
   return (
@@ -50,6 +52,29 @@ function IconCommands({ size = 20 }) {
   );
 }
 
+/** Three nodes + sagging cables — Graph */
+function IconLage({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="7" r="2.1" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="6.2" cy="17" r="2.1" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="17.8" cy="17" r="2.1" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M10.4 8.6C9 11.2 7.6 13.4 6.8 15.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M13.6 8.6C15 11.2 16.4 13.4 17.2 15.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** Closed book — Kurzhandbuch (Leiste unten) */
 function IconBook({ size = 20 }) {
   return (
@@ -78,31 +103,14 @@ function IconBook({ size = 20 }) {
 }
 
 /**
- * Glyph mark — freigegebene Silhouette (Stein / Schriftzeichen / frühe Kalligrafie).
- * CSS mask + currentColor so it matches the other monochrome rail icons.
- * Replaces the old 2×2 snack-cell calendar glyph; the activity-calendar action is unchanged.
+ * Glyph mark — cartouche + Aten. Activity-calendar action is unchanged.
  */
 function IconCalendar({ size = 20 }) {
-  return (
-    <span
-      className="icon-glyph-mark"
-      style={{ width: size, height: size }}
-      aria-hidden="true"
-    />
-  );
+  return <GlyphMark size={size} className="icon-glyph-mark" />;
 }
 
 function IconFolder({ size = 20 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M4 8.5A2.5 2.5 0 0 1 6.5 6H10l1.8 1.8H17.5A2.5 2.5 0 0 1 20 10.3v5.2A2.5 2.5 0 0 1 17.5 18h-11A2.5 2.5 0 0 1 4 15.5v-7z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <TabletPhoto size={size} />;
 }
 
 /** Wiki / Info — circle with “i” (clearer than book/cabinet). */
@@ -376,6 +384,7 @@ export {
   IconSearch,
   IconCompose,
   IconCommands,
+  IconLage,
   IconBook,
   IconCalendar,
   IconFolder,

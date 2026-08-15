@@ -12,12 +12,16 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 
 | Node | Tut | Quellen (Einstieg) | Hängt an |
 |------|-----|--------------------|----------|
-| **Bridge** | Browser ↔ WebSocket ↔ ACP stdio (`grok agent` / glyph-agent-acp) | `server/index.js`, `server/glyph-agent-acp.mjs` | Sessions, Agents |
+| **Bridge** | Browser ↔ WebSocket ↔ ACP stdio (`grok agent` / glyph-agent-acp). Zwei Sitze: `desk` · `phone`. | `server/index.js`, `server/seats.js`, `server/glyph-agent-acp.mjs` | Sessions, Agents |
 | **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel | `client/src/App.jsx`, `client/src/main.jsx` | Bridge-Events |
+| **Palette / Type** | Eine Gold-Hex, eine Danger-Hex, Neutrals via `color-mix`; IBM Plex; Type-Scale fest | `client/src/styles.css` (`:root`) | Client-Shell |
+| **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende | `ContextLvlBar.jsx` | Client-Shell |
+| **Tool-Karte** | Aufklappbare ACP-Toolzeile (Verb + Ziel, Diff/Ausgabe nach Klick) | `client/src/components/ToolCard.jsx`, `client/src/utils/toolCard.js`, `server/toolTitle.mjs` | Bridge `type: tool` |
 | **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen | `client/src/components/SlashPopup.jsx`, `ExtensionsModal.jsx` | `server/skills.js`, `server/commands.js` |
 | **Sessions** | Session-Liste, Überblick, Summaries | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
-| **Bindings** | API-Keys / OAuth-Status speichern | `server/bindings.js`, `BindingsPanel.jsx` | `~/.glyph-ui/bindings.json` |
-| **BindPanel** | Gemeinsames Kabelsalat-UI (Vaults + Workspaces) | `BindPanel.jsx`, `useBindResource.js` | Vaults-UI, Workspaces-UI |
+| **Bindings** | API-Keys / OAuth-Status + Kabelplan (hängende Kabel) | `server/bindings.js`, `BindingsPanel.jsx`, `utils/cables.js` | `~/.glyph-ui/bindings.json` |
+| **Graph** | Vollfenster pechschwarz. Grok/Agent/Code = Snake-Köpfe um Glyph; Vaults/Roots = Punkte. Klick → Legende. | `CableLage.jsx`, `GraphLegend.jsx`, `utils/lageLayout.js` | Bindings, Vaults, Workspaces |
+| **BindPanel** | Kompakt-Liste im Buch (Fallback) | `BindPanel.jsx`, `useBindResource.js` | Vaults-UI, Workspaces-UI |
 | **Vaults-UI** | Kabelsalat °_Agent | `VaultsPanel.jsx` → Proxy `/api/…` | **glyph-agent** `/vaults` |
 | **Workspaces-UI** | Kabelsalat ^_Code | `WorkspacesPanel.jsx` → `/api/workspaces` | **glyph-agent** `/workspaces` |
 | **Plan / Recurring** | Kalender-Tab Plan | `server/plan.js`, `PlanBar.jsx` | glyph-agent `/recurring` |
@@ -55,8 +59,12 @@ _Avoid_: Extensions-Modal, Command-Legend
 Tastatur- und Maus-Navigation in einer listenbasierten UI: Filter, Hervorheben einer Zeile, Bestätigen (Enter/Klick), Abbrechen (Escape).
 _Avoid_: Focus (nur DOM-Fokus), Selection (Textauswahl)
 
+**Tool-Karte**:
+Eine aufklappbare Zeile im Chat für einen ACP-Tool-Aufruf: Verb + Ziel in der Zusammenfassung, Input/Diff/Ausgabe erst nach Klick. Fehlgeschlagene Tools öffnen sich selbst. Preview: `?toolcard=demo`.
+_Avoid_: Tool-Card (EN), Paper-Card, grok-build-web Disclosure
+
 **Multiline (Composer)**:
-Verhalten, bei dem Enter eine neue Zeile einfügt und eine andere Geste sendet — in Glyph heute: Shift+Enter = Zeile, Enter = Senden. Kein globaler Multiline-Toggle in v1.
+Desk: Enter = senden, Shift+Enter = Zeile. Phone: Tastatur-Enter = Zeile; der runde ↵-Button sendet (⌘/Ctrl+Enter ebenfalls). Slash-Popup: Enter = auswählen, beide Sitze. Kein globaler Multiline-Toggle.
 _Avoid_: textarea rows (nur visuelle Höhe)
 
 **Agent-Command**:
@@ -67,16 +75,28 @@ _Avoid_: Skill (lokal/dateibasiert, nicht zwingend vom Agenten gelistet)
 Ein entdeckbarer, benennbarer Prompt-/Workflow-Eintrag (z. B. aus `~/.grok/skills` oder gebündelten Quellen), den die UI im Extensions-Modal und ggf. im Slash-Popup anbietet.
 _Avoid_: Plugin, Hook, Agent-Command
 
+**Sitz**:
+Gerätessessel für dasselbe Agent-Profil: **`desk`** (Schreibtisch) und **`phone`** (Handy). Jeder Sitz hat eigenen ACP-Prozess und eigene Live-Session. SoT (Vaults, Roots, Vertrag) ist eins. Kein Crew: nicht dieselbe Aufgabe parallel. Query `?seat=phone` · Header `X-Glyph-Seat`. Dieselbe Session-ID nicht auf zwei Sitzen gleichzeitig offen.
+_Avoid_: Schwarm, mehrere Agenten an einer Aufgabe, Geräte = Profile
+
 **Agent-Profil**:
 Eines der wählbaren ACP-Agenten in Glyph: **grok**, **`^_Code`** (`_code`), **`°_Agent`** (id `glyph-agent`). Glyph spawnt ein anderes Binary/Env, nicht „ein anderes Modell“.
 _Avoid_: OpenRouter (kein UI-Profil mehr), Claude (ersetzt durch ^_Code), Provider, Modell (als Profilname)
 
 **Anbindung**:
-Tab im **Buch**-Panel (Handbuch · Befehle · Anbindung · Vaults · Workspaces) zum Prüfen von OAuth/Service-Status und Speichern von API-Keys (`DIRECT_API_KEY` + `DIRECT_API_URL`, `OPENROUTER_API_KEY`, `XAI_API_KEY`) unter `~/.glyph-ui/bindings.json`. Direct-Key ist OpenAI-kompatibel (DeepSeek, Grok, …). Kein eigenes Leisten-Icon. Grok-OAuth bleibt Terminal (`grok login`).
+Keys und Status (`DIRECT_API_KEY` + `DIRECT_API_URL`, `OPENROUTER_API_KEY`, `XAI_API_KEY`) unter `~/.glyph-ui/bindings.json`. Header-Pille (Model/Grok) öffnet den **Graph** (Fokus Grok). Buch-Tab Anbindung bleibt Fallback. Grok-OAuth bleibt Terminal (`grok login`).
 _Avoid_: Settings (zu generisch), Login-Dialog (impliziert eingebettetes OAuth), Kalender (nur Grok-Aktivität, oft disabled)
 
+**Graph**:
+Vollfenster, pechschwarz, kein Bild — auch im hellen App-Theme. Mitte = Glyph-Symbol. Köpfe = Snake-Pixel Grok / °_Agent / ^_Code, radial (Grok oben, Agent links, Code rechts). Klick Kopf → rutscht in die Mitte, zeigt Abhängigkeiten. Ordner (Vaults, Roots) = Kreise; Favorit und aktuell gewählter Ordner = Goldstern (*). Rechte am Knoten: ungebunden = eine Stufe dunkler, keine Linie; lesen = Standardkreis + vier kurze Striche; privat = eine Stufe dunkler + Punkte. Jeder Ordner darf an jeden Kopf, jede Kante eigene Rechte (`heads`: lesen / schreiben / privat / ungebunden). Grok startet offen (schreiben), außer Privat — einschränken, nicht erst freigeben. Kanten: Glyph↔Köpfe = Achse (dünn, ~40 % Opacity). Rechte: schreiben solid, lesen gestrichelt, privat gepunktet — pro Kopf. Auswahl eines Ordners: nur dessen Rechte-Kanten voll, Rest stark gedimmt. Klick Knoten: Name + Nachbarn; Legende setzt Rechte pro Kopf. Labels nur Hover/Selektion. `?graph=`.
+_Avoid_: Lage, Gefäß, Tunnel-Foto, Tafel-Chips, hängende Kabel; ein Kopf pro Ordner; Kreis für den Favoriten
+
+**Plan & Aktivität (Tafel-Symbol)**:
+Kalender-Icon, Tabs Plan / Aktivität. In der Leiste: nur die Zeichen (und die Tafel-Linie) in `currentColor` — Dunkel grau/weiß, Hell schwarz/grau, wie Lupe und Buch. Keine gefüllte Platte.
+_Avoid_: gelbe/schwarze Tafel-Füllung in der Leiste
+
 **Workspaces (Kabelsalat)**:
-Tab im **Buch**-Panel: Code-Roots an **^_Code** anbinden/lösen, Rechte r · r+w · 🔒 gesperrt, Primär★. SoT `~/.glyph/workspaces.json` via glyph-agent `/workspaces` und UI-Proxy `/api/workspaces`. Analog **Vaults** (für °_Agent).
+Tab im **Buch**-Panel: Code-Roots anbinden/lösen, Rechte r · r+w · 🔒, Primär★. SoT `~/.glyph/workspaces.json` via glyph-agent `/workspaces` und UI-Proxy `/api/workspaces`. Analog **Vaults**. Mehrfach-Anbindung (`heads` je Kopf) lebt im **Graph**; Buch-Tab setzt weiter das Heim-Recht (Code bzw. Agent).
 _Avoid_: Vaults-Tab (Obsidian/°_Agent), Finder-„Workspace“-Leistenbutton (nur cwd öffnen)
 
 **^_Code**:

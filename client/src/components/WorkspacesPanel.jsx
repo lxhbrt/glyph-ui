@@ -7,9 +7,9 @@
 import { BindPanel } from "./BindPanel.jsx";
 
 const MODE_TITLES = {
-  r: "Nur Lesen (Auge) — kein Write, keine Shell",
-  rw: "Lesen + Schreiben + Whitelist-Shell (elevated = Popup)",
-  private: "Gesperrt (Schloss) — kein Zugriff für ^_Code",
+  r: "Nur lesen — kein Write, keine Shell",
+  rw: "Lesen, schreiben, Whitelist-Shell",
+  private: "Zu — kein Zugriff für ^_Code",
 };
 
 const MODE_LABELS = {
@@ -25,15 +25,9 @@ export function WorkspacesPanel() {
       resource="Workspace"
       listKey="workspaces"
       apiBase="/api/workspaces"
-      title="Kabelsalat · Workspaces"
-      hint={
-        <>
-          ^_Code ↔ Code-Roots. SoT: <code>~/.glyph/workspaces.json</code>.{" "}
-          <strong>+</strong> absoluter Pfad oder Ordnername unter <code>$HOME</code>.
-          Rechte: r → r+w → gesperrt.
-        </>
-      }
-      attachPlaceholder="Pfad · z. B. ~/glyph-ui oder /Users/…/projekt"
+      title="Workspaces"
+      hint="Pfad oder Ordner unter $HOME — Rechte in der Zeile."
+      attachPlaceholder="~/glyph-ui oder /Users/…/projekt"
       defaultAttachMode="rw"
       modeTitles={MODE_TITLES}
       modeLabels={MODE_LABELS}

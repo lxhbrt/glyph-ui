@@ -89,3 +89,52 @@ export function resolveToolDisplayTitle(update = {}, prev = {}) {
 
   return "tool";
 }
+
+const CLIP_STR = 8000;
+const CLIP_ARR = 40;
+const CLIP_KEYS = 40;
+const CLIP_DEPTH = 6;
+const BINARY_KEY = /^(data|image|bytes|buffer)$/i;
+
+/**
+ * Bound ACP tool payloads before they hit the WebSocket.
+ * Long strings are clipped; large binary-looking keys are dropped.
+ * @param {unknown} value
+ * @param {number} [depth]
+ */
+export function clipToolValue(value, depth = 0) {
+  if (value == null) return value;
+  if (typeof value === "string") {
+    return value.length > CLIP_STR ? `${value.slice(0, CLIP_STR)}…` : value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value !== "object" || depth >= CLIP_DEPTH) return undefined;
+  if (Array.isArray(value)) {
+    return value.slice(0, CLIP_ARR).map((v) => clipToolValue(v, depth + 1));
+  }
+  const out = {};
+  let n = 0;
+  for (const [k, v] of Object.entries(value)) {
+    if (n++ >= CLIP_KEYS) break;
+    if (BINARY_KEY.test(k) && typeof v === "string" && v.length > 200) continue;
+    out[k] = clipToolValue(v, depth + 1);
+  }
+  return out;
+}
+
+/**
+ * Merge incremental tool_call_update onto the last known fields.
+ * @param {object} update
+ * @param {object} [prev]
+ */
+export function mergeToolFields(update = {}, prev = {}) {
+  const pick = (k) =>
+    update[k] !== undefined ? clipToolValue(update[k]) : prev[k];
+  return {
+    rawInput: pick("rawInput"),
+    rawOutput: pick("rawOutput"),
+    content: pick("content"),
+    locations: update.locations || prev.locations,
+    name: update.name || prev.name || "",
+  };
+}

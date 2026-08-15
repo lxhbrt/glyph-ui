@@ -6,6 +6,7 @@
  * Fertig-Status: klickbares „Fertig“ löscht die durchgestrichene To-do.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { seatFetch } from "../utils/seat.js";
 
 const WEEKDAYS = [
   { v: 0, l: "Mo" },
@@ -592,7 +593,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true 
                                 className="ghost cal-session-open"
                                 onClick={async () => {
                                   try {
-                                    const res = await fetch(
+                                    const res = await seatFetch(
                                       `/api/sessions/${s.id}/open`,
                                       { method: "POST" },
                                     );

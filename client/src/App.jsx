@@ -10,6 +10,7 @@ import { PlanBar } from "./components/PlanBar.jsx";
 import { ContextLvlBar } from "./components/ContextLvlBar.jsx";
 import { SnackBoard } from "./components/Snack.jsx";
 import { CommandLegend } from "./components/CommandLegend.jsx";
+import { CableLage, GraphGuard } from "./components/CableLage.jsx";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
 import { SlashPopup } from "./components/SlashPopup.jsx";
@@ -25,6 +26,7 @@ import {
   IconSearch,
   IconCompose,
   IconCommands,
+  IconLage,
   IconBook,
   IconCalendar,
   IconWiki,
@@ -55,6 +57,7 @@ import {
   uploadAttachmentFiles,
 } from "./utils/attachments.js";
 import { invalidateWsToken, wsUrl } from "./utils/format.js";
+import { resolveSeat, seatFetch } from "./utils/seat.js";
 import { modelHudText } from "./utils/assistantTrace.js";
 import {
   contextFillRatio,
@@ -65,7 +68,13 @@ import {
   resolveContextWindow,
   scrollMetrics,
 } from "./utils/contextMeter.js";
-import { upsertToolMessage } from "./utils/messages.js";
+import { ToolCard } from "./components/ToolCard.jsx";
+import { formatToolText, upsertToolMessage } from "./utils/messages.js";
+import {
+  isToolRunning,
+  isToolTerminal,
+  TOOLCARD_DEMO_MESSAGES,
+} from "./utils/toolCard.js";
 import { normalizeClientPlanEntries } from "./utils/plan.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
@@ -94,6 +103,7 @@ export default function App() {
   const drainingRef = useRef(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [seat, setSeat] = useState(() => resolveSeat());
   /** Öffnet den Summarize-Dialog für die AKTIVE Session (glyph-agent / aktive History). */
   const [activeSummarizeOpen, setActiveSummarizeOpen] = useState(false);
   const [cwd, setCwd] = useState("");
@@ -154,8 +164,56 @@ export default function App() {
   /** Bridge meta from /api/health (version, build, host, port, root). */
   const [bridgeMeta, setBridgeMeta] = useState(null);
   const [showOverview, setShowOverview] = useState(false);
-  const [showLegend, setShowLegend] = useState(false);
-  const [legendTab, setLegendTab] = useState("handbook");
+  const [showLage, setShowLage] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const q = new URLSearchParams(window.location.search);
+      return (
+        q.has("graph") ||
+        q.has("lage") ||
+        q.get("buch") === "graph" ||
+        q.get("buch") === "lage"
+      );
+    } catch {
+      return false;
+    }
+  });
+  const [lageFocus, setLageFocus] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const q = new URLSearchParams(window.location.search);
+      return q.get("graph") || q.get("lage") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [showLegend, setShowLegend] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const b = new URLSearchParams(window.location.search).get("buch");
+      return Boolean(b) && b !== "lage" && b !== "graph";
+    } catch {
+      return false;
+    }
+  });
+  const [legendTab, setLegendTab] = useState(() => {
+    if (typeof window === "undefined") return "handbook";
+    try {
+      const t = new URLSearchParams(window.location.search).get("buch") || "";
+      if (
+        t === "vaults" ||
+        t === "workspaces" ||
+        t === "bindings" ||
+        t === "handbook" ||
+        t === "legend"
+      ) {
+        return t;
+      }
+    } catch {
+      /* ignore */
+    }
+    return "handbook";
+  });
   const [showExtensions, setShowExtensions] = useState(false);
   const [skills, setSkills] = useState([]);
   const [skillsHint, setSkillsHint] = useState(null);
@@ -260,7 +318,7 @@ export default function App() {
 
   useEffect(() => {
     const loadHealth = () => {
-      fetch("/api/health")
+      seatFetch("/api/health")
         .then((r) => r.json())
         .then((j) => {
           if (j.wikiRoot) setWikiRoot(j.wikiRoot);
@@ -1002,6 +1060,7 @@ export default function App() {
           }
           setReconnecting(Boolean(msg.reconnecting));
           setSessionId(msg.sessionId || null);
+          if (msg.seat === "desk" || msg.seat === "phone") setSeat(msg.seat);
           if (msg.agent) setAgent(msg.agent);
           if (msg.cwd) setCwd(msg.cwd);
           if (msg.connected) setError("");
@@ -1538,14 +1597,19 @@ export default function App() {
     setMessages((prev) =>
       prev.map((m) => {
         if (m.role !== "tool" || m.streaming) return m;
+        if (isToolTerminal(m.status)) return m;
         const t = m.text || "";
         if (/·\s*(completed|failed|cancelled)\s*$/i.test(t)) return m;
-        if (/·\s*(pending|in_progress|running)\s*$/i.test(t)) {
+        if (
+          isToolRunning(m.status) ||
+          /·\s*(pending|in_progress|running)\s*$/i.test(t)
+        ) {
           return {
             ...m,
-            text: t.replace(
-              /·\s*(pending|in_progress|running)\s*$/i,
-              "· cancelled",
+            status: "cancelled",
+            text: formatToolText(
+              { title: m.title, status: "cancelled", kind: m.kind },
+              t,
             ),
           };
         }
@@ -1556,7 +1620,7 @@ export default function App() {
     try {
       // Prefer HTTP so cancel is reliable even if WS message handler is blocked
       // on an in-flight chat await (server still accepts cancel in parallel).
-      const res = await fetch("/api/bridge/cancel", { method: "POST" });
+      const res = await seatFetch("/api/bridge/cancel", { method: "POST" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(json.error || "Abbruch fehlgeschlagen");
@@ -1659,7 +1723,7 @@ export default function App() {
     setReconnecting(true);
     setError("");
     try {
-      const res = await fetch("/api/bridge/reconnect", { method: "POST" });
+      const res = await seatFetch("/api/bridge/reconnect", { method: "POST" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json.ok === false) {
         throw new Error(json.error || "Grok konnte nicht gestartet werden");
@@ -1696,7 +1760,7 @@ export default function App() {
     setReconnecting(true);
     setError("");
     try {
-      const res = await fetch("/api/bridge/disconnect", { method: "POST" });
+      const res = await seatFetch("/api/bridge/disconnect", { method: "POST" });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json.ok === false) {
         throw new Error(json.error || "Grok konnte nicht beendet werden");
@@ -1722,7 +1786,7 @@ export default function App() {
       setAgentSwitching(true);
       setError("");
       try {
-        const res = await fetch("/api/bridge/agent", {
+        const res = await seatFetch("/api/bridge/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id }),
@@ -1824,7 +1888,26 @@ export default function App() {
     [scrollToBottom, connected],
   );
 
-  const visibleMessages = messages;
+  const snackDemo = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const v = new URLSearchParams(window.location.search).get("snack");
+      return v === "stuffed" || v === "ko" || v === "1";
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const toolCardDemo = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return new URLSearchParams(window.location.search).get("toolcard") === "demo";
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const visibleMessages = toolCardDemo ? TOOLCARD_DEMO_MESSAGES : messages;
 
   /**
    * Grok-only features. Sessions and the calendar read ~/.grok/sessions from
@@ -1886,21 +1969,6 @@ export default function App() {
   useEffect(() => {
     if (!canBrowseSessions) setShowOverview(false);
   }, [canBrowseSessions]);
-
-  /**
-   * Instant KO-Snack preview (no 2 min wait):
-   *   http://127.0.0.1:5174/?snack=stuffed
-   * Leave with ?snack=off or drop the param + reload.
-   */
-  const snackDemo = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const v = new URLSearchParams(window.location.search).get("snack");
-      return v === "stuffed" || v === "ko" || v === "1";
-    } catch {
-      return false;
-    }
-  }, []);
 
   // Working UI: server busy OR any in-flight stream (thought / answer / tools)
   const isWorking = useMemo(
@@ -1971,7 +2039,7 @@ export default function App() {
           modelHint = "";
         }
         if (modelHint) params.set("model", String(modelHint));
-        const res = await fetch(`/api/context?${params.toString()}`, {
+        const res = await seatFetch(`/api/context?${params.toString()}`, {
           cache: "no-store",
         });
         if (!res.ok) return;
@@ -2138,6 +2206,7 @@ export default function App() {
   /** Session, paths, and build — only in the subtitle tooltip (quiet by default). */
   const headerTooltip = useMemo(() => {
     const lines = [];
+    lines.push(seat === "phone" ? "Sitz: Handy" : "Sitz: Schreibtisch");
     if (sessionId) lines.push(`Session ${sessionId}`);
     if (cwd) lines.push(cwd);
     // Build # is the product mark; semver stays secondary (package.json).
@@ -2151,7 +2220,7 @@ export default function App() {
     }
     if (modelHud?.label) lines.push(`Model: ${modelHud.label}`);
     return lines.length ? lines.join("\n") : undefined;
-  }, [sessionId, cwd, bridgeMeta, modelHud]);
+  }, [seat, sessionId, cwd, bridgeMeta, modelHud]);
 
   /** Poll bindings/health for OpenRouter model badge + mismatch auto-sync. */
   useEffect(() => {
@@ -2545,13 +2614,26 @@ export default function App() {
         <span className="side-rail-spacer" aria-hidden="true" />
         <button
           type="button"
+          className={`side-rail-btn${showLage ? " side-rail-btn--plan-open" : ""}`}
+          onClick={() => {
+            setShowLage((v) => !v);
+            setLageFocus("");
+          }}
+          title="Graph — Glyph, Grok, Agent, Code"
+          aria-label="Graph öffnen"
+          aria-pressed={showLage}
+        >
+          <IconLage />
+        </button>
+        <button
+          type="button"
           className="side-rail-btn side-rail-btn--book"
           onClick={() => {
             setLegendTab("handbook");
             setShowLegend(true);
           }}
-          title="Kurzhandbuch · Legende · Anbindung · Vaults · Workspaces"
-          aria-label="Kurzhandbuch und Anbindung öffnen"
+          title="Kurzhandbuch · UI-Legende"
+          aria-label="Kurzhandbuch öffnen"
         >
           <IconBook />
         </button>
@@ -2572,6 +2654,7 @@ export default function App() {
               ) : null}
               <span className="sub sub--inline" title={headerTooltip}>
                 {productTerm} · ACP
+                {seat === "phone" ? " · Handy" : ""}
                 {cwdLabel ? ` · ${cwdLabel}` : ""}
               </span>
             </h1>
@@ -2603,14 +2686,14 @@ export default function App() {
                 }`}
                 title={
                   modelHud.kind === "grok"
-                    ? "Grok-Profil: Model steuert die CLI. OpenRouter-IDs: Buch → Anbindung (nach Wechsel auf Code/Agent)."
+                    ? "Graph — Grok / Anbindung"
                     : modelHud.mismatch
-                      ? `Gespeichert ≠ aktiv: ${modelHud.label} — Buch → Anbindung`
-                      : modelHud.label
+                      ? `Gespeichert ≠ aktiv: ${modelHud.label} — Graph`
+                      : `${modelHud.label} — Graph`
                 }
                 onClick={() => {
-                  setLegendTab("bindings");
-                  setShowLegend(true);
+                  setLageFocus(modelHud.kind === "grok" ? "grok" : "bindings");
+                  setShowLage(true);
                 }}
               >
                 <span className="model-hud-text">
@@ -2757,6 +2840,17 @@ export default function App() {
                 </div>
               ) : (
                 visibleMessages.map((m) => {
+                  if (m.role === "tool") {
+                    return (
+                      <article
+                        key={m.id}
+                        data-msg-id={m.id}
+                        className="msg msg-tool"
+                      >
+                        <ToolCard msg={m} />
+                      </article>
+                    );
+                  }
                   const roleLabel =
                     m.role === "user"
                       ? "Du"
@@ -2764,9 +2858,7 @@ export default function App() {
                         ? agentLabel
                         : m.role === "thought"
                           ? "Thinking"
-                          : m.role === "system"
-                            ? "System"
-                            : "Tool";
+                          : "System";
                   const showCopy =
                     (m.role === "user" || m.role === "assistant") &&
                     !m.streaming &&
@@ -3134,6 +3226,7 @@ export default function App() {
                     );
                   }}
                   placeholder={composerPlaceholder}
+                  enterKeyHint={seat === "phone" ? "enter" : "send"}
                   onKeyDown={(e) => {
                     if (slashOpen) {
                       if (e.key === "Escape") {
@@ -3165,10 +3258,12 @@ export default function App() {
                         return;
                       }
                     }
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (connected) send();
-                    }
+                    if (e.key !== "Enter" || e.shiftKey) return;
+                    // Phone: keyboard Return = newline. Send is the ↵ button
+                    // (or ⌘/Ctrl+Enter on a hardware keyboard).
+                    if (seat === "phone" && !e.metaKey && !e.ctrlKey) return;
+                    e.preventDefault();
+                    if (connected) send();
                   }}
                 />
               </div>
@@ -3317,15 +3412,23 @@ export default function App() {
                       : "Glyph got lost… in space — tippen = Stopp · dann neu"
                     : isWorking
                       ? input.trim() || pendingAttachments.length
-                        ? "In Warteschlange (Enter)"
+                        ? seat === "phone"
+                          ? "In Warteschlange"
+                          : "In Warteschlange (Enter)"
                         : cancelling
                           ? "Bricht ab…"
                           : "Stopp: Snack / leerer Klick — Abbrechen"
                       : sendAction === "deep-search"
-                        ? "Deep Search starten (Enter)"
+                        ? seat === "phone"
+                          ? "Deep Search starten"
+                          : "Deep Search starten (Enter)"
                         : sendAction === "fork"
-                          ? "Session forken (Enter)"
-                          : "Senden (Enter)"
+                          ? seat === "phone"
+                            ? "Session forken"
+                            : "Session forken (Enter)"
+                          : seat === "phone"
+                            ? "Senden"
+                            : "Senden (Enter)"
                 }
                 aria-label={
                   showStuffed
@@ -3452,12 +3555,26 @@ export default function App() {
         </div>
       )}
 
+      <GraphGuard>
+        <CableLage
+          open={showLage}
+          onClose={() => setShowLage(false)}
+          focus={lageFocus}
+          activeProfile={agent?.id || ""}
+          working={isWorking}
+        />
+      </GraphGuard>
       <CommandLegend
         open={showLegend}
         onClose={() => setShowLegend(false)}
         initialTab={legendTab}
         agentCommands={agentCommands}
         agentProfileId={agent?.id || ""}
+        onOpenLage={(which) => {
+          setShowLegend(false);
+          setLageFocus(which || "");
+          setShowLage(true);
+        }}
       />
       <ExtensionsModal
         open={showExtensions}

@@ -144,8 +144,8 @@ Das Script:
 **iPhone / iPad (Checkliste):**
 
 1. Tailscale-App installieren, **gleiches Konto**, Status „Connected“  
-2. Safari: `https://<dein-mac>.ts.net:8443/`  
-3. Profil **°_Agent** (oder grok) wählen  
+2. Safari: `https://<dein-mac>.ts.net:8443/` (oder `?seat=phone`)  
+3. Profil **°_Agent** (oder grok) wählen — eigener Sitz, stiehlt nicht den PC-Chat  
 4. Optional: Teilen → **Zum Home-Bildschirm** (PWA-ähnlich)  
 5. ACL in [login.tailscale.com/admin/acls](https://login.tailscale.com/admin/acls): nur Mac + iPhone (strenge Device-Tags/Quellen)
 
@@ -233,8 +233,8 @@ Ohne **verbunden** ist das Eingabefeld deaktiviert.
 
 1. Status **verbunden** sicherstellen.
 2. Nachricht tippen (Pfad, Fehler, Ziel — je klarer, desto besser).
-3. **Enter** senden · **Shift+Enter** = neue Zeile. Der runde Button zeigt idle **↵**, während der
-   Agent arbeitet **Snack** (Klick / leerer Enter = Stopp).
+3. **Desk:** Enter senden · Shift+Enter = neue Zeile. **Handy:** Tastatur-Enter = neue Zeile;
+   der runde **↵**-Button sendet. Während der Agent arbeitet: **Snack** (Klick = Stopp).
 4. Antwort streamt live flach im Chat; dein Prompt erscheint als Bubble. Rollen: **Agent** (der
    aktive Name, z. B. Grok), **Thinking**, **Tool**, **System** (Prompts ohne „Du“-Label).
 
@@ -635,7 +635,7 @@ Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
 - [ ] °_Agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
 - [ ] °_Agent Cloud-Antwort: `OPENROUTER_API_KEY` in der glyph-agent-Umgebung (Technik)  
 - [ ] Workspace passt (Header-Pfad / `GLYPH_UI_CWD`)  
-- [ ] Enter = senden, Shift+Enter = Zeile  
+- [ ] Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, ↵-Button = senden 
 - [ ] Während Arbeit: Text → Queue, leer → Stop  
 - [ ] Sessions: Lupe · Aktivität: Kalender · Wissen: Wiki  
 - [ ] Sprache (nur grok): `XAI_API_KEY` (falls nötig) · Mic diktieren · Lautsprecher vorlesen  

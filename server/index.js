@@ -43,6 +43,7 @@ import { Readable, Writable } from "node:stream";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
+import { parseSeat, SeatHub } from "./seats.js";
 import * as acp from "@agentclientprotocol/sdk";
 import {
   DEFAULT_AGENT_ID,
@@ -71,7 +72,7 @@ import {
   resolveContextDefaults,
 } from "./sessions.js";
 import { buildActivity } from "./activity.js";
-import { resolveToolDisplayTitle } from "./toolTitle.mjs";
+import { mergeToolFields, resolveToolDisplayTitle } from "./toolTitle.mjs";
 import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
 import {
   buildFileName,
@@ -441,6 +442,15 @@ async function buildPromptBlocks(text, attachments = []) {
 
 const app = express();
 const httpServer = createServer(app);
+
+/** Filled after GrokBridge is defined. */
+let seats;
+function seatFromReq(req) {
+  return parseSeat(req.get("x-glyph-seat") || req.query?.seat);
+}
+function live(req) {
+  return seats.get(seatFromReq(req));
+}
 const wss = new WebSocketServer({
   server: httpServer,
   path: "/ws",
@@ -588,7 +598,8 @@ async function saveAttachmentFile({ name, mimeType, dataBase64 }) {
 }
 
 // API routes are registered below BEFORE static — do not move static above them.
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", (req, res) => {
+  const b = seats ? live(req) : null;
   res.json({
     ok: true,
     version: GLYPH_VERSION,
@@ -596,11 +607,20 @@ app.get("/api/health", (_req, res) => {
     host: HOST,
     port: PORT,
     root: ROOT,
-    connected: Boolean(bridge?.connected),
-    reconnecting: Boolean(bridge?.starting),
-    sessionId: bridge?.sessionId || null,
+    connected: Boolean(b?.connected),
+    reconnecting: Boolean(b?.starting),
+    sessionId: b?.sessionId || null,
+    seat: b?.seat || "desk",
+    seats: seats
+      ? seats.all().map((x) => ({
+          seat: x.seat,
+          connected: Boolean(x.connected),
+          sessionId: x.sessionId || null,
+          agent: publicAgent(x.agentProfile?.() || null)?.id || null,
+        }))
+      : [],
     cwd: WORK_CWD,
-    agent: publicAgent(bridge?.agentProfile?.() || null),
+    agent: publicAgent(b?.agentProfile?.() || null),
     agents: publicAgents(AGENT_PROFILES),
     wikiRoot: getWikiRoot(),
     wikiArchive: path.join(getWikiRoot(), "sources/grok-sessions"),
@@ -616,7 +636,7 @@ app.get("/api/health", (_req, res) => {
  */
 app.get("/api/skills", async (req, res) => {
   try {
-    const activeId = bridge?.agentProfile?.()?.id;
+    const activeId = live(req)?.agentProfile?.()?.id;
     const profile = String(
       req.query.profile || activeId || DEFAULT_AGENT_ID || "grok",
     ).trim();
@@ -857,9 +877,9 @@ app.post("/api/workspace/open", async (_req, res) => {
   }
 });
 
-app.post("/api/bridge/cancel", async (_req, res) => {
+app.post("/api/bridge/cancel", async (req, res) => {
   try {
-    const result = await bridge.cancelTurn();
+    const result = await live(req).cancelTurn();
     res.json(result);
   } catch (err) {
     res.status(500).json({
@@ -879,7 +899,7 @@ app.post("/api/bridge/cancel", async (_req, res) => {
  */
 app.post("/api/bridge/agent", async (req, res) => {
   try {
-    const result = await bridge.switchAgent(req.body?.id);
+    const result = await live(req).switchAgent(req.body?.id);
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -888,24 +908,25 @@ app.post("/api/bridge/agent", async (req, res) => {
       : /wartet|warten|arbeitet/i.test(message)
         ? 409
         : 500;
+    const b = live(req);
     res.status(status).json({
       ok: false,
       error: message,
-      agent: publicAgent(bridge?.agentProfile?.() || null),
-      connected: Boolean(bridge?.connected),
+      agent: publicAgent(b?.agentProfile?.() || null),
+      connected: Boolean(b?.connected),
     });
   }
 });
 
-app.post("/api/bridge/reconnect", async (_req, res) => {
+app.post("/api/bridge/reconnect", async (req, res) => {
   try {
-    const result = await bridge.reconnect();
+    const result = await live(req).reconnect();
     res.json(result);
   } catch (err) {
     res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : String(err),
-      connected: Boolean(bridge?.connected),
+      connected: Boolean(live(req)?.connected),
     });
   }
 });
@@ -914,15 +935,15 @@ app.post("/api/bridge/reconnect", async (_req, res) => {
  * Stop the local `grok agent` (equivalent to /quit in the TUI).
  * Bridge HTTP/WS stays up; agent goes offline until reconnect.
  */
-app.post("/api/bridge/disconnect", async (_req, res) => {
+app.post("/api/bridge/disconnect", async (req, res) => {
   try {
-    const result = await bridge.disconnect();
+    const result = await live(req).disconnect();
     res.json(result);
   } catch (err) {
     res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : String(err),
-      connected: Boolean(bridge?.connected),
+      connected: Boolean(live(req)?.connected),
     });
   }
 });
@@ -931,12 +952,12 @@ app.post("/api/bridge/disconnect", async (_req, res) => {
  * List sessions only — never deletes.
  * Empty-shell cleanup is POST /api/sessions/cleanup-empty (explicit).
  */
-app.get("/api/sessions", async (_req, res) => {
+app.get("/api/sessions", async (req, res) => {
   try {
     const data = await listSessions();
     res.json({
       ...data,
-      activeSessionId: bridge?.sessionId || null,
+      activeSessionId: live(req).sessionId || null,
       wikiRoot: getWikiRoot(),
       cleaned: null,
     });
@@ -960,7 +981,7 @@ app.post("/api/sessions/cleanup-empty", async (req, res) => {
       return;
     }
     const result = await cleanupEmptySessions({
-      protectId: bridge?.sessionId || null,
+      protectId: seats.all().map((b) => b.sessionId).filter(Boolean),
       deleteDisk: true,
     });
     res.json(result);
@@ -1472,7 +1493,7 @@ app.get("/api/sessions/:id", async (req, res) => {
       res.status(404).json({ error: "Session not found" });
       return;
     }
-    res.json({ session, activeSessionId: bridge?.sessionId || null });
+    res.json({ session, activeSessionId: live(req).sessionId || null });
   } catch (err) {
     res.status(500).json({
       error: err instanceof Error ? err.message : String(err),
@@ -1487,14 +1508,15 @@ app.get("/api/sessions/:id", async (req, res) => {
  */
 app.get("/api/context", async (req, res) => {
   try {
+    const b = live(req);
     const profile = String(
-      req.query.profile || bridge?.agentProfile?.()?.id || DEFAULT_AGENT_ID || "grok",
+      req.query.profile || b?.agentProfile?.()?.id || DEFAULT_AGENT_ID || "grok",
     ).trim();
-    // Prefer explicit query sessionId. Only fall back to the live bridge
+    // Prefer explicit query sessionId. Only fall back to the live seat
     // session when the *active* profile is grok — a leftover grok UUID must
     // not pin the LVL window at 500k after switching to glyph-agent / claude.
-    const bridgeProfile = String(bridge?.agentProfile?.()?.id || "").trim();
-    const bridgeSid = String(bridge?.sessionId || "").trim();
+    const bridgeProfile = String(b?.agentProfile?.()?.id || "").trim();
+    const bridgeSid = String(b?.sessionId || "").trim();
     const querySid = String(req.query.sessionId || "").trim();
     let sessionId = querySid;
     if (!sessionId && bridgeSid && (profile === "grok" || bridgeProfile === profile)) {
@@ -1519,7 +1541,7 @@ app.get("/api/context", async (req, res) => {
       ok: true,
       ...ctx,
       profile,
-      activeSessionId: bridge?.sessionId || null,
+      activeSessionId: b?.sessionId || null,
     });
   } catch (err) {
     res.status(500).json({
@@ -1538,7 +1560,16 @@ app.post("/api/sessions/:id/open", async (req, res) => {
       res.status(400).json({ error: "Invalid session id" });
       return;
     }
-    const result = await bridge.openSession(req.params.id);
+    const owner = seats.findBySession(req.params.id);
+    const mine = live(req);
+    if (owner && owner.seat !== mine.seat) {
+      res.status(409).json({
+        error: `Session läuft auf Sitz ${owner.seat}`,
+        seat: owner.seat,
+      });
+      return;
+    }
+    const result = await mine.openSession(req.params.id);
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1577,7 +1608,7 @@ app.post("/api/sessions/:id/close", async (req, res) => {
     const result = await closeSession(req.params.id, {
       deleteDisk,
       writeWiki,
-      protectId: bridge?.sessionId || null,
+      protectId: seats.all().map((x) => x.sessionId).filter(Boolean),
       wikiWriter: writeWiki
         ? async (doc, meta) => {
             const written = await writeSessionArchive(doc, meta);
@@ -1676,9 +1707,14 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
     let turns = session ? (session.turns || session.transcriptPreview || []) : [];
     // Fallback für AKTIVE In-Memory-Session (openrouter/glyph-agent ohne Disk-Ordner):
     // Verlauf über die ACP-Methode session.history beziehen, statt aus ~/.grok/sessions.
-    if (!turns.length && bridge && bridge.connected && req.params.id === bridge.sessionId) {
+    if (
+      !turns.length &&
+      seats.all().some((x) => x.connected && x.sessionId === req.params.id)
+    ) {
       try {
-        const hist = await bridge.getSessionHistory(req.params.id);
+        const hist = await seats
+          .findBySession(req.params.id)
+          .getSessionHistory(req.params.id);
         turns = (hist.messages || []).map((m) => ({
           role: m.role,
           // content kann String ODER OpenAI-Array sein ([{type:'text',text}] / image_url) —
@@ -1767,9 +1803,14 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
     }
     const session = await getSessionForOpen(req.params.id);
     let turns = session ? (session.turns || session.transcriptPreview || []) : [];
-    if (!turns.length && bridge && bridge.connected && req.params.id === bridge.sessionId) {
+    if (
+      !turns.length &&
+      seats.all().some((x) => x.connected && x.sessionId === req.params.id)
+    ) {
       try {
-        const hist = await bridge.getSessionHistory(req.params.id);
+        const hist = await seats
+          .findBySession(req.params.id)
+          .getSessionHistory(req.params.id);
         turns = (hist.messages || []).map((m) => ({
           role: m.role,
           text: Array.isArray(m.content)
@@ -1921,11 +1962,14 @@ app.get("/api/sessions/:id/history", async (req, res) => {
       res.status(400).json({ error: "Ungültige Session-ID" });
       return;
     }
-    if (!bridge || !bridge.connected) {
+    const histBridge =
+      seats.findBySession(req.params.id) ||
+      (live(req).connected ? live(req) : null);
+    if (!histBridge || !histBridge.connected) {
       res.status(503).json({ error: "Kein aktiver Agent verbunden" });
       return;
     }
-    const result = await bridge.getSessionHistory(req.params.id);
+    const result = await histBridge.getSessionHistory(req.params.id);
     const messages = Array.isArray(result?.messages) ? result.messages : [];
     res.json({ ok: true, sessionId: req.params.id, messages });
   } catch (err) {
@@ -1963,7 +2007,8 @@ function extractPermissionPreview(toolCall) {
 }
 
 class GrokBridge {
-  constructor() {
+  constructor(opts = {}) {
+    this.seat = parseSeat(opts.seat);
     this.connected = false;
     this.sessionId = null;
     /**
@@ -2079,6 +2124,7 @@ class GrokBridge {
       type: "status",
       connected: this.connected,
       sessionId: this.sessionId,
+      seat: this.seat,
       busy: this.busy || this.starting,
       cancelling: this.cancelling,
       reconnecting: this.starting,
@@ -2549,6 +2595,7 @@ class GrokBridge {
       // Prefer title → name → kind/path — never dump opaque call-… UUIDs in the UI
       const title = resolveToolDisplayTitle(update, prev);
       const toolKind = update.kind || prev.kind || "";
+      const fields = mergeToolFields(update, prev);
 
       if (toolCallId) {
         const done =
@@ -2560,12 +2607,9 @@ class GrokBridge {
         } else {
           this.activeTools.set(toolCallId, {
             title,
-            name: update.name || prev.name || "",
             kind: toolKind,
             status,
-            locations: update.locations || prev.locations,
-            rawInput:
-              update.rawInput !== undefined ? update.rawInput : prev.rawInput,
+            ...fields,
           });
         }
       }
@@ -2576,6 +2620,11 @@ class GrokBridge {
         status,
         kind: toolKind,
         toolCallId,
+        name: fields.name,
+        rawInput: fields.rawInput,
+        rawOutput: fields.rawOutput,
+        content: fields.content,
+        locations: fields.locations,
       });
       return;
     }
@@ -3078,10 +3127,24 @@ class GrokBridge {
   }
 }
 
-const bridge = new GrokBridge();
+seats = new SeatHub((seat) => new GrokBridge({ seat }));
 
-wss.on("connection", (ws) => {
-  bridge.addClient(ws);
+wss.on("connection", (ws, req) => {
+  let seat = "desk";
+  try {
+    const host = req?.headers?.host || `127.0.0.1:${PORT}`;
+    const url = new URL(req.url || "/ws", `http://${host}`);
+    seat = parseSeat(url.searchParams.get("seat"));
+  } catch {
+    seat = "desk";
+  }
+  const b = seats.get(seat);
+  if (seat === "phone" && !b.connected && !b.starting && !b.process) {
+    b.start().catch((err) => {
+      console.error("Failed to start phone seat:", err);
+    });
+  }
+  b.addClient(ws);
 
   ws.on("message", async (raw) => {
     let msg;
@@ -3094,28 +3157,27 @@ wss.on("connection", (ws) => {
 
     try {
       if (msg.type === "chat") {
-        await bridge.chat(msg.text || "", normalizeAttachments(msg.attachments));
+        await b.chat(msg.text || "", normalizeAttachments(msg.attachments));
       } else if (msg.type === "deep_search" || msg.type === "deep-search") {
-        await bridge.deepSearch(
+        await b.deepSearch(
           msg.text || msg.query || "",
           normalizeAttachments(msg.attachments),
         );
       } else if (msg.type === "fork") {
-        const result = await bridge.forkSession(msg.text || msg.directive || "");
+        const result = await b.forkSession(msg.text || msg.directive || "");
         ws.send(JSON.stringify({ type: "fork_result", ...result }));
       } else if (msg.type === "reset") {
-        await bridge.reset();
+        await b.reset();
       } else if (msg.type === "cancel" || msg.type === "stop") {
-        await bridge.cancelTurn();
+        await b.cancelTurn();
       } else if (msg.type === "reconnect") {
-        await bridge.reconnect();
+        await b.reconnect();
       } else if (msg.type === "disconnect" || msg.type === "quit") {
-        await bridge.disconnect();
+        await b.disconnect();
       } else if (msg.type === "ping") {
         ws.send(JSON.stringify({ type: "pong" }));
       } else if (msg.type === "permission_response") {
-        // ^_Code Genehmigung aus dem Browser
-        const ok = bridge.resolveBrowserPermission(
+        const ok = b.resolveBrowserPermission(
           msg.id,
           msg.optionId || (msg.allow ? "allow-once" : "reject-once"),
         );
@@ -3137,7 +3199,7 @@ wss.on("connection", (ws) => {
     }
   });
 
-  ws.on("close", () => bridge.removeClient(ws));
+  ws.on("close", () => b.removeClient(ws));
 });
 
 // Static UI after all API routes (POST /api/* must not be swallowed).
@@ -3173,7 +3235,7 @@ httpServer.listen(PORT, HOST, () => {
   );
   console.log(`Working directory  → ${WORK_CWD}`);
   console.log(`Uploads            → ${UPLOAD_DIR}`);
-  console.log(`Grok connected     → ${bridge.connected}`);
+  console.log(`Grok connected     → ${seats.get("desk").connected}`);
 
   // Re-push OpenRouter models from bindings if agent is up but drifted
   // (agent restart loses hot-apply; bindings.json is source of truth).
@@ -3216,7 +3278,7 @@ httpServer.listen(PORT, HOST, () => {
   }
 
   // Connect ACP agent after the UI is already reachable.
-  bridge.start().catch((err) => {
+  seats.get("desk").start().catch((err) => {
     console.error("Failed to start Grok bridge:", err);
     console.error(
       "Is `grok` on PATH and authenticated? Try: grok doctor / grok login",
@@ -3225,7 +3287,7 @@ httpServer.listen(PORT, HOST, () => {
 });
 
 async function shutdown() {
-  await bridge.stop();
+  await Promise.all(seats.all().map((b) => b.stop()));
   httpServer.close();
   process.exit(0);
 }

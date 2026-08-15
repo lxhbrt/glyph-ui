@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveSeat } from "./seat.js";
+
 /**
  * Bridge requires ?token= on /ws.
  * Prod injects window.__GLYPH_WS_TOKEN__ into index.html; Vite dev (and
@@ -57,6 +59,7 @@ async function wsUrl(opts = {}) {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const url = new URL(`${proto}//${window.location.host}/ws`);
   url.searchParams.set("token", token);
+  url.searchParams.set("seat", opts.seat || resolveSeat());
   return url.toString();
 }
 
