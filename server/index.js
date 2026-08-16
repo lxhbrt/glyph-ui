@@ -6,7 +6,8 @@
  * SPDX-License-Identifier: MIT
  *
  * Browser events (JSON):
- *   { type: "chat", text: "...", attachments?: AttachmentMeta[] }
+ *   { type: "chat", text: "...", attachments?: AttachmentMeta[],
+ *     vaultSearch?: boolean, vaultSelected?: VaultHit[] }
  *   { type: "deep_search", text: "...", attachments?: AttachmentMeta[] }
  *   { type: "fork", text?: "..." }        // ACP session/fork (+ optional directive)
  *   { type: "reset" }
@@ -1111,6 +1112,43 @@ function proxyAgent(
  * Kabelsalat — Vault-Registry (glyph-agent /vaults → ~/.glyph/vaults.json).
  */
 proxyAgent("vaults", { extra: ["pins"] });
+
+/**
+ * Manuelle Ordner-Suche (°_Agent): POST /api/vault/find → glyph-agent /vault/find
+ */
+app.post("/api/vault/find", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/vault/find`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(30000),
+    });
+    const json = await r.json().catch(() => ({}));
+    if (r.ok) {
+      res.status(200).json(json);
+      return;
+    }
+    const status = r.status === 400 || r.status === 404 ? r.status : 502;
+    res.status(status).json({
+      ok: false,
+      hits: [],
+      ...json,
+      error:
+        json.error ||
+        (r.status === 404
+          ? "Vault-Suche: Endpoint fehlt (glyph-agent neu starten)."
+          : `Suche fehlgeschlagen (HTTP ${r.status})`),
+    });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      hits: [],
+    });
+  }
+});
 
 /**
  * Kabelsalat — Workspace-Registry (^_Code /workspaces → ~/.glyph/workspaces.json).
@@ -2766,7 +2804,7 @@ class GrokBridge {
    * @param {string} text
    * @param {Array<{ id?: string, name?: string, mimeType?: string, size?: number, path?: string, uri?: string }>} [attachments]
    */
-  async chat(text, attachments = []) {
+  async chat(text, attachments = [], opts = {}) {
     if (!this.connected || !this.connection || !this.sessionId) {
       throw new Error("Grok is not connected yet");
     }
@@ -2784,11 +2822,22 @@ class GrokBridge {
     let stopReason = "end_turn";
     let failed = null;
     try {
+      const glyph = {};
+      const isAgent =
+        this.agentId === "glyph-agent" || this.agentId === "agent";
+      if (isAgent) {
+        // Immer setzen: fehlt das Flag, fällt die Engine auf B+-Auto-Suche zurück.
+        glyph.vaultSearch = opts.vaultSearch === true;
+        if (Array.isArray(opts.vaultSelected)) {
+          glyph.vaultSelected = opts.vaultSelected;
+        }
+      }
       const result = await this.connection.agent.request(
         acp.methods.agent.session.prompt,
         {
           sessionId: this.sessionId,
           prompt,
+          ...(Object.keys(glyph).length ? { _meta: { glyph } } : {}),
         },
       );
       stopReason = result?.stopReason || "end_turn";
@@ -3157,7 +3206,10 @@ wss.on("connection", (ws, req) => {
 
     try {
       if (msg.type === "chat") {
-        await b.chat(msg.text || "", normalizeAttachments(msg.attachments));
+        await b.chat(msg.text || "", normalizeAttachments(msg.attachments), {
+          vaultSearch: msg.vaultSearch,
+          vaultSelected: msg.vaultSelected,
+        });
       } else if (msg.type === "deep_search" || msg.type === "deep-search") {
         await b.deepSearch(
           msg.text || msg.query || "",

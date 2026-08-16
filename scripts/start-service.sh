@@ -27,7 +27,7 @@ if [[ -z "${GROK_BIN:-}" ]]; then
   fi
 fi
 
-export GLYPH_UI_CWD="${GLYPH_UI_CWD:-${HOME_DIR}}"
+export GLYPH_UI_CWD="${GLYPH_UI_CWD:-${ROOT}}"
 export NO_COLOR=1
 
 cd "$ROOT"

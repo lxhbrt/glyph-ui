@@ -14,6 +14,11 @@ const COMMAND_LEGEND = [
         desc: "Sessions suchen/öffnen; Schließen: Ja + Wiki oder Löschen (/delete).",
       },
       {
+        cmd: "Graph",
+        need: "empfohlen",
+        desc: "Direkt unter der Lupe. Köpfe um Glyph. Punkt klicken → Legende.",
+      },
+      {
         cmd: "Stift · Neuer Chat",
         need: "optional",
         desc: "Neue ACP-Session, Chat leeren. Entspricht TUI /new (Disk bleibt).",
@@ -47,11 +52,6 @@ const COMMAND_LEGEND = [
         cmd: "Theme",
         need: "optional",
         desc: "Hell / Dunkel umschalten.",
-      },
-      {
-        cmd: "Graph",
-        need: "empfohlen",
-        desc: "Leiste · Graph: Köpfe um Glyph. Punkt klicken → Legende.",
       },
       {
         cmd: "Refresh",
@@ -262,9 +262,9 @@ const SHORT_HANDBOOK = [
     id: "layout",
     title: "Oberfläche",
     body: [
-      "Links: Sessions, Neuer Chat, **Befehle und Skills**, Kalender, Wiki, Workspace, Theme, Refresh, **Graph**, **Buch** (Handbuch · UI-Legende).",
+      "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, Refresh, **Buch** (Handbuch · UI-Legende).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
-      "Unten: Composer · Chat | Deep Search | Fork · **Mic** · Stimme · **↵**.",
+      "Unten: Composer · Chat | Deep Search | Fork · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
     ],
   },
   {
@@ -272,9 +272,9 @@ const SHORT_HANDBOOK = [
     title: "Linke Leiste",
     rows: [
       ["Lupe", "Sessions suchen/öffnen; Ja + Wiki · Löschen (/delete)"],
+      ["Graph", "Direkt unter der Lupe · Köpfe um Glyph · Punkt → Legende"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
       ["Buch", "Handbuch · UI-Legende"],
-      ["Graph", "Köpfe um Glyph · Punkt → Legende"],
       ["Kalender", "Aktivitäts-Heatmap — Klick → Sessions des Tages"],
       ["Wiki", "Wiki-Index (.md) in Obsidian / Standard-App"],
       ["Ordner", "Aktuellen Workspace (cwd) im Finder öffnen"],
@@ -287,6 +287,8 @@ const SHORT_HANDBOOK = [
     title: "Schreiben & senden",
     rows: [
       ["Chat", "Normale Nachricht an den aktiven Agenten"],
+      ["Apfel", "°_Agent: über ↵ (ohne extra Höhe). Rot/Stiel/Blatt; an = Gold-Rand. Aus = keine Vault-Suche."],
+      ["Treffer", "Nur im Panel, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext."],
       ["Deep Search", "Strukturierte Multi-Quellen-Recherche"],
       ["Fork", "Session branchen; Text = optionale Directive"],
       ["Enter", "Desk: senden · Handy: Zeile (↵-Button sendet)"],

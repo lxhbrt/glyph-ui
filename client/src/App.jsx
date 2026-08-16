@@ -15,6 +15,8 @@ import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
 import { SlashPopup } from "./components/SlashPopup.jsx";
 import { SlashHighlightedText } from "./components/SlashHighlightedText.jsx";
+import { VaultSearchToggle } from "./components/VaultSearchToggle.jsx";
+import { VaultSearchHits } from "./components/VaultSearchHits.jsx";
 import { SummarizeDialog } from "./components/SummarizeDialog.jsx";
 import { ActivityCalendar } from "./components/ActivityCalendar.jsx";
 import {
@@ -77,6 +79,15 @@ import {
 } from "./utils/toolCard.js";
 import { normalizeClientPlanEntries } from "./utils/plan.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
+import {
+  loadVaultSearchOn,
+  saveVaultSearchOn,
+  migrateVaultSearchOn,
+  defaultSelectedIds,
+  selectedHits,
+  normalizePreviewPayload,
+  toWireSelected,
+} from "./utils/vaultSearch.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
 import { GLYPH_BUILD, GLYPH_VERSION } from "./version.js";
 
@@ -153,6 +164,15 @@ export default function App() {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeMenuRef = useRef(null);
   const fileInputRef = useRef(null);
+  /** °_Agent: manuelle Ordner-Suche. Default aus; Zustand pro Session. */
+  const [vaultSearchOn, setVaultSearchOn] = useState(false);
+  const [vaultHits, setVaultHits] = useState(null);
+  const [vaultHitOn, setVaultHitOn] = useState(() => new Set());
+  const [vaultSearchBusy, setVaultSearchBusy] = useState(false);
+  const [vaultSearchError, setVaultSearchError] = useState("");
+  const runVaultSearchRef = useRef(null);
+  const isAgentProfile =
+    agent?.id === "glyph-agent" || agent?.id === "agent";
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("gbt-theme") === "light" ? "light" : "dark";
@@ -959,6 +979,23 @@ export default function App() {
     if (!wsRef.current || wsRef.current.readyState !== 1) return;
 
     drainingRef.current = true;
+    const queuedPicked =
+      Array.isArray(next.vaultSelected) && next.vaultSelected.length > 0;
+    if (
+      next.vaultSearch &&
+      !queuedPicked &&
+      next.action !== "fork" &&
+      next.action !== "deep-search"
+    ) {
+      queueRef.current = queueRef.current.slice(1);
+      setQueue([...queueRef.current]);
+      setInput(next.text || "");
+      void runVaultSearchRef.current?.(next.text || "");
+      window.setTimeout(() => {
+        drainingRef.current = false;
+      }, 100);
+      return;
+    }
     // Mark busy immediately so a second drain cannot double-send
     busyRef.current = true;
     queueRef.current = queueRef.current.slice(1);
@@ -1452,7 +1489,7 @@ export default function App() {
 
   /** Send a prepared payload to the agent (live turn). */
   const dispatchPayload = useCallback(
-    ({ text, action, displayText, attachments }) => {
+    ({ text, action, displayText, attachments, vaultSearch, vaultSelected }) => {
       if (!wsRef.current || wsRef.current.readyState !== 1) return;
 
       const wire =
@@ -1494,11 +1531,21 @@ export default function App() {
       } else if (action === "fork") {
         wsRef.current.send(JSON.stringify({ type: "fork", text }));
       } else {
+        const vault =
+          typeof vaultSearch === "boolean"
+            ? {
+                vaultSearch,
+                ...(Array.isArray(vaultSelected)
+                  ? { vaultSelected }
+                  : {}),
+              }
+            : {};
         wsRef.current.send(
           JSON.stringify({
             type: "chat",
             text,
             ...(wire.length ? { attachments: wire } : {}),
+            ...vault,
           }),
         );
       }
@@ -1522,6 +1569,37 @@ export default function App() {
     return text || att || "";
   }, []);
 
+  const runVaultSearch = useCallback(async (query) => {
+    const q = String(query || "").trim();
+    if (!q) return;
+    setVaultSearchBusy(true);
+    setVaultSearchError("");
+    try {
+      const res = await seatFetch("/api/vault/find", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ query: q }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.ok === false) {
+        throw new Error(json.error || `Suche fehlgeschlagen (HTTP ${res.status})`);
+      }
+      const preview = normalizePreviewPayload(json, q);
+      setVaultHits(preview);
+      setVaultHitOn(defaultSelectedIds(preview.hits));
+    } catch (err) {
+      setVaultSearchError(err instanceof Error ? err.message : String(err));
+      setVaultHits({ query: q, hits: [], status: "error" });
+      setVaultHitOn(new Set());
+    } finally {
+      setVaultSearchBusy(false);
+    }
+  }, []);
+  runVaultSearchRef.current = runVaultSearch;
+
   const send = useCallback(() => {
     const text = input.trim();
     if (!connected || !wsRef.current) return;
@@ -1532,13 +1610,41 @@ export default function App() {
       sendAction === "fork" ? [] : toWireAttachments(pendingAttachments);
     if (sendAction !== "fork" && !text && !atts.length) return;
 
+    const wantsVault =
+      isAgentProfile && sendAction === "chat" && vaultSearchOn && Boolean(text);
+
+    if (wantsVault && vaultSearchBusy) return;
+    if (wantsVault) {
+      const haveHits =
+        vaultHits &&
+        vaultHits.query === text &&
+        vaultHits.status !== "error" &&
+        !vaultSearchError;
+      const failedThisQuery =
+        Boolean(vaultSearchError) && vaultHits?.query === text;
+      if (!haveHits && !failedThisQuery) {
+        void runVaultSearch(text);
+        return;
+      }
+    }
+
     const displayText = buildDisplayText(sendAction, text, atts);
+    const picked = wantsVault
+      ? toWireSelected(selectedHits(vaultHits?.hits || [], vaultHitOn))
+      : [];
+    const useVaultContext = picked.length > 0;
     const payload = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       text,
       action: sendAction,
       displayText,
       ...(atts.length ? { attachments: atts } : {}),
+      ...(isAgentProfile && sendAction === "chat"
+        ? {
+            vaultSearch: useVaultContext,
+            ...(useVaultContext ? { vaultSelected: picked } : {}),
+          }
+        : {}),
     };
 
     // While Grok is working: park in queue (TUI-style wait area)
@@ -1553,6 +1659,10 @@ export default function App() {
 
     setInput("");
     clearPendingAttachments();
+    if (wantsVault) {
+      setVaultHits(null);
+      setVaultHitOn(new Set());
+    }
     dispatchPayload(payload);
   }, [
     attachBusy,
@@ -1560,11 +1670,50 @@ export default function App() {
     clearPendingAttachments,
     connected,
     input,
+    isAgentProfile,
     messages,
     pendingAttachments,
     scrollToBottom,
     sendAction,
     buildDisplayText,
+    dispatchPayload,
+    vaultSearchOn,
+    vaultSearchBusy,
+    vaultSearchError,
+    vaultHits,
+    vaultHitOn,
+    runVaultSearch,
+  ]);
+
+  /** „Mit Auswahl senden": markierte Treffer sofort als Agent-Kontext senden. */
+  const sendVaultSelection = useCallback(() => {
+    const picked = toWireSelected(
+      selectedHits(vaultHits?.hits || [], vaultHitOn),
+    );
+    if (picked.length === 0) return;
+    const text = String(vaultHits?.query || input.trim());
+    const payload = {
+      id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      text,
+      action: "chat",
+      displayText: text,
+      vaultSearch: true,
+      vaultSelected: picked,
+    };
+    setVaultHits(null);
+    setVaultHitOn(new Set());
+    if (busy || messages.some((m) => m.streaming)) {
+      queueRef.current = [...queueRef.current, payload];
+      setQueue([...queueRef.current]);
+      return;
+    }
+    dispatchPayload(payload);
+  }, [
+    busy,
+    messages,
+    input,
+    vaultHits,
+    vaultHitOn,
     dispatchPayload,
   ]);
 
@@ -2190,6 +2339,40 @@ export default function App() {
       scheduleDrainQueue();
     }
   }, [isWorking, queue.length, connected, scheduleDrainQueue]);
+
+  const prevSessionRef = useRef(sessionId);
+  useEffect(() => {
+    if (!isAgentProfile) {
+      setVaultSearchOn(false);
+      setVaultHits(null);
+      setVaultHitOn(new Set());
+      setVaultSearchError("");
+      return;
+    }
+    const prev = prevSessionRef.current;
+    prevSessionRef.current = sessionId;
+    const on =
+      sessionId && !prev
+        ? migrateVaultSearchOn("new", sessionId)
+        : loadVaultSearchOn(sessionId);
+    setVaultSearchOn(on);
+    if (!on) {
+      setVaultHits(null);
+      setVaultHitOn(new Set());
+      setVaultSearchError("");
+    }
+  }, [sessionId, isAgentProfile]);
+
+  const toggleVaultSearch = useCallback(() => {
+    setVaultSearchOn((v) => {
+      const next = !v;
+      saveVaultSearchOn(sessionId, next);
+      return next;
+    });
+    setVaultHits(null);
+    setVaultHitOn(new Set());
+    setVaultSearchError("");
+  }, [sessionId]);
   const workingSeconds = useWorkingSeconds(showWorking);
 
   /** Short path for the header (home → ~). Full path stays in title tooltip. */
@@ -2300,6 +2483,12 @@ export default function App() {
       // Short on purpose: stop/queue is the round button + empty Enter — no reminder spam
       return `${agentLabel} work… ${workingSeconds}s`;
     }
+    if (isAgentProfile && vaultSearchBusy) {
+      return "Suche im Vault…";
+    }
+    if (isAgentProfile && vaultSearchOn && vaultHits) {
+      return "Treffer im Panel anwählen · ↵ sendet (nur aktive ins Vault)";
+    }
     if (sendAction === "deep-search") {
       return "Deep Search Query… z. B. Compare Postgres 17 vs MySQL 9";
     }
@@ -2317,6 +2506,10 @@ export default function App() {
     sendAction,
     workingSeconds,
     agentLabel,
+    isAgentProfile,
+    vaultSearchBusy,
+    vaultSearchOn,
+    vaultHits,
   ]);
 
   // Profile-dependent skills (offline-capable disk scan on the bridge)
@@ -2548,6 +2741,19 @@ export default function App() {
         </button>
         <button
           type="button"
+          className={`side-rail-btn${showLage ? " side-rail-btn--plan-open" : ""}`}
+          onClick={() => {
+            setShowLage((v) => !v);
+            setLageFocus("");
+          }}
+          title="Graph — Glyph, Grok, Agent, Code"
+          aria-label="Graph öffnen"
+          aria-pressed={showLage}
+        >
+          <IconLage />
+        </button>
+        <button
+          type="button"
           className="side-rail-btn"
           onClick={reset}
           disabled={!connected || busy}
@@ -2612,19 +2818,6 @@ export default function App() {
           <IconRefresh />
         </button>
         <span className="side-rail-spacer" aria-hidden="true" />
-        <button
-          type="button"
-          className={`side-rail-btn${showLage ? " side-rail-btn--plan-open" : ""}`}
-          onClick={() => {
-            setShowLage((v) => !v);
-            setLageFocus("");
-          }}
-          title="Graph — Glyph, Grok, Agent, Code"
-          aria-label="Graph öffnen"
-          aria-pressed={showLage}
-        >
-          <IconLage />
-        </button>
         <button
           type="button"
           className="side-rail-btn side-rail-btn--book"
@@ -3096,16 +3289,49 @@ export default function App() {
               </ol>
             </div>
           ) : null}
-          <ContextLvlBar
-            contextFill={contextFill}
-            goldFill={goldFill}
-            softCapRatio={(contextInfo.softCapPercent || 80) / 100}
-            used={displayUsed}
-            windowTokens={contextInfo.window}
-            model={effectiveModel || contextInfo.model}
-            estimated={displayEstimated}
-            animateKey={sessionId || agent?.id || "new"}
-          />
+          <div className="context-lvl-row">
+            <ContextLvlBar
+              contextFill={contextFill}
+              goldFill={goldFill}
+              softCapRatio={(contextInfo.softCapPercent || 80) / 100}
+              used={displayUsed}
+              windowTokens={contextInfo.window}
+              model={effectiveModel || contextInfo.model}
+              estimated={displayEstimated}
+              animateKey={sessionId || agent?.id || "new"}
+            />
+            {isAgentProfile ? (
+              <VaultSearchToggle
+                on={vaultSearchOn}
+                disabled={!connected}
+                onToggle={toggleVaultSearch}
+              />
+            ) : null}
+          </div>
+          <div className="composer-box-anchor">
+          {isAgentProfile && (vaultSearchBusy || vaultHits || vaultSearchError) ? (
+            <VaultSearchHits
+              query={vaultHits?.query || input.trim()}
+              hits={vaultHits?.hits || []}
+              selectedIds={vaultHitOn}
+              busy={vaultSearchBusy}
+              error={vaultSearchError}
+              onToggle={(id) => {
+                setVaultHitOn((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                });
+              }}
+              onDismiss={() => {
+                setVaultHits(null);
+                setVaultHitOn(new Set());
+                setVaultSearchError("");
+              }}
+              onSend={sendVaultSelection}
+            />
+          ) : null}
           <div
             className={`composer-box${attachBusy ? " composer-box--attach-busy" : ""}${
               dropActive ? " is-drop-target" : ""
@@ -3152,7 +3378,7 @@ export default function App() {
               </div>
             ) : null}
             {/* Composer card: textarea on top (grows up), toolbar stays on the bottom. */}
-            <div className="composer-row">
+            <div className={`composer-row${isAgentProfile ? " composer-row--vault" : ""}`}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -3372,6 +3598,7 @@ export default function App() {
               >
                 <IconMic size={18} />
               </button>
+              <div className="composer-send-stack">
               <button
                 type="button"
                 className={`send${showWorking ? " send--working" : " send--idle"}${
@@ -3465,7 +3692,9 @@ export default function App() {
                   )}
                 </span>
               </button>
+              </div>
             </div>
+          </div>
           </div>
         </footer>
       </div>

@@ -18,6 +18,7 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende | `ContextLvlBar.jsx` | Client-Shell |
 | **Tool-Karte** | Aufklappbare ACP-Toolzeile (Verb + Ziel, Diff/Ausgabe nach Klick) | `client/src/components/ToolCard.jsx`, `client/src/utils/toolCard.js`, `server/toolTitle.mjs` | Bridge `type: tool` |
 | **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen | `client/src/components/SlashPopup.jsx`, `ExtensionsModal.jsx` | `server/skills.js`, `server/commands.js` |
+| **Ordner-Suche** | °_Agent: Pixel-Apfel über ↵ (rot, ohne extra Höhe). Aus = keine Vault-Suche. An → `/api/vault/find`, Treffer nur im Panel, Default aus, nur aktivierte in den Kontext. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
 | **Sessions** | Session-Liste, Überblick, Summaries | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
 | **Bindings** | API-Keys / OAuth-Status + Kabelplan (hängende Kabel) | `server/bindings.js`, `BindingsPanel.jsx`, `utils/cables.js` | `~/.glyph-ui/bindings.json` |
 | **Graph** | Vollfenster pechschwarz. Grok/Agent/Code = Snake-Köpfe um Glyph; Vaults/Roots = Punkte. Klick → Legende. | `CableLage.jsx`, `GraphLegend.jsx`, `utils/lageLayout.js` | Bindings, Vaults, Workspaces |
@@ -62,6 +63,10 @@ _Avoid_: Focus (nur DOM-Fokus), Selection (Textauswahl)
 **Tool-Karte**:
 Eine aufklappbare Zeile im Chat für einen ACP-Tool-Aufruf: Verb + Ziel in der Zusammenfassung, Input/Diff/Ausgabe erst nach Klick. Fehlgeschlagene Tools öffnen sich selbst. Preview: `?toolcard=demo`.
 _Avoid_: Tool-Card (EN), Paper-Card, grok-build-web Disclosure
+
+**Ordner-Suche**:
+Manueller Vault-Zugriff im Profil **°_Agent**. Pixel-Apfel **über dem Senden-Button** (nicht zwischen + und Chat), ohne die Composer-Höhe zu erhöhen. Minecraft: roter Körper, brauner Stiel, grünes Blatt; inaktiv abgedunkelt; an = Gold-Outline + Puls. Standard aus — Agent antwortet ohne VaultFind/ListVaultDir. An: nächste Sendung sucht, Treffer nur im Panel (nicht im Chat-Verlauf), jedes Ergebnis startet aus; nur explizit an = in den Agent-Kontext. Zustand pro Session (`sessionStorage`). Jobs/Engine ohne Flag bleiben beim B+-Precheck. ACP sendet `vault_search` nur wenn mindestens ein Treffer aktiv ist.
+_Avoid_: automatische Vault-Suche bei jeder °_Agent-Nachricht; Apfel zwischen + und Chat; Lupe (Sessions); Treffer als Chat-Nachrichten; Gold-gefüllter Apfel
 
 **Multiline (Composer)**:
 Desk: Enter = senden, Shift+Enter = Zeile. Phone: Tastatur-Enter = Zeile; der runde ↵-Button sendet (⌘/Ctrl+Enter ebenfalls). Slash-Popup: Enter = auswählen, beide Sitze. Kein globaler Multiline-Toggle.
@@ -144,3 +149,11 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - **Live-Test grün (Q8=B):** Profil `°_Agent` → Antwort + Meta Schritte **und** VaultFind erkennbar.
 - **UI-Label (2026-08-07):** Profil-Label `glyph-agent` → **`°_Agent`** (analog `^_Code`); id `glyph-agent` unverändert. Früher `-_Agent`; Alias `-_Agent` bleibt in `resolveAgent` gültig.
 - **ADR (Q9=C):** kein ADR; CONTEXT reicht.
+
+### Ordner-Suche (2026-08-15)
+
+- °_Agent-Composer: Pixel-Apfel (Minecraft: rot / Stiel braun / Blatt grün) **über ↵**, außerhalb des Flow — Composer-Höhe unverändert. Standard **aus**. An = Gold-Outline + Puls, nicht goldene Füllung.
+- An: Suche erst beim Senden; Treffer nur im Ordner-Suche-Panel, nie im Chat-Verlauf. Default **aus**; nur explizit aktivierte Treffer gehen in den Agent-Kontext (`vault_search` + `vault_selected`). Ohne Auswahl: normale Nachricht, kein Vault.
+- Toggle-Zustand pro Session, nicht global.
+- Interaktives ACP: `vault_search` nur bei mindestens einem aktivierten Treffer. Fehlt/aus = kein VaultFind. Jobs/`/chat` ohne Flag: B+ unverändert.
+- Suchfehler (404 etc.) rot im Panel; Chat bleibt sendbar.

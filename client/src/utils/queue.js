@@ -73,6 +73,21 @@ function loadPersistedQueue() {
                   ? attachments.map((a) => a.name).join(", ")
                   : ""),
           ...(attachments.length ? { attachments } : {}),
+          ...(q.vaultSearch === true ? { vaultSearch: true } : {}),
+          ...(Array.isArray(q.vaultSelected) && q.vaultSelected.length
+            ? {
+                vaultSelected: q.vaultSelected
+                  .filter((h) => h && typeof h === "object" && h.path)
+                  .map((h) => ({
+                    id: String(h.id || ""),
+                    kind: h.kind === "folder" ? "folder" : "file",
+                    path: String(h.path),
+                    title: String(h.title || ""),
+                    excerpt: String(h.excerpt || ""),
+                    score: typeof h.score === "number" ? h.score : null,
+                  })),
+              }
+            : {}),
         };
       })
       .slice(0, QUEUE_MAX);

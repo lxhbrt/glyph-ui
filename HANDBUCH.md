@@ -202,6 +202,7 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 | Symbol | Name | Funktion |
 |--------|------|----------|
 | **Lupe** | Sessions | Suche, öffnen; Schließen: Ja + Wiki · Löschen (`/delete`) |
+| **Graph** | Graph | Köpfe um Glyph; Vaults/Roots als Punkte. Direkt unter der Lupe |
 | **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
 | **Buch** (unten) | Handbuch | Tabs: Kurzhandbuch · Befehle · **Anbindung** (Keys/OAuth-Status) |

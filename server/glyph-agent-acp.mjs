@@ -6,7 +6,7 @@
  * über den lokalen HTTP-Dienst (POST /chat). Dieser Adapter hat KEINE Agentenlogik.
  *
  * Modi (Env GLYPH_AGENT_MODE):
- *   agent (Default) — VaultFind + Web + Cloud-Antwort
+ *   agent (Default) — Web + Cloud-Antwort; VaultFind nur bei UI-Toggle
  *   code            — ^_Code: DeepSeek + Read/Write/Shell, Genehmigung via ACP
  *
  * Protokoll: ACP v1 über NDJSON-Stdio (acp.ndJsonStream).
@@ -16,6 +16,7 @@ import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
 import { buildPromptWithAttachments } from "../shared/attachments.mjs";
 import { buildStepBanner } from "./stepBanner.mjs";
+import { agentVaultBodyFromMeta } from "./vaultFlags.mjs";
 
 // glyph-agent HTTP-Dienst (Standard wie in server.py)
 const AGENT_URL = process.env.GLYPH_AGENT_URL || "http://127.0.0.1:18899";
@@ -442,6 +443,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
           content: typeof m?.content === "string" ? m.content : String(m?.content || ""),
         }))
       : [];
+    const glyphMeta = params?._meta?.glyph || {};
     let body = {
       message: built.message,
       attachments: built.attachments,
@@ -450,7 +452,10 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       mode: IS_CODE ? "code" : "agent",
       // Chat-Verlauf → glyph-agent (ohne Historie startet jeder Turn bei null)
       history: priorHistory,
-    };
+      // Interactive °_Agent: Vault-Suche nur bei Toggle. Fehlt _meta → aus
+      // (Jobs rufen /chat direkt auf und behalten den B+-Default).
+      ...agentVaultBodyFromMeta(glyphMeta, { isCode: IS_CODE }),
+    }
 
     let { answerText, stepBlocks, trace, final } = await streamChat(
       body,
