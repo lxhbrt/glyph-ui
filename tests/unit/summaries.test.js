@@ -8,7 +8,9 @@ import path from "node:path";
 import os from "node:os";
 
 import {
+  buildDraftFromTurns,
   buildFileName,
+  isTrivialTitle,
   localDateParts,
   writeSummaryAtomically,
   resolveSummariesDir,
@@ -181,4 +183,49 @@ test("writeSkillFromProposal: create + extend + hand-skill reference", async () 
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true });
   }
+});
+
+test("isTrivialTitle: Test-Ping und Wiederholung", () => {
+  assert.equal(isTrivialTitle("TEST TEST TEST"), true);
+  assert.equal(isTrivialTitle("test"), true);
+  assert.equal(isTrivialTitle("test test"), true);
+  assert.equal(isTrivialTitle("hallo"), true);
+  assert.equal(isTrivialTitle("Workspaces Kabelsalat Phase 2"), false);
+});
+
+test("buildDraftFromTurns: erster Test-Ping wird nicht Titel", () => {
+  const draft = buildDraftFromTurns([
+    { role: "user", text: "TEST TEST TEST" },
+    { role: "assistant", text: "ok" },
+    { role: "user", text: "Timeout nach 120s — Idle statt Wall-Clock" },
+    { role: "assistant", text: "Idle-Timer in acpIdle.mjs." },
+  ]);
+  assert.ok(!/test test test/i.test(draft.title), draft.title);
+  assert.match(draft.title, /Idle|Timeout|Wall-Clock/i);
+  assert.ok(!/Start: „TEST TEST TEST"/i.test(draft.summary), draft.summary);
+  assert.match(draft.summary, /Idle|Timeout/i);
+  assert.ok(!draft.decisions.some((d) => /test test test/i.test(d)));
+});
+
+test("buildDraftFromTurns: nur Test-Pings → kein Test als Überschrift", () => {
+  const draft = buildDraftFromTurns([
+    { role: "user", text: "TEST TEST TEST" },
+    { role: "assistant", text: "pong" },
+    { role: "user", text: "test" },
+    { role: "assistant", text: "pong" },
+  ]);
+  assert.ok(!/test/i.test(draft.title), draft.title);
+  assert.equal(draft.title, "Unbenannte Session");
+});
+
+test("proposeSkillFromDraft: TEST TEST TEST ist nicht eligible", () => {
+  const p = proposeSkillFromDraft({
+    title: "TEST TEST TEST",
+    summary: "Session mit 4 Nutzer-Turns. TEST TEST TEST.",
+    decisions: ["TEST TEST TEST", "test", "test"],
+    next_steps: ["pong"],
+    turn_counts: { user: 4, assistant: 4 },
+  });
+  assert.equal(p.eligible, false);
+  assert.match(p.reason, /generisch|trivial|Titel/i);
 });

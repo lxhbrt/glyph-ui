@@ -76,6 +76,7 @@ import { buildActivity } from "./activity.js";
 import { mergeToolFields, resolveToolDisplayTitle } from "./toolTitle.mjs";
 import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
 import {
+  buildDraftFromTurns,
   buildFileName,
   getWikiRoot as getSummaryWikiRoot,
   proposeSkillFromDraft,
@@ -1669,56 +1670,6 @@ app.post("/api/sessions/:id/close", async (req, res) => {
 });
 
 /**
- * Deterministische Zubereitung des Session-Transkripts zu einer Summary-Struktur.
- * Kein Modell nötig (robust). Erneutes Zusammenfassen nach weiteren Turns:
- * Entwurf basiert auf dem aktuellen Verlauf (Start + letzte Turns + Zähler).
- * @returns {{title:string, summary:string, decisions:string[], open_items:string[], next_steps:string[], references:string[], turn_counts?:object}}
- */
-function buildDraftFromTurns(turns, meta = {}) {
-  const userTurns = (turns || []).filter((t) => t.role === "user" && t.text && t.text.trim());
-  const assistantTurns = (turns || []).filter((t) => t.role === "assistant" && t.text && t.text.trim());
-  const clean = (t, n) => String(t?.text || "").replace(/\s+/g, " ").trim().slice(0, n);
-
-  const title =
-    meta.title || clean(userTurns[0], 80) || "Unbenannte Session";
-  const firstUser = clean(userTurns[0], 200);
-  const lastUser = userTurns.length ? clean(userTurns[userTurns.length - 1], 200) : "";
-  const lastAssistant = assistantTurns.length
-    ? clean(assistantTurns[assistantTurns.length - 1], 400)
-    : "";
-
-  // Kurzfassung: Umfang + Start + ggf. letzte Arbeit (wichtig für Checkpoints).
-  let summary = "Keine Nachrichten vorhanden.";
-  if (firstUser) {
-    const parts = [
-      `Session mit ${userTurns.length} Nutzer- und ${assistantTurns.length} Antwort-Turns.`,
-      `Start: „${firstUser.slice(0, 160)}".`,
-    ];
-    if (userTurns.length > 1 && lastUser && lastUser !== firstUser) {
-      parts.push(`Zuletzt (Nutzer): „${lastUser.slice(0, 160)}".`);
-    }
-    if (lastAssistant) {
-      parts.push(`Letztes Ergebnis: ${lastAssistant.slice(0, 280)}`);
-    }
-    summary = parts.join(" ");
-  }
-
-  // Entscheidungen = letzte Nutzer-Turns (Anweisungen/Ziele); nächste Schritte = letzte Antworten.
-  const decisions = userTurns.slice(-5).map((t) => clean(t, 180)).filter(Boolean);
-  const next_steps = assistantTurns.slice(-3).map((t) => clean(t, 180)).filter(Boolean);
-
-  return {
-    title,
-    summary,
-    decisions,
-    open_items: [],
-    next_steps,
-    references: [],
-    turn_counts: { user: userTurns.length, assistant: assistantTurns.length },
-  };
-}
-
-/**
  * Erweiterte Session-ID-Prüfung für Summarize/History: akzeptiert UUID (Grok/Disk)
  * ODER In-Memory-Adapter-IDs (openrouter-1, glyph-agent-1, claude-N) — nur sichere
  * Zeichen, keine Pfad-Tricks. isSessionId (sessions.js) bleibt für Disk-Endpunkte.
@@ -1731,6 +1682,53 @@ function isSummarizeSessionId(id) {
   return SAFE_SESSION_ID_RE.test(id);
 }
 
+function mapHistoryMessages(messages) {
+  return (messages || []).map((m) => ({
+    role: m.role,
+    text: Array.isArray(m.content)
+      ? m.content
+          .filter((b) => b?.type === "text" && typeof b.text === "string")
+          .map((b) => b.text)
+          .join("\n")
+      : String(m.content ?? ""),
+  }));
+}
+
+/**
+ * Turns für Summarize: bei In-Memory-IDs (^_Code / °_Agent) immer der live
+ * ACP-Verlauf — sonst klebt der Entwurf am ersten Test-Ping. Grok-UUIDs: Disk.
+ */
+async function turnsForSummarize(sessionId) {
+  const session = await getSessionForOpen(sessionId);
+  const liveSeat = seats.findBySession(sessionId);
+  const preferLive = !isSessionId(sessionId) && liveSeat?.connected;
+  if (preferLive) {
+    try {
+      const hist = await liveSeat.getSessionHistory(sessionId);
+      const liveTurns = mapHistoryMessages(hist.messages);
+      if (liveTurns.some((t) => String(t.text || "").trim())) {
+        return { session, turns: liveTurns };
+      }
+    } catch {
+      /* Disk-/leer-Fallback */
+    }
+  }
+  let turns = session ? session.turns || session.transcriptPreview || [] : [];
+  if (
+    !turns.length &&
+    liveSeat?.connected &&
+    liveSeat.sessionId === sessionId
+  ) {
+    try {
+      const hist = await liveSeat.getSessionHistory(sessionId);
+      turns = mapHistoryMessages(hist.messages);
+    } catch {
+      turns = [];
+    }
+  }
+  return { session, turns };
+}
+
 /**
  * Erzeugt einen Zusammenfassungs-ENTWURF ohne zu schreiben (nicht-destruktiv).
  * Liefert Entwurf + geplanten Zielpfad/Dateiname + Datenschutz-Status.
@@ -1741,33 +1739,7 @@ app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
       res.status(400).json({ error: "Ungültige Session-ID" });
       return;
     }
-    const session = await getSessionForOpen(req.params.id);
-    let turns = session ? (session.turns || session.transcriptPreview || []) : [];
-    // Fallback für AKTIVE In-Memory-Session (openrouter/glyph-agent ohne Disk-Ordner):
-    // Verlauf über die ACP-Methode session.history beziehen, statt aus ~/.grok/sessions.
-    if (
-      !turns.length &&
-      seats.all().some((x) => x.connected && x.sessionId === req.params.id)
-    ) {
-      try {
-        const hist = await seats
-          .findBySession(req.params.id)
-          .getSessionHistory(req.params.id);
-        turns = (hist.messages || []).map((m) => ({
-          role: m.role,
-          // content kann String ODER OpenAI-Array sein ([{type:'text',text}] / image_url) —
-          // extrahiere Text, damit buildDraftFromTurns (erwartet String) sauber läuft.
-          text: Array.isArray(m.content)
-            ? m.content
-                .filter((b) => b?.type === "text" && typeof b.text === "string")
-                .map((b) => b.text)
-                .join("\n")
-            : String(m.content ?? ""),
-        }));
-      } catch {
-        turns = [];
-      }
-    }
+    const { session, turns } = await turnsForSummarize(req.params.id);
     if (!turns.length) {
       res.status(404).json({ error: "Session nicht gefunden oder ohne Nachrichten" });
       return;
@@ -1839,29 +1811,7 @@ app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
       res.status(400).json({ error: "Ungültige Session-ID" });
       return;
     }
-    const session = await getSessionForOpen(req.params.id);
-    let turns = session ? (session.turns || session.transcriptPreview || []) : [];
-    if (
-      !turns.length &&
-      seats.all().some((x) => x.connected && x.sessionId === req.params.id)
-    ) {
-      try {
-        const hist = await seats
-          .findBySession(req.params.id)
-          .getSessionHistory(req.params.id);
-        turns = (hist.messages || []).map((m) => ({
-          role: m.role,
-          text: Array.isArray(m.content)
-            ? m.content
-                .filter((b) => b?.type === "text" && typeof b.text === "string")
-                .map((b) => b.text)
-                .join("\n")
-            : String(m.content ?? ""),
-        }));
-      } catch {
-        turns = [];
-      }
-    }
+    const { session, turns } = await turnsForSummarize(req.params.id);
 
     const body = req.body || {};
     const profile = body.profile || "glyph-agent";

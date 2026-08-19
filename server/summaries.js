@@ -189,9 +189,92 @@ export function renderSummaryDocument(data) {
   return body.join("\n");
 }
 
-/** Trivial-Titel: kein Skill-Spam aus Begrüßungen. */
-const TRIVIAL_TITLE_RE =
+/** Einzelwort-Ping (hi/test/ok…) — auch als Token in „TEST TEST TEST“. */
+const TRIVIAL_TOKEN_RE =
   /^(hi|hallo|hey|test|ok|danke|thanks|ping|yo|sup|help|hilfe|\?+|…+)$/i;
+
+/**
+ * Test-Pings und Wiederholungen taugen nicht als Session-Titel / Skill-Name.
+ * „TEST TEST TEST“ und „test“ sind trivial; echte Aufgabenzeilen nicht.
+ */
+export function isTrivialTitle(text) {
+  const s = String(text || "").replace(/\s+/g, " ").trim();
+  if (!s) return true;
+  if (s.length < 8 && TRIVIAL_TOKEN_RE.test(s)) return true;
+  if (TRIVIAL_TOKEN_RE.test(s)) return true;
+  const tokens = s
+    .toLowerCase()
+    .split(/[^a-z0-9äöüß]+/i)
+    .filter(Boolean);
+  if (!tokens.length) return true;
+  if (tokens.every((t) => TRIVIAL_TOKEN_RE.test(t))) return true;
+  if (tokens.length >= 2 && tokens.every((t) => t === tokens[0]) && tokens[0].length <= 8) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Deterministischer Draft aus Turns (kein LLM). Titel = letzte substanzielle
+ * Nutzerzeile, nicht der erste Test-Ping. Erneutes Zusammenfassen nach weiteren
+ * Turns spiegelt den aktuellen Stand (Start nur wenn nicht trivial).
+ *
+ * @param {Array<{role?: string, text?: string}>} turns
+ * @param {{ title?: string }} [meta]
+ * @returns {{title:string, summary:string, decisions:string[], open_items:string[], next_steps:string[], references:string[], turn_counts?:object}}
+ */
+export function buildDraftFromTurns(turns, meta = {}) {
+  const userTurns = (turns || []).filter((t) => t.role === "user" && t.text && String(t.text).trim());
+  const assistantTurns = (turns || []).filter(
+    (t) => t.role === "assistant" && t.text && String(t.text).trim(),
+  );
+  const clean = (t, n) => String(t?.text || "").replace(/\s+/g, " ").trim().slice(0, n);
+
+  const cleanedUsers = userTurns.map((t) => clean(t, 200)).filter(Boolean);
+  const substantial = cleanedUsers.filter((t) => !isTrivialTitle(t));
+  const metaTitle = String(meta.title || "").trim();
+  const title = !isTrivialTitle(metaTitle)
+    ? metaTitle.slice(0, 80)
+    : substantial.length
+      ? substantial[substantial.length - 1].slice(0, 80)
+      : "Unbenannte Session";
+
+  const firstUser = cleanedUsers[0] || "";
+  const lastUser = cleanedUsers.length ? cleanedUsers[cleanedUsers.length - 1] : "";
+  const lastAssistant = assistantTurns.length ? clean(assistantTurns[assistantTurns.length - 1], 400) : "";
+
+  let summary = "Keine Nachrichten vorhanden.";
+  if (firstUser || lastUser) {
+    const parts = [
+      `Session mit ${userTurns.length} Nutzer- und ${assistantTurns.length} Antwort-Turns.`,
+    ];
+    if (firstUser && !isTrivialTitle(firstUser)) {
+      parts.push(`Start: „${firstUser.slice(0, 160)}".`);
+    }
+    if (lastUser && lastUser !== firstUser && !isTrivialTitle(lastUser)) {
+      parts.push(`Zuletzt (Nutzer): „${lastUser.slice(0, 160)}".`);
+    } else if (substantial.length && isTrivialTitle(firstUser)) {
+      parts.push(`Zuletzt (Nutzer): „${substantial[substantial.length - 1].slice(0, 160)}".`);
+    }
+    if (lastAssistant) {
+      parts.push(`Letztes Ergebnis: ${lastAssistant.slice(0, 280)}`);
+    }
+    summary = parts.join(" ");
+  }
+
+  const decisions = substantial.slice(-5).map((t) => t.slice(0, 180)).filter(Boolean);
+  const next_steps = assistantTurns.slice(-3).map((t) => clean(t, 180)).filter(Boolean);
+
+  return {
+    title,
+    summary,
+    decisions,
+    open_items: [],
+    next_steps,
+    references: [],
+    turn_counts: { user: userTurns.length, assistant: assistantTurns.length },
+  };
+}
 
 /**
  * Skill-Name aus Session-Titel (a-z0-9-, 2–48 Zeichen).
@@ -235,7 +318,7 @@ export function proposeSkillFromDraft(draft, opts = {}) {
       reason: `Zu kurz (${userN} Nutzer-Turns, min. ${minUser}) — kein Skill.`,
     };
   }
-  if (TRIVIAL_TITLE_RE.test(title) || title.length < 8) {
+  if (isTrivialTitle(title) || title.length < 8 || /^unbenannte session$/i.test(title)) {
     return {
       eligible: false,
       name,
