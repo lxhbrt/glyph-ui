@@ -16,6 +16,7 @@ import {
   LAGE_H,
   LAGE_W,
   layoutLage,
+  PHONE_PAD,
   lerpGraph,
   reaches,
 } from "../utils/lageLayout.js";
@@ -328,24 +329,24 @@ export function CableLage({
   const hubState = nodeState({ id: "hub", kind: "hub" });
   const busy = vaults.busy || workspaces.busy;
   const loading = vaults.loading || workspaces.loading;
-  const field = useMemo(
-    () =>
-      narrow
-        ? graphFrame(graph.nodes)
-        : { x: 0, y: 0, w: LAGE_W, h: LAGE_H },
-    [narrow, graph.nodes],
-  );
-
-  const allEdges = useMemo(
+  const allLayout = useMemo(
     () =>
       layoutLage({
         vaults: vaults.items,
         workspaces: workspaces.items,
         focus: "all",
         compact: narrow,
-      }).edges,
+      }),
     [vaults.items, workspaces.items, narrow],
   );
+  const field = useMemo(
+    () =>
+      narrow
+        ? graphFrame(allLayout.nodes, PHONE_PAD)
+        : { x: 0, y: 0, w: LAGE_W, h: LAGE_H },
+    [narrow, allLayout],
+  );
+  const allEdges = allLayout.edges;
 
   const neighborRows = useMemo(() => {
     if (!selected) return [];
@@ -504,6 +505,7 @@ export function CableLage({
                     st={st}
                     hub={hubState}
                     starred={starred}
+                    large={narrow}
                   />
                 </span>
                 <strong className="lage-node-label">{name}</strong>
@@ -609,12 +611,23 @@ class LegendCatch extends Component {
   }
 }
 
-function NodeFace({ node, st, hub, starred }) {
+function NodeFace({ node, st, hub, starred, large = false }) {
   if (node.id === "hub") {
-    return <GlyphVessel size={hub.face ? 28 : 36} face={hub.face || null} />;
+    const faceOn = Boolean(hub.face);
+    return (
+      <GlyphVessel
+        size={large ? (faceOn ? 42 : 54) : faceOn ? 28 : 36}
+        face={hub.face || null}
+      />
+    );
   }
   if (node.kind === "profile") {
-    return <SnakeHead size={26} face={st.face || node.face || "grok"} />;
+    return (
+      <SnakeHead
+        size={large ? 40 : 26}
+        face={st.face || node.face || "grok"}
+      />
+    );
   }
   return <FolderGlyph st={st} starred={starred} />;
 }

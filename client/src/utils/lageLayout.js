@@ -13,7 +13,16 @@ export const RING_HEAD = 208;
 export const RING_BIND = 358;
 export const RING_PULL = 52;
 export const FRAME_PAD = 80;
+/** Tighter crop on the phone so the constellation, not the pad, fills the canvas. */
+export const PHONE_PAD = 48;
 export const HEAD_IDS = ["grok", "agent", "code"];
+
+/** Compact (phone): Grok high, Agent/Code slightly below Glyph — tall triangle. */
+const COMPACT_HEAD = {
+  grok: { dx: 0, dy: -300 },
+  agent: { dx: -158, dy: 88 },
+  code: { dx: 158, dy: 88 },
+};
 
 /** Camera around the constellation. Phone uses this as SVG viewBox so the graph fills the field. */
 export function graphFrame(nodes, pad = FRAME_PAD) {
@@ -98,19 +107,30 @@ function onRing(r, deg) {
   };
 }
 
+function compactHeadPoint(id) {
+  const p = COMPACT_HEAD[id] || COMPACT_HEAD.grok;
+  return { x: LAGE_CX + p.dx, y: LAGE_CY + p.dy };
+}
+
 /** Tafeln on a ring around Glyph. Left/right of the horizontal midline. */
 export function wallSlots(n, side, pull = false, compact = false) {
   if (n <= 0) return [];
-  const r0 = compact ? 292 : RING_BIND;
-  const r = r0 - (pull ? (compact ? 32 : RING_PULL) : 0);
-  const step = compact ? 16 : 22;
-  const maxSpan = compact
-    ? side === "left"
-      ? 72
-      : 56
-    : side === "left"
-      ? 110
-      : 86;
+  if (compact) {
+    // Column under the side heads so the crop stays tall (phone can scale up).
+    const inset = pull ? 168 : 175;
+    const x = LAGE_CX + (side === "left" ? -inset : inset);
+    const yStart = LAGE_CY + COMPACT_HEAD.agent.dy + 72;
+    const gap = 48;
+    const span = n <= 1 ? 0 : Math.min(192, gap * (n - 1));
+    return Array.from({ length: n }, (_, i) => ({
+      x: Math.round(x),
+      y: Math.round(n === 1 ? yStart : yStart + (span * i) / Math.max(1, n - 1)),
+    }));
+  }
+  const r0 = RING_BIND;
+  const r = r0 - (pull ? RING_PULL : 0);
+  const step = 22;
+  const maxSpan = side === "left" ? 110 : 86;
   const span = n === 1 ? 0 : Math.min(maxSpan, step * (n - 1));
   const mid = side === "left" ? 180 : 0;
   return Array.from({ length: n }, (_, i) => {
@@ -194,14 +214,13 @@ function baseNodes({
   pullWs = false,
   compact = false,
 }) {
-  const rHead = compact ? 186 : RING_HEAD;
   const grok = {
     id: "grok",
     kind: "profile",
     label: "Grok",
     cluster: "grok",
     face: "grok",
-    ...onRing(rHead, -90),
+    ...(compact ? compactHeadPoint("grok") : onRing(RING_HEAD, -90)),
   };
   const agent = {
     id: "agent",
@@ -209,7 +228,7 @@ function baseNodes({
     label: "°_Agent",
     cluster: "agent",
     face: "agent",
-    ...onRing(rHead, 180),
+    ...(compact ? compactHeadPoint("agent") : onRing(RING_HEAD, 180)),
   };
   const code = {
     id: "code",
@@ -217,7 +236,7 @@ function baseNodes({
     label: "^_Code",
     cluster: "code",
     face: "code",
-    ...onRing(rHead, 0),
+    ...(compact ? compactHeadPoint("code") : onRing(RING_HEAD, 0)),
   };
   const hub = {
     id: "hub",

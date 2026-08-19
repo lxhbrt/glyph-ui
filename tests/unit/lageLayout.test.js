@@ -200,6 +200,30 @@ describe("layoutLage", () => {
     assert.ok(wide.w > tight.w, `${wide.w} > ${tight.w}`);
   });
 
+  it("compact frame is portrait — phone canvas can grow with the field", () => {
+    const empty = graphFrame(layoutLage({ compact: true }).nodes, 48);
+    assert.ok(
+      empty.h / empty.w >= 0.92,
+      `empty ${empty.w}×${empty.h} ratio ${empty.h / empty.w}`,
+    );
+    const loaded = graphFrame(
+      layoutLage({
+        compact: true,
+        vaults: [{ id: "a" }, { id: "b" }],
+        workspaces: [{ id: "x" }],
+      }).nodes,
+      48,
+    );
+    assert.ok(
+      loaded.h / loaded.w >= 0.88,
+      `loaded ${loaded.w}×${loaded.h} ratio ${loaded.h / loaded.w}`,
+    );
+    const grok = layoutLage({ compact: true }).nodes.find((n) => n.id === "grok");
+    const hub = layoutLage({ compact: true }).nodes.find((n) => n.id === "hub");
+    const agent = layoutLage({ compact: true }).nodes.find((n) => n.id === "agent");
+    assert.ok(hub.y - grok.y > agent.x - hub.x, "vertical arm longer than horizontal");
+  });
+
   it("compact keeps wall tablets off the heads", () => {
     const { nodes } = layoutLage({
       compact: true,
