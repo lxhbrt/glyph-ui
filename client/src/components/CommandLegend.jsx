@@ -94,6 +94,11 @@ const COMMAND_LEGEND = [
         desc: "Icon-Button: Agent starten/beenden. Gold-Kette = verbunden, rot = offline.",
       },
       {
+        cmd: "Zusammenfassen",
+        need: "empfohlen",
+        desc: "Header rechts neben der Kette: aktive Session als Snapshot speichern (Vorschau → Bestätigen). Grok zusätzlich in der Lupe. Test-Pings werden nicht Titel.",
+      },
+      {
         cmd: "Freitext + Kontext",
         need: "normal",
         desc: "Aufgabe, Pfad, Fehlertext, Ziel — je klarer, desto besser.",
@@ -250,7 +255,7 @@ const SHORT_HANDBOOK = [
     body: [
       "**Graph** (Leiste): pechschwarz. Köpfe um Glyph; Vaults/Roots als Punkte. Klick → Legende.",
       "**Grok:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
-      "**^_Code / °_Agent:** `OPENROUTER_API_KEY` hier oder in `.env`. Engine: `python server.py` (:18899).",
+      "**^_Code / °_Agent:** Header-Pille oder Graph-Kopf → Host-URL, Direct-Key, OpenRouter-Key, Modell. Ohne Slash = Direct (`deepseek-v4-flash`), mit Slash = OpenRouter (`google/gemini-3.7-flash`).",
       "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒 · Kabel an/ab. SoT: `~/.glyph/vaults.json`.",
       "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒 gesperrt. SoT: `~/.glyph/workspaces.json`.",
       "**An/Ab** = Kabel durchtrennen, Eintrag bleibt.",
@@ -263,6 +268,7 @@ const SHORT_HANDBOOK = [
     title: "Oberfläche",
     body: [
       "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, Refresh, **Buch** (Handbuch · UI-Legende).",
+      "Header rechts: Profil · Modell-Pille · Kette · **Zusammenfassen** (aktive Session).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
       "Unten: Composer · Chat | Deep Search | Fork · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
     ],
@@ -325,6 +331,7 @@ const SHORT_HANDBOOK = [
       "Sessions liegen unter `~/.grok/sessions`. Lupe → suchen → Öffnen.",
       "Schließen: **Ja + Wiki** (Archiv + löschen) · **Löschen** (TUI `/delete`) · Abbrechen.",
       "Aktive Chat-Session ist geschützt (zuerst Stift = `/new`). Speicher freigeben = Ordner löschen.",
+      "**Zusammenfassen** (Header, neben der Kette): Snapshot der aktiven Session. Grok auch in der Lupe. Titel = letzte echte Aufgabe, nicht der erste Test-Ping.",
       "Wiki-Ziel: `…/OpenClaw memory-wiki/sources/grok-sessions/`.",
     ],
   },

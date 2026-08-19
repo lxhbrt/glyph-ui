@@ -12,7 +12,34 @@ export const LAGE_CY = 390;
 export const RING_HEAD = 208;
 export const RING_BIND = 358;
 export const RING_PULL = 52;
+export const FRAME_PAD = 80;
 export const HEAD_IDS = ["grok", "agent", "code"];
+
+/** Camera around the constellation. Phone uses this as SVG viewBox so the graph fills the field. */
+export function graphFrame(nodes, pad = FRAME_PAD) {
+  if (!nodes?.length) return { x: 0, y: 0, w: LAGE_W, h: LAGE_H };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const n of nodes) {
+    const x = Number(n?.x);
+    const y = Number(n?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  if (!Number.isFinite(minX)) return { x: 0, y: 0, w: LAGE_W, h: LAGE_H };
+  const p = Number.isFinite(pad) ? pad : FRAME_PAD;
+  return {
+    x: minX - p,
+    y: minY - p,
+    w: Math.max(1, maxX - minX + p * 2),
+    h: Math.max(1, maxY - minY + p * 2),
+  };
+}
 
 export function homeHeadOf(kind) {
   return kind === "workspace" ? "code" : "agent";

@@ -2428,18 +2428,17 @@ export default function App() {
         const active = data.modelsActive?.active || data.modelsActive?.shared;
         const desired = data.models?.shared;
         const code = data.modelsActive?.code || data.models?.code;
-        const primary =
-          active?.primary || desired?.primary || data.modelsActive?.shared?.primary || "";
-        const fb =
-          active?.fallback ??
-          desired?.fallback ??
-          data.modelsActive?.shared?.fallback ??
-          "";
-        let label = primary || "—";
-        if (primary && fb) label = `${primary} → ${fb}`;
-        if (code?.override && code?.primary) {
-          label = `${label} · code:${code.primary}`;
-        }
+        const useCode = agent?.id === "_code" && Boolean(code?.primary);
+        const primary = useCode
+          ? code.primary
+          : active?.primary || desired?.primary || data.modelsActive?.shared?.primary || "";
+        const fb = useCode
+          ? code.fallback ?? ""
+          : active?.fallback ??
+            desired?.fallback ??
+            data.modelsActive?.shared?.fallback ??
+            "";
+        const label = primary && fb ? `${primary} → ${fb}` : primary || "—";
         setModelHud({
           kind: "openrouter",
           label,
@@ -2885,7 +2884,13 @@ export default function App() {
                       : `${modelHud.label} — Graph`
                 }
                 onClick={() => {
-                  setLageFocus(modelHud.kind === "grok" ? "grok" : "bindings");
+                  setLageFocus(
+                    modelHud.kind === "grok"
+                      ? "grok"
+                      : agent?.id === "_code"
+                        ? "code"
+                        : "agent",
+                  );
                   setShowLage(true);
                 }}
               >
@@ -2936,12 +2941,13 @@ export default function App() {
             {canSummarize && connected && sessionId ? (
               <button
                 type="button"
-                className="pill pill-btn pill-btn--icon active-session-summarize"
+                className="pill pill-btn active-session-summarize"
                 title="Aktive Session zusammenfassen (Vorschau → Bestätigen)"
                 aria-label="Session zusammenfassen"
                 onClick={() => setActiveSummarizeOpen(true)}
               >
-                <IconSummarize size={18} />
+                <IconSummarize size={16} />
+                <span className="summarize-btn-label">Zusammenfassen</span>
               </button>
             ) : null}
           </div>

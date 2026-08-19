@@ -244,7 +244,7 @@ function KeyField({
  * @param {boolean} props.active — when true, load/refresh status
  * @param {string} [props.agentProfileId] — grok | _code | glyph-agent
  */
-function BindingsPanel({ active, agentProfileId = "" }) {
+function BindingsPanel({ active }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -264,13 +264,6 @@ function BindingsPanel({ active, agentProfileId = "" }) {
   const [codeOpen, setCodeOpen] = useState(false);
   const [modelsDirty, setModelsDirty] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
-
-  const openRouterProfiles =
-    agentProfileId === "_code" ||
-    agentProfileId === "code" ||
-    agentProfileId === "glyph-agent" ||
-    agentProfileId === "agent" ||
-    !agentProfileId;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -522,12 +515,11 @@ function BindingsPanel({ active, agentProfileId = "" }) {
 
       <form className="bindings-form" onSubmit={(e) => void save(e)}>
         <h4 className="bindings-section-title">Stecker · Models</h4>
-        {!openRouterProfiles ? (
-          <p className="bindings-hint">
-            Profil <strong>Grok</strong> nutzt CLI/OAuth — Model-IDs greifen erst
-            nach Wechsel auf <code>^_Code</code> oder <code>°_Agent</code>.
-          </p>
-        ) : null}
+        <p className="bindings-hint">
+          Ohne Slash = Direct-ID (<code>deepseek-v4-flash</code>). Mit Slash =
+          OpenRouter-Slug (<code>google/gemini-3.7-flash</code>). Greift für{" "}
+          <code>°_Agent</code> / <code>^_Code</code>, unabhängig vom aktiven Profil.
+        </p>
         {status?.modelsMismatch ? (
           <p className="bindings-hint bindings-hint--warn">
             Gespeicherte Models ≠ laufender Agent — Speichern oder Connect synct.
@@ -536,7 +528,7 @@ function BindingsPanel({ active, agentProfileId = "" }) {
 
         <div className="bindings-plug">
           <label className="bindings-label" htmlFor="bind-model-primary">
-            Primary (Direct Model-ID)
+            Modell °_Agent
           </label>
           <input
             id="bind-model-primary"
@@ -546,14 +538,14 @@ function BindingsPanel({ active, agentProfileId = "" }) {
             spellCheck={false}
             placeholder="deepseek-v4-pro"
             value={primary}
-            disabled={saving || !openRouterProfiles}
+            disabled={saving}
             onChange={(e) => {
               markModelsDirty();
               setPrimary(e.target.value);
             }}
           />
           <label className="bindings-label" htmlFor="bind-model-fallback">
-            Fallback (OpenRouter-Slug, optional)
+            Reserve °_Agent
           </label>
           <input
             id="bind-model-fallback"
@@ -563,59 +555,52 @@ function BindingsPanel({ active, agentProfileId = "" }) {
             spellCheck={false}
             placeholder="deepseek/deepseek-v4-flash-0731"
             value={fallback}
-            disabled={saving || !openRouterProfiles}
+            disabled={saving}
             onChange={(e) => {
               markModelsDirty();
               setFallback(e.target.value);
             }}
           />
-          <details
-            className="bindings-advanced"
-            open={codeOpen}
-            onToggle={(e) => setCodeOpen(e.currentTarget.open)}
-          >
-            <summary>Erweitert: Code abweichend</summary>
-            <p className="bindings-hint">
-              Leer = gleiches Paar wie Primary/Fallback (shared).
-            </p>
-            <label className="bindings-label" htmlFor="bind-code-primary">
-              Code Primary
-            </label>
-            <input
-              id="bind-code-primary"
-              className="bindings-input"
-              type="text"
-              autoComplete="off"
-              spellCheck={false}
-              value={codePrimary}
-              disabled={saving || !openRouterProfiles}
-              onChange={(e) => {
-                markModelsDirty();
-                setCodePrimary(e.target.value);
-              }}
-            />
-            <label className="bindings-label" htmlFor="bind-code-fallback">
-              Code Fallback
-            </label>
-            <input
-              id="bind-code-fallback"
-              className="bindings-input"
-              type="text"
-              autoComplete="off"
-              spellCheck={false}
-              value={codeFallback}
-              disabled={saving || !openRouterProfiles}
-              onChange={(e) => {
-                markModelsDirty();
-                setCodeFallback(e.target.value);
-              }}
-            />
-          </details>
+          <label className="bindings-label" htmlFor="bind-code-primary">
+            Modell ^_Code
+            <span className="bindings-label-meta">leer = wie °_Agent</span>
+          </label>
+          <input
+            id="bind-code-primary"
+            className="bindings-input"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="google/gemini-3.7-flash"
+            value={codePrimary}
+            disabled={saving}
+            onChange={(e) => {
+              markModelsDirty();
+              setCodePrimary(e.target.value);
+              setCodeOpen(Boolean(e.target.value.trim()));
+            }}
+          />
+          <label className="bindings-label" htmlFor="bind-code-fallback">
+            Reserve ^_Code
+          </label>
+          <input
+            id="bind-code-fallback"
+            className="bindings-input"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={codeFallback}
+            disabled={saving}
+            onChange={(e) => {
+              markModelsDirty();
+              setCodeFallback(e.target.value);
+            }}
+          />
           <div className="bindings-actions bindings-actions--inline">
             <button
               type="button"
               className="pill pill-btn"
-              disabled={saving || testing || loading || !openRouterProfiles}
+              disabled={saving || testing || loading}
               onClick={() => void testModel()}
             >
               {testing ? "Teste…" : "Testen"}

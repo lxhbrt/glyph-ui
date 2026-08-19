@@ -10,6 +10,7 @@ import {
   adjacentIds,
   bindsOf,
   displayBind,
+  graphFrame,
   HEAD_IDS,
   LAGE_CX,
   LAGE_H,
@@ -103,8 +104,11 @@ export function CableLage({
     } else if (focus === "workspaces" || focus === "code") {
       setCluster("code");
       setSelectedId("hub");
-    } else if (focus === "grok" || focus === "bindings") {
+    } else if (focus === "grok") {
       setCluster("grok");
+      setSelectedId("hub");
+    } else if (focus === "bindings") {
+      setCluster("agent");
       setSelectedId("hub");
     } else if (open) {
       setCluster((c) => c || "all");
@@ -324,6 +328,13 @@ export function CableLage({
   const hubState = nodeState({ id: "hub", kind: "hub" });
   const busy = vaults.busy || workspaces.busy;
   const loading = vaults.loading || workspaces.loading;
+  const field = useMemo(
+    () =>
+      narrow
+        ? graphFrame(graph.nodes)
+        : { x: 0, y: 0, w: LAGE_W, h: LAGE_H },
+    [narrow, graph.nodes],
+  );
 
   const allEdges = useMemo(
     () =>
@@ -405,17 +416,25 @@ export function CableLage({
         </p>
       ) : null}
 
-      <div className={`lage-body${loading ? " is-loading" : ""}`}>
+      <div
+        className={`lage-body${loading ? " is-loading" : ""}${
+          selected ? " has-inspect" : ""
+        }`}
+      >
         <div
           className="lage-canvas"
           data-loading={loading || undefined}
+          style={{
+            "--lage-fw": field.w,
+            "--lage-fh": field.h,
+          }}
           onClick={(e) => {
             if (e.target === e.currentTarget) resetField();
           }}
         >
           <svg
             className="lage-svg"
-            viewBox={`0 0 ${LAGE_W} ${LAGE_H}`}
+            viewBox={`${field.x} ${field.y} ${field.w} ${field.h}`}
             preserveAspectRatio="xMidYMid meet"
             aria-hidden="true"
           >
@@ -461,8 +480,8 @@ export function CableLage({
                   starred ? " is-star" : ""
                 }${st.mode ? ` is-mode-${st.mode}` : ""}`}
                 style={{
-                  left: `${(node.x / LAGE_W) * 100}%`,
-                  top: `${(node.y / LAGE_H) * 100}%`,
+                  left: `${((node.x - field.x) / field.w) * 100}%`,
+                  top: `${((node.y - field.y) / field.h) * 100}%`,
                 }}
                 aria-label={name}
                 aria-pressed={selectedId === node.id}

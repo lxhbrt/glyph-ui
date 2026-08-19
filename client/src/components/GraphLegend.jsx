@@ -3,7 +3,8 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { buildModelsPatch, modelsForHead } from "../utils/bindingsModels.js";
 import { bindsOf } from "../utils/lageLayout.js";
 import { ModeGlyph } from "./ModeGlyph.jsx";
 
@@ -237,12 +238,29 @@ function KeyLine({ name, keyId, rec, hint, onPut, busy }) {
 function CloudBind({ absorb, bindings, onBindingsChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [okMsg, setOkMsg] = useState("");
+  const [testing, setTesting] = useState(false);
+  const shown = modelsForHead(bindings, absorb);
+  const urlNow =
+    bindings?.settings?.DIRECT_API_URL?.value || "https://api.deepseek.com";
+  const [host, setHost] = useState(urlNow);
+  const [primary, setPrimary] = useState(shown.primary);
+  const [fallback, setFallback] = useState(shown.fallback);
+
+  useEffect(() => {
+    setHost(urlNow);
+    setPrimary(shown.primary);
+    setFallback(shown.fallback);
+  }, [urlNow, shown.primary, shown.fallback, absorb]);
+
   const d = bindings?.keys?.DIRECT_API_KEY;
   const o = bindings?.keys?.OPENROUTER_API_KEY;
+  const isCode = absorb === "code";
 
   async function put(body) {
     setBusy(true);
     setErr("");
+    setOkMsg("");
     try {
       const res = await fetch("/api/bindings", {
         method: "PUT",
@@ -252,37 +270,197 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       onBindingsChange?.(data);
+      const apply = data?.modelsApply;
+      if (body.models && apply) {
+        setOkMsg(
+          apply.ok && apply.applied
+            ? "Gespeichert · live am Agent."
+            : `Gespeichert. Apply: ${apply.error || "Agent offline"}.`,
+        );
+      } else if (body.DIRECT_API_URL || body.DIRECT_API_KEY || body.OPENROUTER_API_KEY) {
+        setOkMsg("Gespeichert.");
+      }
+      return data;
+    } catch (e) {
+      setErr(e.message || String(e));
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveModels(e) {
+    e?.preventDefault?.();
+    const patch = buildModelsPatch({ absorb, primary, fallback });
+    if (!patch) {
+      setErr("Modell-ID fehlt.");
+      return;
+    }
+    const body = { ...patch };
+    if (host.trim()) body.DIRECT_API_URL = host.trim();
+    await put(body);
+  }
+
+  async function testModel() {
+    const m = primary.trim();
+    if (!m) {
+      setErr("Zum Testen eine Modell-ID eintragen.");
+      return;
+    }
+    setTesting(true);
+    setErr("");
+    setOkMsg("");
+    try {
+      const res = await fetch("/api/models/probe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: m }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || `Probe HTTP ${res.status}`);
+      }
+      setOkMsg(`Test ok: ${m}`);
     } catch (e) {
       setErr(e.message || String(e));
     } finally {
-      setBusy(false);
+      setTesting(false);
     }
   }
 
   return (
     <div className="lage-bind">
       <p className="lage-lede">
-        {absorb === "code"
-          ? "Code denkt über Direct. Ohne Key kein Schreiben."
-          : "Agent antwortet über Direct. Ohne Key nur Vault, keine Cloud."}
+        {isCode
+          ? "Key + Host + Modell hier. Ohne Slash = Direct (deepseek-v4-flash). Mit Slash = OpenRouter (google/gemini-3.7-flash)."
+          : "Key + Host + Modell hier. Ohne Slash = Direct. Mit Slash = OpenRouter-Slug."}
       </p>
+      <form
+        className="lage-keyline"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!host.trim()) {
+            setErr("Host-URL fehlt.");
+            return;
+          }
+          void put({ DIRECT_API_URL: host.trim() });
+        }}
+      >
+        <div className="lage-keyline-head">
+          <strong>Host</strong>
+          <span className="lage-pill">{bindings?.settings?.DIRECT_API_URL?.source || "default"}</span>
+        </div>
+        <p className="lage-lede">Direct-Endpoint. DeepSeek, anderer OpenAI-kompatibler Host.</p>
+        <div className="lage-key-reveal">
+          <input
+            type="url"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label="Direct Base-URL"
+            placeholder="https://api.deepseek.com"
+            value={host}
+            disabled={busy}
+            onChange={(e) => setHost(e.target.value)}
+          />
+          <button type="submit" className="lage-link" disabled={busy || !host.trim()}>
+            Schreiben
+          </button>
+        </div>
+      </form>
       <KeyLine
-        name="Direct"
+        name="Direct-Key"
         keyId="DIRECT_API_KEY"
         rec={d}
-        hint="Neu setzen ersetzt. Entfernen löscht. DeepSeek oder jeder OpenAI-kompatible Host."
+        hint="Zum Host. DeepSeek sk-… oder Key des anderen Endpoints."
         onPut={put}
         busy={busy}
       />
       <KeyLine
-        name="Reserve"
+        name="OpenRouter-Key"
         keyId="OPENROUTER_API_KEY"
         rec={o}
-        hint="Nur wenn Direct schweigt. Optional."
+        hint="Pflicht, wenn das Modell einen Slash hat (vendor/model) oder als Reserve."
         onPut={put}
         busy={busy}
       />
-      {err ? <p className="lage-alert">{err}</p> : null}
+      <form className="lage-keyline" onSubmit={saveModels}>
+        <div className="lage-keyline-head">
+          <strong>{isCode ? "Modell ^_Code" : "Modell °_Agent"}</strong>
+          <span className={`lage-pill${shown.source === "code" ? " is-on" : ""}`}>
+            {isCode
+              ? shown.source === "code"
+                ? "eigen"
+                : "wie Agent"
+              : "shared"}
+          </span>
+        </div>
+        <p className="lage-lede">
+          {isCode
+            ? "Leer + Schreiben = gleiches Paar wie °_Agent."
+            : "z. B. deepseek-v4-pro oder google/gemini-3.7-flash."}
+        </p>
+        <label className="lage-field-label" htmlFor={`lage-model-${absorb}`}>
+          Primary
+        </label>
+        <div className="lage-key-reveal">
+          <input
+            id={`lage-model-${absorb}`}
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label={isCode ? "Modell ^_Code" : "Modell °_Agent"}
+            placeholder={isCode ? "google/gemini-3.7-flash" : "deepseek-v4-pro"}
+            value={primary}
+            disabled={busy}
+            onChange={(e) => setPrimary(e.target.value)}
+          />
+        </div>
+        <label className="lage-field-label" htmlFor={`lage-fb-${absorb}`}>
+          Reserve-Modell
+        </label>
+        <div className="lage-key-reveal">
+          <input
+            id={`lage-fb-${absorb}`}
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label="Reserve-Modell"
+            placeholder="deepseek/deepseek-v4-flash-0731"
+            value={fallback}
+            disabled={busy}
+            onChange={(e) => setFallback(e.target.value)}
+          />
+        </div>
+        <div className="lage-actions">
+          <button type="submit" className="lage-link" disabled={busy}>
+            {busy ? "…" : "Schreiben"}
+          </button>
+          <button
+            type="button"
+            className="lage-link"
+            disabled={busy || testing || !primary.trim()}
+            onClick={() => void testModel()}
+          >
+            {testing ? "Teste…" : "Testen"}
+          </button>
+          {isCode && shown.source === "code" ? (
+            <button
+              type="button"
+              className="lage-link"
+              disabled={busy}
+              onClick={() => {
+                setPrimary("");
+                setFallback("");
+                void put({ models: { code: null } });
+              }}
+            >
+              Wie Agent
+            </button>
+          ) : null}
+        </div>
+      </form>
+      {err ? <p className="lage-alert" role="alert">{err}</p> : null}
+      {okMsg ? <p className="lage-fact" role="status">{okMsg}</p> : null}
     </div>
   );
 }

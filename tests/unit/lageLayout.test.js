@@ -10,6 +10,8 @@ import {
   bindsOf,
   clusterOf,
   displayBind,
+  FRAME_PAD,
+  graphFrame,
   layoutLage,
   LAGE_H,
   LAGE_W,
@@ -163,6 +165,39 @@ describe("layoutLage", () => {
     assert.ok(
       !agent.edges.some((e) => e.to === "vault:only-code" || e.from === "vault:only-code"),
     );
+  });
+
+  it("graphFrame is the full field when empty", () => {
+    const f = graphFrame([]);
+    assert.equal(f.x, 0);
+    assert.equal(f.y, 0);
+    assert.equal(f.w, LAGE_W);
+    assert.equal(f.h, LAGE_H);
+  });
+
+  it("graphFrame crops to nodes plus pad — compact constellation is smaller than the field", () => {
+    const { nodes } = layoutLage({ compact: true });
+    const f = graphFrame(nodes);
+    assert.ok(f.w < LAGE_W, `${f.w} < ${LAGE_W}`);
+    assert.ok(f.h < LAGE_H, `${f.h} < ${LAGE_H}`);
+    for (const n of nodes) {
+      assert.ok(n.x >= f.x + FRAME_PAD - 0.5, n.id);
+      assert.ok(n.x <= f.x + f.w - FRAME_PAD + 0.5, n.id);
+      assert.ok(n.y >= f.y + FRAME_PAD - 0.5, n.id);
+      assert.ok(n.y <= f.y + f.h - FRAME_PAD + 0.5, n.id);
+    }
+  });
+
+  it("graphFrame grows when wall tablets sit farther out", () => {
+    const tight = graphFrame(layoutLage({ compact: true }).nodes);
+    const wide = graphFrame(
+      layoutLage({
+        compact: true,
+        vaults: [{ id: "a" }, { id: "b" }, { id: "c" }],
+        workspaces: [{ id: "x" }, { id: "y" }],
+      }).nodes,
+    );
+    assert.ok(wide.w > tight.w, `${wide.w} > ${tight.w}`);
   });
 
   it("compact keeps wall tablets off the heads", () => {

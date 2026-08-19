@@ -335,7 +335,14 @@ body,
   align-items: flex-start;
   gap: 12px;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  min-width: 0;
   margin-bottom: 4px;
+}
+
+.top > div:first-child {
+  min-width: 0;
+  flex: 1 1 10rem;
 }
 
 .top h1 {
@@ -396,6 +403,22 @@ body,
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+button.pill-btn.active-session-summarize {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.summarize-btn-label {
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 /* Agent picker (Grok ↔ Claude) — sits left of the connection pill. */
@@ -5227,8 +5250,8 @@ button.cal-cell {
   .top-actions {
     gap: 8px;
     width: 100%;
-    /* Kürzel-Badge: kein Umbruch der Action-Zeile durch lange Modell-IDs */
-    flex-wrap: nowrap;
+    /* Kette + Zusammenfassen bleiben sichtbar; Modell-Pille schrumpft */
+    flex-wrap: wrap;
     min-width: 0;
   }
 
@@ -5255,6 +5278,11 @@ button.cal-cell {
     min-width: 2.5rem;
     min-height: 2.5rem;
     padding: 0;
+  }
+
+  button.pill-btn.active-session-summarize {
+    min-height: 36px;
+    padding: 6px 10px;
   }
 
   /* Chat type scale stays on :root tokens (same as desktop / all modes) */
@@ -6379,12 +6407,13 @@ button.cal-cell {
 }
 
 .lage-canvas {
+  --lage-fw: 1200;
+  --lage-fh: 780;
   position: relative;
-  container-type: size;
   min-width: 0;
   min-height: 0;
-  aspect-ratio: 1200 / 780;
-  width: min(100%, calc(100dvh * 1200 / 780));
+  aspect-ratio: var(--lage-fw) / var(--lage-fh);
+  width: min(100%, calc(100dvh * var(--lage-fw) / var(--lage-fh)));
   max-height: 100%;
   margin: auto;
   overflow: visible;
@@ -7045,6 +7074,14 @@ button.cal-cell {
   font-weight: 600;
 }
 
+.lage-field-label {
+  display: block;
+  margin: 0.65rem 0 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--lage-mute);
+}
+
 .lage-pill {
   font-size: 0.68rem;
   letter-spacing: 0.04em;
@@ -7229,17 +7266,34 @@ button.cal-cell {
 
   .lage-body {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    overflow-x: hidden;
+    overflow: hidden;
+    container-type: size;
+  }
+
+  .lage-body.has-inspect {
+    align-items: flex-start;
   }
 
   .lage-canvas {
     width: 100%;
     max-width: 100%;
     height: auto;
-    max-height: 56%;
-    margin-top: 2.6rem;
+    max-height: 100%;
+    margin: 0;
+    aspect-ratio: var(--lage-fw) / var(--lage-fh);
+  }
+
+  @supports (width: 1cqi) {
+    .lage-canvas {
+      width: min(100cqi, calc(100cqh * var(--lage-fw) / var(--lage-fh)));
+    }
+
+    .lage-body.has-inspect .lage-canvas {
+      width: min(100cqi, calc(62cqh * var(--lage-fw) / var(--lage-fh)));
+      max-height: 62%;
+    }
   }
 
   .lage-inspect {
@@ -7252,16 +7306,7 @@ button.cal-cell {
     border-left: 0;
     border-right: 0;
     border-bottom: 0;
-  }
-
-  .lage-node--hub .lage-node-core {
-    width: 2.85rem;
-    height: 2.85rem;
-  }
-
-  .lage-node--profile .lage-node-core {
-    width: 2.35rem;
-    height: 2.35rem;
+    padding-bottom: calc(1.15rem + env(safe-area-inset-bottom, 0px));
   }
 
   .lage-node-label {
