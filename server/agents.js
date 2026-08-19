@@ -100,8 +100,9 @@ export function resolveClaudeCommand(env = process.env) {
  * @property {string} [via]
  * @property {string} [hint]
  * @property {NodeJS.ProcessEnv | Record<string, string>} [env]
- * @property {{ deepSearch: boolean, activity: boolean, sessionList: boolean, sessionHistory: boolean, summarize: boolean }} capabilities
+ * @property {{ deepSearch: boolean, swarm: boolean, activity: boolean, sessionList: boolean, sessionHistory: boolean, summarize: boolean }} capabilities
  *   - deepSearch     : Grok-only Multi-Quellen-Recherche
+ *   - swarm          : °_Agent / ^_Code — Planer+Suche+Synthese (Engine)
  *   - activity       : Aktivitäts-Kalender (liest ~/.grok/events.jsonl)
  *   - sessionList    : persistente Session-Liste (nur grok, ~/.grok/sessions)
  *   - sessionHistory : aktiver In-Memory-Verlauf der aktuellen Session (über ACP session/history)
@@ -123,7 +124,7 @@ export function buildAgentProfiles(env = process.env) {
       // Match TUI default: no --reasoning-effort override (model default).
       args: ["agent", "--always-approve", "--no-leader", "stdio"],
       via: "bin",
-      capabilities: { deepSearch: true, activity: true, sessionList: true, sessionHistory: true, summarize: true },
+      capabilities: { deepSearch: true, swarm: false, activity: true, sessionList: true, sessionHistory: true, summarize: true },
     },
     {
       id: "_code",
@@ -137,7 +138,7 @@ export function buildAgentProfiles(env = process.env) {
         GLYPH_AGENT_ACP_NAME: "^_Code",
       },
       hint: "DeepSeek V4 Flash · Grep/SearchReplace/Read/Write/Shell (Whitelist) · Roots: glyph-ui/agent/openclaw · Genehmigung in Glyph",
-      capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
+      capabilities: { deepSearch: false, swarm: true, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
     {
       id: "glyph-agent",
@@ -151,7 +152,7 @@ export function buildAgentProfiles(env = process.env) {
       },
       hint: "B+: VaultFind/Wiki + Web/BrowseUrl + ReadPdf/Mail · Cloud-Antwort · kein Shell · Diff+Backup · :18899",
       // Kein persistentes Session-Listing, aber aktiver In-Memory-Verlauf (session/history) → summarize.
-      capabilities: { deepSearch: false, activity: false, sessionList: false, sessionHistory: true, summarize: true },
+      capabilities: { deepSearch: false, swarm: true, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
   ];
 }

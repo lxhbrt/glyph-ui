@@ -17,7 +17,7 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | **Palette / Type** | Eine Gold-Hex, eine Danger-Hex, Neutrals via `color-mix`; IBM Plex; Type-Scale fest | `client/src/styles.css` (`:root`) | Client-Shell |
 | **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende. Über Soft-Cap (Grok): **Zusammenpressen** → `/compact`. | `ContextLvlBar.jsx` | Client-Shell |
 | **Tool-Karte** | Aufklappbare ACP-Toolzeile (Verb + Ziel, Diff/Ausgabe nach Klick) | `client/src/components/ToolCard.jsx`, `client/src/utils/toolCard.js`, `server/toolTitle.mjs` | Bridge `type: tool` |
-| **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen | `client/src/components/SlashPopup.jsx`, `ExtensionsModal.jsx` | `server/skills.js`, `server/commands.js` |
+| **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen. Modus **Chat · Deep Search · Fork · Swarm**: Fork = `x.ai/session/fork` dann ACP `session/fork`; Deep Search = Grok `/deep-research` (andere Köpfe ausgegraut); Swarm = °_Agent/^_Code `POST /chat` `swarm: true`. | `client/src/App.jsx`, `shared/composerActions.mjs`, `server/glyph-agent-acp.mjs` | Bridge |
 | **Ordner-Suche** | °_Agent: Pixel-Apfel über ↵ (rot, ohne extra Höhe). Aus = keine Vault-Suche. An → `/api/vault/find`, Treffer nur im Panel, Default aus, nur aktivierte in den Kontext. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
 | **Sessions** | Session-Liste, Überblick, Summaries, **Name** (`/rename`) | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
 | **Rewind** | Nutzer-Turn und alles danach aus dem Verlauf. Esc Esc, `/rewind`, ↺ an der Nachricht. Dateien bleiben. | `shared/rewind.mjs`, `RewindPicker.jsx`, Bridge `type: rewind` | Sessions, Bridge |
@@ -39,8 +39,20 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 ## Language
 
 **Composer**:
-Das Nachrichteneingabefeld im Chat-Footer (Textarea), in dem der Nutzer Tippt, Anhänge anhängt und Sendungen auslöst.
+Das Nachrichteneingabefeld im Chat-Footer (Textarea), in dem der Nutzer Tippt, Anhänge anhängt und Sendungen auslöst. Sendemodus: **Chat**, **Deep Search**, **Fork**, **Swarm**.
 _Avoid_: Prompt-Box, Input, Chatbox
+
+**Deep Search**:
+Grok-Composer-Aktion: `session/prompt` mit `/deep-research <query>`. Grok-ACP fängt den Slash im Agent ab (nicht der TUI-Pager). Andere Profile: ausgegraut.
+_Avoid_: TinyFish/Exa als dieser Button; `/workflows`-Dashboard in Glyph
+
+**Fork**:
+Composer-Aktion: aktuelle Session branchen. Grok `x.ai/session/fork`, sonst ACP `session/fork` (°_Agent/^_Code: Verlaufskopie im Adapter). Directive = erster Prompt der neuen Session.
+_Avoid_: `/fork` als Chat-Text; Worktree-Dialog
+
+**Swarm**:
+Composer-Aktion (4. Menüpunkt). Köpfe **°_Agent** und **^_Code**: Engine Planer → Websuche → Synthese mit Quellen. Grok ausgegraut (dort Deep Search). Nicht Sitze, nicht Crew-Dashboard.
+_Avoid_: Grok-Bot-Schwarm als Sitz-Ersatz; `/workflows`-Dashboard; Swarm auf Grok
 
 **Slash-Popup**:
 Eine flüchtige, filterbare Befehlsliste, die erscheint, während der Nutzer im Composer `/` tippt — nicht ein separates Vollbild-Modal.

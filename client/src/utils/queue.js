@@ -64,7 +64,11 @@ function loadPersistedQueue() {
           id: q.id,
           text,
           action:
-            q.action === "deep-search" || q.action === "fork" ? q.action : "chat",
+            q.action === "deep-search" ||
+            q.action === "fork" ||
+            q.action === "swarm"
+              ? q.action
+              : "chat",
           displayText:
             typeof q.displayText === "string" && q.displayText
               ? q.displayText

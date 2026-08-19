@@ -94,9 +94,9 @@ const COMMAND_LEGEND = [
         desc: "Runder Button: idle = ↵. Während Arbeit: Text+Enter = Queue; leerer Klick/Snack (runder Stopp-Punkt) = Soft-Abbruch (ACP). Kritische Tools laufen sicher zu Ende mit Hinweis.",
       },
       {
-        cmd: "Chat | Deep Search | Fork",
+        cmd: "Chat | Deep Search | Fork | Swarm",
         need: "empfohlen",
-        desc: "Chat = normale Nachricht. Deep Search = /deep-research. Fork = Session branchen (/fork).",
+        desc: "Chat = Nachricht. Deep Search = Grok /deep-research (sonst ausgegraut). Fork = Session branchen. Swarm = °_Agent/^_Code Planer+Suche+Synthese.",
       },
       {
         cmd: "Kette · verbunden / offline",
@@ -300,7 +300,7 @@ const SHORT_HANDBOOK = [
       "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, Refresh, **Buch** (Handbuch · UI-Legende).",
       "Header rechts: Profil · Modell-Pille · Kette · **Zusammenfassen** (aktive Session).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
-      "Unten: Composer · Chat | Deep Search | Fork · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
+      "Unten: Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
     ],
   },
   {
@@ -325,8 +325,9 @@ const SHORT_HANDBOOK = [
       ["Chat", "Normale Nachricht an den aktiven Agenten"],
       ["Apfel", "°_Agent: über ↵ (ohne extra Höhe). Rot/Stiel/Blatt; an = Gold-Rand. Aus = keine Vault-Suche."],
       ["Treffer", "Nur im Panel, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext."],
-      ["Deep Search", "Strukturierte Multi-Quellen-Recherche"],
+      ["Deep Search", "Grok: strukturierte Multi-Quellen-Recherche. Andere Köpfe ausgegraut."],
       ["Fork", "Session branchen; Text = optionale Directive"],
+      ["Swarm", "°_Agent / ^_Code: Planer, Suche, Synthese. Grok ausgegraut."],
       ["↑", "Leerer Composer: Prompt-History"],
       ["Rewind", "Esc Esc · /rewind · ↺ an der Nutzer-Nachricht. Dateien bleiben."],
       ["Enter", "Desk: senden · Handy: Zeile (↵-Button sendet)"],

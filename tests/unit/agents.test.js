@@ -93,6 +93,7 @@ test("buildAgentProfiles", async (t) => {
     assert.equal(code.env?.GLYPH_AGENT_MODE, "code");
     assert.deepEqual(code.capabilities, {
       deepSearch: false,
+      swarm: true,
       activity: false,
       sessionList: false,
       sessionHistory: true,
@@ -103,6 +104,7 @@ test("buildAgentProfiles", async (t) => {
   await t.test("capabilities per profile", () => {
     assert.deepEqual(findAgent(profiles, "grok").capabilities, {
       deepSearch: true,
+      swarm: false,
       activity: true,
       sessionList: true,
       sessionHistory: true,
@@ -110,6 +112,7 @@ test("buildAgentProfiles", async (t) => {
     });
     assert.deepEqual(findAgent(profiles, "glyph-agent").capabilities, {
       deepSearch: false,
+      swarm: true,
       activity: false,
       sessionList: false,
       sessionHistory: true,

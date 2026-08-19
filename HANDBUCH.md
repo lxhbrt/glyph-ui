@@ -21,9 +21,9 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 
 | Profil | Typ | Auth | Fähigkeiten (in Glyph) |
 |--------|-----|------|-------------------------|
-| **grok** (Standard) | Cloud | OAuth | Sessions ✅ · Deep Search ✅ · Aktivität ✅ · Voice ✅ |
-| **^_Code** | Lokal + Cloud (DeepSeek) | OpenRouter | Read/Write/Shell mit Genehmigung in Glyph |
-| **°_Agent** (id `glyph-agent`) | Lokal + Cloud-Antwort | — | VaultFind, Web-Recherche, Cloud-Antwort (Engine); Trace/Steps in der UI |
+| **grok** (Standard) | Cloud | OAuth | Sessions ✅ · Deep Search ✅ · Swarm ✗ · Aktivität ✅ · Voice ✅ |
+| **^_Code** | Lokal + Cloud (DeepSeek) | OpenRouter | Read/Write/Shell mit Genehmigung in Glyph · Swarm ✅ |
+| **°_Agent** (id `glyph-agent`) | Lokal + Cloud-Antwort | — | VaultFind, Web-Recherche, Cloud-Antwort (Engine); Swarm ✅; Deep Search ✗ |
 
 > 📊 Grafische Abläufe (warum + wie jedes Profil): `docs/glyph-profile-diagrams.html`
 > · Volltext der Bedienung unten; die Kapitel dieses Handbuchs gelten profilunabhängig,

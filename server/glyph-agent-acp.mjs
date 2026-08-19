@@ -19,6 +19,7 @@ import { createIdleTimer } from "./acpIdle.mjs";
 import { buildStepBanner } from "./stepBanner.mjs";
 import { agentVaultBodyFromMeta } from "./vaultFlags.mjs";
 import { sliceMessagesBeforeUser } from "../shared/rewind.mjs";
+import { cloneSessionStore } from "../shared/composerActions.mjs";
 
 // glyph-agent HTTP-Dienst (Standard wie in server.py)
 const AGENT_URL = process.env.GLYPH_AGENT_URL || "http://127.0.0.1:18899";
@@ -199,7 +200,9 @@ app.onRequest(acp.methods.agent.initialize, async () => ({
       image: true,
       text: true,
     },
-    sessionCapabilities: {},
+    sessionCapabilities: {
+      fork: {},
+    },
   },
   agentInfo: {
     name: AGENT_NAME,
@@ -244,6 +247,19 @@ app.onRequest(
     return { sessionId: params.sessionId, messages: store.messages || [] };
   },
 );
+
+app.onRequest(acp.methods.agent.session.fork, async ({ params }) => {
+  const sourceId = params?.sessionId;
+  const store = sessions.get(sourceId);
+  if (!store) {
+    const err = new Error(`Unbekannte Session: ${sourceId}`);
+    err.code = -32602;
+    throw err;
+  }
+  const sessionId = newSessionId();
+  sessions.set(sessionId, cloneSessionStore(store));
+  return { sessionId };
+});
 
 app.onRequest(
   "session.rewind",
@@ -497,6 +513,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       // Interactive °_Agent: Vault-Suche nur bei Toggle. Fehlt _meta → aus
       // (Jobs rufen /chat direkt auf und behalten den B+-Default).
       ...agentVaultBodyFromMeta(glyphMeta, { isCode: IS_CODE }),
+      ...(glyphMeta.swarm === true ? { swarm: true } : {}),
     }
 
     let { answerText, stepBlocks, trace, final } = await streamChat(

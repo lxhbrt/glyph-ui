@@ -27,6 +27,11 @@ import {
   slashTokenAt,
 } from "./utils/slash.js";
 import {
+  canSwarm,
+  composerActionLabel,
+  resolveComposerAction,
+} from "./utils/composerActions.js";
+import {
   IconSearch,
   IconCompose,
   IconCommands,
@@ -169,17 +174,24 @@ export default function App() {
   const copiedTimerRef = useRef(null);
   /** Message id whose copy/speak actions are revealed (tap-to-show). */
   const [actionsMsgId, setActionsMsgId] = useState(null);
-  /** Composer action: chat | deep-search | fork (TUI-aligned, not thinking toggle). */
+  /** Composer action: chat | deep-search | fork | swarm. */
   const [sendAction, setSendAction] = useState(() => {
     try {
       const v = localStorage.getItem("gbt-action");
-      if (v === "deep-search" || v === "fork" || v === "chat") return v;
+      if (
+        v === "deep-search" ||
+        v === "fork" ||
+        v === "chat" ||
+        v === "swarm"
+      ) {
+        return v;
+      }
     } catch {
       /* ignore */
     }
     return "chat";
   });
-  /** Compact mode dropdown (Chat | Deep Search | Fork). */
+  /** Compact mode dropdown (Chat | Deep Search | Fork | Swarm). */
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeMenuRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -1304,6 +1316,10 @@ export default function App() {
           return;
         }
 
+        if (msg.type === "fork_result" && msg.sessionId) {
+          setSessionId(msg.sessionId);
+        }
+
         if (msg.type === "turn_done") {
           finalizeStreaming();
           busyRef.current = false;
@@ -1566,6 +1582,14 @@ export default function App() {
             ...(wire.length ? { attachments: wire } : {}),
           }),
         );
+      } else if (action === "swarm") {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "swarm",
+            text,
+            ...(wire.length ? { attachments: wire } : {}),
+          }),
+        );
       } else if (action === "fork") {
         wsRef.current.send(JSON.stringify({ type: "fork", text }));
       } else {
@@ -1599,6 +1623,10 @@ export default function App() {
     if (action === "deep-search") {
       const body = text || att || "…";
       return att && text ? `🔍 Deep Search: ${text}\n${att}` : `🔍 Deep Search: ${body}`;
+    }
+    if (action === "swarm") {
+      const body = text || att || "…";
+      return att && text ? `Swarm: ${text}\n${att}` : `Swarm: ${body}`;
     }
     if (action === "fork") {
       return text ? `⑂ Fork: ${text}` : "⑂ Fork (Session branchen)";
@@ -1683,13 +1711,30 @@ export default function App() {
 
     if (!connected || !wsRef.current) return;
 
+    const resolved = resolveComposerAction(sendAction, text);
+    const action = resolved.action;
+    const body = resolved.text;
+
     // Fork may run without a directive; chat & deep-search need text and/or files.
     const atts =
-      sendAction === "fork" ? [] : toWireAttachments(pendingAttachments);
-    if (sendAction !== "fork" && !text && !atts.length) return;
+      action === "fork" ? [] : toWireAttachments(pendingAttachments);
+    if (action !== "fork" && !body && !atts.length) return;
+
+    if (action === "deep-search" && agent?.id && agent.id !== "grok") {
+      setError(
+        `Deep Search ist nur im grok-Profil verfügbar (aktiv: ${agent.label || "Agent"})`,
+      );
+      return;
+    }
+    if (action === "swarm" && agent?.id && !canSwarm(agent.id)) {
+      setError(
+        `Swarm läuft über °_Agent und ^_Code (aktiv: ${agent.label || "Agent"})`,
+      );
+      return;
+    }
 
     const wantsVault =
-      isAgentProfile && sendAction === "chat" && vaultSearchOn && Boolean(text);
+      isAgentProfile && action === "chat" && vaultSearchOn && Boolean(body);
 
     if (wantsVault && vaultSearchBusy) return;
     if (wantsVault) {
@@ -1706,18 +1751,18 @@ export default function App() {
       }
     }
 
-    const displayText = buildDisplayText(sendAction, text, atts);
+    const displayText = buildDisplayText(action, body, atts);
     const picked = wantsVault
       ? toWireSelected(selectedHits(vaultHits?.hits || [], vaultHitOn))
       : [];
     const useVaultContext = picked.length > 0;
     const payload = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      text,
-      action: sendAction,
+      text: body,
+      action,
       displayText,
       ...(atts.length ? { attachments: atts } : {}),
-      ...(isAgentProfile && sendAction === "chat"
+      ...(isAgentProfile && action === "chat"
         ? {
             vaultSearch: useVaultContext,
             ...(useVaultContext ? { vaultSelected: picked } : {}),
@@ -1741,9 +1786,11 @@ export default function App() {
       setVaultHits(null);
       setVaultHitOn(new Set());
     }
+    if (action === "fork") setSendAction("chat");
     dispatchPayload(payload);
   }, [
     attachBusy,
+    agent,
     busy,
     clearPendingAttachments,
     connected,
@@ -2177,13 +2224,13 @@ export default function App() {
   const visibleMessages = toolCardDemo ? TOOLCARD_DEMO_MESSAGES : messages;
 
   /**
-   * Grok-only features. Sessions and the calendar read ~/.grok/sessions from
-   * disk; Deep Search sends the /deep-research slash command. Neither exists
-   * for other agents, so the controls stay visible but disabled — a greyed
-   * button with a reason beats a button that silently does nothing.
+   * Grok-only: Deep Search, Sessions, calendar. Other heads keep the control
+   * visible but disabled — a greyed button with a reason beats silent no-op.
+   * Swarm is the inverse: °_Agent / ^_Code, greyed on Grok.
    */
   const caps = agent?.capabilities;
   const canDeepSearch = caps ? Boolean(caps.deepSearch) : true;
+  const canSwarmAction = caps ? Boolean(caps.swarm) : true;
   // Session-Lupe (persistent) nur bei sessionList:true (Grok); Aktivität nur bei activity:true.
   const canBrowseSessions = caps ? Boolean(caps.sessionList) : true;
   const canSeeActivity = caps ? Boolean(caps.activity) : true;
@@ -2212,6 +2259,7 @@ export default function App() {
     (what) => `${what} ist nur im grok-Profil verfügbar (aktiv: ${agentLabel})`,
     [agentLabel],
   );
+  const swarmBlockedReason = `Swarm läuft über °_Agent und ^_Code (aktiv: ${agentLabel})`;
 
   /** Tooltip for the agent picker: command + why some controls are greyed. */
   const agentPickTitle = useMemo(() => {
@@ -2229,7 +2277,10 @@ export default function App() {
     if (!canDeepSearch && sendAction === "deep-search") {
       setSendAction("chat");
     }
-  }, [canDeepSearch, sendAction]);
+    if (!canSwarmAction && sendAction === "swarm") {
+      setSendAction("chat");
+    }
+  }, [canDeepSearch, canSwarmAction, sendAction]);
 
   // Same for panels that are open when the agent changes under them.
   // Kalender-Panel bleibt offen (Tab Plan gilt für alle Profile; Aktivität ggf. deaktiviert).
@@ -2608,6 +2659,9 @@ export default function App() {
     }
     if (sendAction === "deep-search") {
       return "Deep Search Query… z. B. Compare Postgres 17 vs MySQL 9";
+    }
+    if (sendAction === "swarm") {
+      return "Swarm-Thema… °_Agent / ^_Code zerlegen, suchen, belegen";
     }
     if (sendAction === "fork") {
       return "Optional: Directive für den Fork… (leer = nur Session branchen)";
@@ -3059,13 +3113,12 @@ export default function App() {
             {canSummarize && connected && sessionId ? (
               <button
                 type="button"
-                className="pill pill-btn active-session-summarize"
+                className="pill pill-btn pill-btn--icon active-session-summarize"
                 title="Aktive Session zusammenfassen (Vorschau → Bestätigen)"
                 aria-label="Session zusammenfassen"
                 onClick={() => setActiveSummarizeOpen(true)}
               >
-                <IconSummarize size={16} />
-                <span className="summarize-btn-label">Zusammenfassen</span>
+                <IconSummarize size={18} />
               </button>
             ) : null}
           </div>
@@ -3755,23 +3808,13 @@ export default function App() {
                   className={`composer-mode-btn${modeMenuOpen ? " is-open" : ""}`}
                   aria-haspopup="listbox"
                   aria-expanded={modeMenuOpen}
-                  aria-label={`Modus: ${
-                    sendAction === "deep-search"
-                      ? "Deep Search"
-                      : sendAction === "fork"
-                        ? "Fork"
-                        : "Chat"
-                  }`}
+                  aria-label={`Modus: ${composerActionLabel(sendAction)}`}
                   title="Sendemodus"
                   disabled={!connected}
                   onClick={() => setModeMenuOpen((o) => !o)}
                 >
                   <span className="composer-mode-label">
-                    {sendAction === "deep-search"
-                      ? "Deep Search"
-                      : sendAction === "fork"
-                        ? "Fork"
-                        : "Chat"}
+                    {composerActionLabel(sendAction)}
                   </span>
                   <span className="composer-mode-chevron" aria-hidden="true">
                     ▾
@@ -3801,10 +3844,21 @@ export default function App() {
                         title:
                           "Session branchen (TUI /fork). Text = optionale Directive",
                       },
+                      {
+                        id: "swarm",
+                        label: "Swarm",
+                        title:
+                          "°_Agent und ^_Code: Planer, Suche, Synthese mit Quellen",
+                      },
                     ].map((opt) => {
                       const blocked =
-                        opt.id === "deep-search" && !canDeepSearch;
+                        (opt.id === "deep-search" && !canDeepSearch) ||
+                        (opt.id === "swarm" && !canSwarmAction);
                       const active = sendAction === opt.id;
+                      const blockedTitle =
+                        opt.id === "swarm"
+                          ? swarmBlockedReason
+                          : unavailableFor("Deep Search");
                       return (
                         <button
                           key={opt.id}
@@ -3814,11 +3868,7 @@ export default function App() {
                           className={`composer-mode-option${
                             active ? " is-active" : ""
                           }${blocked ? " is-blocked" : ""}`}
-                          title={
-                            blocked
-                              ? unavailableFor("Deep Search")
-                              : opt.title
-                          }
+                          title={blocked ? blockedTitle : opt.title}
                           disabled={!connected || blocked}
                           onClick={() => {
                             if (blocked) return;
@@ -3905,13 +3955,17 @@ export default function App() {
                         ? seat === "phone"
                           ? "Deep Search starten"
                           : "Deep Search starten (Enter)"
-                        : sendAction === "fork"
+                        : sendAction === "swarm"
                           ? seat === "phone"
-                            ? "Session forken"
-                            : "Session forken (Enter)"
-                          : seat === "phone"
-                            ? "Senden"
-                            : "Senden (Enter)"
+                            ? "Swarm starten"
+                            : "Swarm starten (Enter)"
+                          : sendAction === "fork"
+                            ? seat === "phone"
+                              ? "Session forken"
+                              : "Session forken (Enter)"
+                            : seat === "phone"
+                              ? "Senden"
+                              : "Senden (Enter)"
                 }
                 aria-label={
                   showStuffed
@@ -3922,9 +3976,11 @@ export default function App() {
                         : "Antwort stoppen"
                       : sendAction === "deep-search"
                         ? "Deep Search starten"
-                        : sendAction === "fork"
-                          ? "Fork starten"
-                          : "Senden"
+                        : sendAction === "swarm"
+                          ? "Swarm starten"
+                          : sendAction === "fork"
+                            ? "Fork starten"
+                            : "Senden"
                 }
                 aria-live={showWorking ? "polite" : undefined}
               >

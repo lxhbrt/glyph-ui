@@ -407,20 +407,6 @@ body,
   min-width: 0;
 }
 
-button.pill-btn.active-session-summarize {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-shrink: 0;
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-
-.summarize-btn-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
 /* Agent picker (Grok ↔ Claude) — sits left of the connection pill. */
 .agent-pick {
   display: inline-flex;
@@ -3840,7 +3826,7 @@ button.tool-card-summary:hover .tool-card-verb {
   -webkit-box-orient: vertical;
 }
 
-/* Compact mode dropdown (Chat | Deep Search | Fork) */
+/* Compact mode dropdown (Chat | Deep Search | Fork | Swarm) */
 .composer-mode-wrap {
   position: relative;
   flex-shrink: 0;
@@ -4133,7 +4119,7 @@ button.tool-card-summary:hover .tool-card-verb {
   }
 }
 
-/* Action picker: Chat | Deep Search | Fork (TUI-aligned, not thinking toggle) */
+/* Action picker: Chat | Deep Search | Fork | Swarm (TUI-aligned) */
 .action-picker {
   display: inline-flex;
   align-items: stretch;
@@ -5367,7 +5353,14 @@ button.cal-cell {
 
   .top {
     flex-direction: column;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
     gap: 8px;
+  }
+
+  /* Column header: 10rem basis is height, not width — that parked the pills mid-screen. */
+  .top > div:first-child {
+    flex: 0 1 auto;
   }
 
   .top h1 {
@@ -5392,8 +5385,8 @@ button.cal-cell {
   .top-actions {
     gap: 8px;
     width: 100%;
-    /* Kette + Zusammenfassen bleiben sichtbar; Modell-Pille schrumpft */
-    flex-wrap: wrap;
+    /* Kürzel-Badge: kein Umbruch der Action-Zeile durch lange Modell-IDs */
+    flex-wrap: nowrap;
     min-width: 0;
   }
 
@@ -5420,11 +5413,6 @@ button.cal-cell {
     min-width: 2.5rem;
     min-height: 2.5rem;
     padding: 0;
-  }
-
-  button.pill-btn.active-session-summarize {
-    min-height: 36px;
-    padding: 6px 10px;
   }
 
   /* Chat type scale stays on :root tokens (same as desktop / all modes) */

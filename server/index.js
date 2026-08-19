@@ -111,6 +111,11 @@ import {
   readGlyphBuild,
   readGlyphVersion,
 } from "../shared/meta.js";
+import {
+  canSwarm,
+  deepResearchPrompt,
+  parseForkResponse,
+} from "../shared/composerActions.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = getGlyphRoot();
@@ -2807,6 +2812,7 @@ class GrokBridge {
           glyph.vaultSelected = opts.vaultSelected;
         }
       }
+      if (opts.swarm === true) glyph.swarm = true;
       const result = await this.connection.agent.request(
         acp.methods.agent.session.prompt,
         {
@@ -2842,72 +2848,99 @@ class GrokBridge {
   }
 
   /**
-   * Deep Search — same as TUI `/deep-research <query>`.
-   * Starts a background research workflow; results stream back as normal updates.
+   * Deep Search — Grok ACP intercepts `/deep-research` in session/prompt
+   * (slash_exec). Not a pager-only command. Other profiles have no host.
    * @param {string} query
    * @param {Array} [attachments]
    */
   async deepSearch(query, attachments = []) {
+    if (this.agentId !== "grok") {
+      throw new Error(
+        "Deep Search nur im Grok-Profil (TUI /deep-research).",
+      );
+    }
     const q = String(query || "").trim();
     const atts = normalizeAttachments(attachments);
     if (!q && !atts.length) throw new Error("Deep Search braucht eine Query");
-    // Avoid double-prefix if user already typed the slash command
-    const prompt = !q
-      ? ""
-      : q.startsWith("/deep-research")
-        ? q
-        : `/deep-research ${q}`;
+    const prompt = deepResearchPrompt(q);
     this.broadcast({
       type: "system",
-      text: `Deep Search gestartet — wie TUI \`/deep-research\`. Fortschritt über Workflows.`,
+      text: "Deep Search gestartet. Der Bericht kommt in diesen Chat, sobald die Recherche fertig ist.",
     });
     await this.chat(prompt, atts);
   }
 
   /**
-   * Fork current session (ACP session/fork), like TUI `/fork`.
-   * Optional directive is sent as the first prompt in the new session.
+   * Swarm — °_Agent / ^_Code Engine (Planer → Suche → Synthese).
+   * Grok bleibt bei Deep Search.
+   * @param {string} query
+   * @param {Array} [attachments]
+   */
+  async swarm(query, attachments = []) {
+    if (!canSwarm(this.agentId)) {
+      throw new Error(
+        "Swarm läuft über °_Agent und ^_Code (Grok: Deep Search).",
+      );
+    }
+    const q = String(query || "").trim();
+    const atts = normalizeAttachments(attachments);
+    if (!q && !atts.length) throw new Error("Swarm braucht ein Thema");
+    this.broadcast({
+      type: "system",
+      text: "Swarm gestartet (°_Agent / ^_Code). Bericht kommt in diesen Chat.",
+    });
+    await this.chat(q, atts, { swarm: true });
+  }
+
+  /**
+   * Fork current session (Grok `x.ai/session/fork`, else ACP `session/fork`).
+   * Optional directive is the first prompt in the new session.
+   * Slash-as-prompt is not a fallback — that leaves Glyph on the old session.
    */
   async forkSession(directive = "") {
     if (!this.connected || !this.connection || !this.sessionId) {
-      throw new Error("Grok is not connected yet");
+      throw new Error("Agent ist noch nicht verbunden");
     }
     if (this.busy) throw new Error("A turn is already running");
 
     const sourceId = this.sessionId;
-    let result;
-    try {
-      result = await this.connection.agent.request(
-        acp.methods.agent.session.fork,
-        {
-          sessionId: sourceId,
-          cwd: WORK_CWD,
-          mcpServers: [],
-          _meta: { yoloMode: true },
-        },
+    const params = {
+      sessionId: sourceId,
+      sourceSessionId: sourceId,
+      cwd: WORK_CWD,
+      mcpServers: [],
+      _meta: { yoloMode: true, noWorktree: true },
+    };
+
+    const tryRequest = async (method) => {
+      try {
+        return {
+          method,
+          result: await this.connection.agent.request(method, params),
+        };
+      } catch (err) {
+        const code = err?.code ?? err?.data?.code;
+        const msg = String(err?.message || err || "");
+        const missing =
+          code === -32601 ||
+          /method not found|unknown method|not implemented|unrecognized/i.test(
+            msg,
+          );
+        if (missing) return null;
+        throw err;
+      }
+    };
+
+    const hit =
+      (await tryRequest("x.ai/session/fork")) ||
+      (await tryRequest(acp.methods.agent.session.fork));
+    if (!hit) {
+      throw new Error(
+        "Fork: Agent bietet weder x.ai/session/fork noch session/fork.",
       );
-    } catch {
-      // Fallback: let the agent shell handle /fork as a slash command
-      const d = String(directive || "").trim();
-      const slash = d
-        ? d.startsWith("/fork")
-          ? d
-          : `/fork --no-worktree ${d}`
-        : "/fork --no-worktree";
-      this.broadcast({
-        type: "system",
-        text: `ACP session/fork nicht verfügbar — sende \`${slash}\` als Prompt.`,
-      });
-      await this.chat(slash);
-      return {
-        ok: true,
-        via: "slash",
-        sourceSessionId: sourceId,
-        sessionId: this.sessionId,
-      };
     }
 
-    const newId = result?.sessionId;
+    const newId = parseForkResponse(hit.result);
     if (!newId) {
       throw new Error("Fork fehlgeschlagen: keine neue sessionId");
     }
@@ -2936,7 +2969,7 @@ class GrokBridge {
 
     return {
       ok: true,
-      via: "session/fork",
+      via: hit.method,
       sourceSessionId: sourceId,
       sessionId: newId,
     };
@@ -3283,6 +3316,11 @@ wss.on("connection", (ws, req) => {
         });
       } else if (msg.type === "deep_search" || msg.type === "deep-search") {
         await b.deepSearch(
+          msg.text || msg.query || "",
+          normalizeAttachments(msg.attachments),
+        );
+      } else if (msg.type === "swarm") {
+        await b.swarm(
           msg.text || msg.query || "",
           normalizeAttachments(msg.attachments),
         );
