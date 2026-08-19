@@ -1578,6 +1578,23 @@ button.send.send--stuffed .send-snack {
   font-variant-numeric: tabular-nums;
 }
 
+.context-lvl-compact {
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 650;
+  padding: 2px 7px;
+  min-height: 1.5rem;
+  cursor: pointer;
+}
+
+.context-lvl-compact:hover {
+  background: color-mix(in srgb, var(--gold) 22%, var(--panel));
+}
+
 /* Drag-and-drop target on the transcript (no toolbar button needed) */
 .messages.is-drop-target {
   outline: 2px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
@@ -2670,6 +2687,43 @@ button.tool-card-summary:hover .tool-card-verb {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
+.plan-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 4px 4px 4px 0;
+}
+
+.plan-bar-approve {
+  min-height: 2rem;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--gold) 16%, var(--panel));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.plan-bar-approve:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gold) 26%, var(--panel));
+}
+
+.plan-bar-approve:disabled,
+.plan-bar-revise:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.plan-bar-revise {
+  min-height: 2rem;
+  padding: 0 8px;
+  font-size: 0.72rem;
+}
+
 .plan-bar-label {
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -3231,6 +3285,80 @@ button.tool-card-summary:hover .tool-card-verb {
   font-size: 0.72rem;
   color: var(--muted);
   opacity: 0.85;
+}
+
+.rewind-picker {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: min(32rem, calc(100vh - 3rem));
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  padding: 14px 16px 12px;
+  outline: none;
+}
+
+.rewind-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.rewind-picker-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.rewind-picker-hint {
+  margin: 8px 0 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.rewind-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.rewind-picker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rewind-picker-row.is-selected,
+.rewind-picker-row:hover {
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+}
+
+.rewind-picker-idx {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding-top: 2px;
+}
+
+.rewind-picker-text {
+  min-width: 0;
+  line-height: 1.35;
 }
 
 .slash-popup-empty {
@@ -4288,6 +4416,20 @@ button.danger {
 .session-title-row strong {
   font-weight: 600;
   font-size: 0.95rem;
+}
+
+.session-rename {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .session-sub {
@@ -7266,14 +7408,11 @@ button.cal-cell {
 
   .lage-body {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     overflow: hidden;
+    padding-top: 0.35rem;
     container-type: size;
-  }
-
-  .lage-body.has-inspect {
-    align-items: flex-start;
   }
 
   .lage-canvas {
@@ -7281,7 +7420,7 @@ button.cal-cell {
     max-width: 100%;
     height: auto;
     max-height: 100%;
-    margin: 0;
+    margin: 0 auto;
     aspect-ratio: var(--lage-fw) / var(--lage-fh);
   }
 
@@ -7289,11 +7428,16 @@ button.cal-cell {
     .lage-canvas {
       width: min(100cqi, calc(100cqh * var(--lage-fw) / var(--lage-fh)));
     }
+  }
 
-    .lage-body.has-inspect .lage-canvas {
-      width: min(100cqi, calc(62cqh * var(--lage-fw) / var(--lage-fh)));
-      max-height: 62%;
-    }
+  .lage-node--hub .lage-node-core {
+    width: 4.25rem;
+    height: 4.25rem;
+  }
+
+  .lage-node--profile .lage-node-core {
+    width: 3.5rem;
+    height: 3.5rem;
   }
 
   .lage-inspect {
@@ -7310,7 +7454,20 @@ button.cal-cell {
   }
 
   .lage-node-label {
-    font-size: 0.55rem;
+    font-size: 0.62rem;
+  }
+
+  .lage-node--vault .lage-node-label {
+    left: 0;
+    transform: none;
+    max-width: 7.2rem;
+  }
+
+  .lage-node--workspace .lage-node-label {
+    left: auto;
+    right: 0;
+    transform: none;
+    max-width: 7.2rem;
   }
 
   .lage-gate {

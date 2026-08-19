@@ -380,6 +380,26 @@ function IconSummarize({ size = 18 }) {
   );
 }
 
+function IconRewind({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8.2 7.2L4.5 11l3.7 3.8"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.2 11h8.1c3 0 5.4 2.1 5.4 4.8v.4"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export {
   IconSearch,
   IconCompose,
@@ -403,4 +423,5 @@ export {
   IconLink,
   IconLinkOff,
   IconSummarize,
+  IconRewind,
 };

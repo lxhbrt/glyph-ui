@@ -8,6 +8,16 @@
  * @param {Array<{ status?: string }>} entries
  * @returns {{ done: number, total: number, current: string | null, allDone: boolean }}
  */
+/**
+ * Frischer Plan: noch kein Schritt läuft — UI darf Umsetzen / Ändern anbieten.
+ * @param {Array<{ status?: string }>} entries
+ */
+export function planNeedsApproval(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (list.length === 0) return false;
+  return list.every((e) => !e?.status || e.status === "pending");
+}
+
 export function planProgress(entries) {
   const list = Array.isArray(entries) ? entries : [];
   const total = list.length;

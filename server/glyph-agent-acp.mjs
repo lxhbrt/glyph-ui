@@ -18,6 +18,7 @@ import { buildPromptWithAttachments } from "../shared/attachments.mjs";
 import { createIdleTimer } from "./acpIdle.mjs";
 import { buildStepBanner } from "./stepBanner.mjs";
 import { agentVaultBodyFromMeta } from "./vaultFlags.mjs";
+import { sliceMessagesBeforeUser } from "../shared/rewind.mjs";
 
 // glyph-agent HTTP-Dienst (Standard wie in server.py)
 const AGENT_URL = process.env.GLYPH_AGENT_URL || "http://127.0.0.1:18899";
@@ -241,6 +242,34 @@ app.onRequest(
       throw err;
     }
     return { sessionId: params.sessionId, messages: store.messages || [] };
+  },
+);
+
+app.onRequest(
+  "session.rewind",
+  (raw) => ({
+    sessionId: raw?.sessionId,
+    dropUserIndex: raw?.dropUserIndex,
+  }),
+  async ({ params }) => {
+    const store = sessions.get(params.sessionId);
+    if (!store) {
+      const err = new Error(`Unbekannte oder beendete Session: ${params.sessionId}`);
+      err.code = -32602;
+      throw err;
+    }
+    const drop = Number(params.dropUserIndex);
+    if (!Number.isInteger(drop) || drop < 0) {
+      const err = new Error("dropUserIndex ungültig");
+      err.code = -32602;
+      throw err;
+    }
+    store.messages = sliceMessagesBeforeUser(store.messages || [], drop);
+    return {
+      sessionId: params.sessionId,
+      dropUserIndex: drop,
+      messages: store.messages,
+    };
   },
 );
 

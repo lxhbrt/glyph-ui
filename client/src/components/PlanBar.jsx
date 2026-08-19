@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { planProgress, planStatusGlyph } from "../utils/plan.js";
+import { planNeedsApproval, planProgress, planStatusGlyph } from "../utils/plan.js";
 
 /**
  * @param {{
@@ -11,12 +11,24 @@ import { planProgress, planStatusGlyph } from "../utils/plan.js";
  *   collapsed?: boolean,
  *   onToggle?: () => void,
  *   onDismiss?: () => void,
+ *   onApprove?: () => void,
+ *   onRevise?: () => void,
+ *   approveDisabled?: boolean,
  * }} props
  */
-export function PlanBar({ entries, collapsed = false, onToggle, onDismiss }) {
+export function PlanBar({
+  entries,
+  collapsed = false,
+  onToggle,
+  onDismiss,
+  onApprove,
+  onRevise,
+  approveDisabled = false,
+}) {
   if (!entries?.length) return null;
 
   const { done, total, current, allDone } = planProgress(entries);
+  const needsApproval = planNeedsApproval(entries);
 
   return (
     <div
@@ -47,6 +59,30 @@ export function PlanBar({ entries, collapsed = false, onToggle, onDismiss }) {
             {collapsed ? "▸" : "▾"}
           </span>
         </button>
+        {needsApproval && (onApprove || onRevise) ? (
+          <div className="plan-bar-actions">
+            {onApprove ? (
+              <button
+                type="button"
+                className="plan-bar-approve"
+                disabled={approveDisabled}
+                onClick={onApprove}
+              >
+                Umsetzen
+              </button>
+            ) : null}
+            {onRevise ? (
+              <button
+                type="button"
+                className="ghost plan-bar-revise"
+                disabled={approveDisabled}
+                onClick={onRevise}
+              >
+                Ändern
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {onDismiss ? (
           <button
             type="button"

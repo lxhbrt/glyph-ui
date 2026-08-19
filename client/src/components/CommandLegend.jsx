@@ -79,6 +79,16 @@ const COMMAND_LEGEND = [
         desc: "Follow-ups parken während der Antwort (wie TUI). Danach automatisch senden. × / Leeren.",
       },
       {
+        cmd: "↑ · Prompt-History",
+        need: "empfohlen",
+        desc: "Leerer Composer: letzte Prompts durchblättern (wie TUI). ↓ schließt. Esc stellt den Entwurf wieder her.",
+      },
+      {
+        cmd: "Rewind",
+        need: "empfohlen",
+        desc: "Letzten Nutzer-Turn und alles danach aus dem Verlauf nehmen. Esc Esc, /rewind, oder ↺ an der Nachricht. Dateien bleiben.",
+      },
+      {
         cmd: "↵ / Snack · Stopp",
         need: "auto",
         desc: "Runder Button: idle = ↵. Während Arbeit: Text+Enter = Queue; leerer Klick/Snack (runder Stopp-Punkt) = Soft-Abbruch (ACP). Kritische Tools laufen sicher zu Ende mit Hinweis.",
@@ -97,6 +107,11 @@ const COMMAND_LEGEND = [
         cmd: "Zusammenfassen",
         need: "empfohlen",
         desc: "Header rechts neben der Kette: aktive Session als Snapshot speichern (Vorschau → Bestätigen). Grok zusätzlich in der Lupe. Test-Pings werden nicht Titel.",
+      },
+      {
+        cmd: "Name · /rename",
+        need: "optional",
+        desc: "Lupe: r oder Button Name. Composer: /rename Titel. Nur Grok-Sessions auf Disk.",
       },
       {
         cmd: "Freitext + Kontext",
@@ -122,6 +137,16 @@ const COMMAND_LEGEND = [
         cmd: "Tool-Karte",
         need: "auto",
         desc: "Live-Tools: Verb + Ziel. Klick öffnet Input/Diff/Ausgabe. Fehlgeschlagene Tools öffnen sich selbst.",
+      },
+      {
+        cmd: "Plan-Freigabe",
+        need: "optional",
+        desc: "Frischer ACP-Plan (alles offen): Umsetzen sendet den Auftrag, Ändern fokussiert den Composer.",
+      },
+      {
+        cmd: "LVL · Zusammenpressen",
+        need: "optional",
+        desc: "Klick auf die Leiste: Legende. Über Soft-Cap (Grok): Zusammenpressen sendet /compact.",
       },
     ],
   },
@@ -169,6 +194,11 @@ const COMMAND_LEGEND = [
         desc: "Session laden / öffnen.",
       },
       {
+        cmd: "r",
+        need: "optional",
+        desc: "Markierte Session umbenennen.",
+      },
+      {
         cmd: "Esc",
         need: "optional",
         desc: "Panel schließen oder Bestätigung abbrechen.",
@@ -188,7 +218,7 @@ const COMMAND_HINTS = {
     {
       cmd: "Slash in dieser UI",
       need: "hilfreich",
-      desc: "Live-Liste = was der Agent wirklich anbietet. Glyph-eigene Aktionen: Deep Search, Fork, Sessions, Kopieren, Plan-Leiste.",
+      desc: "Live-Liste = was der Agent wirklich anbietet. Glyph-eigene Aktionen: Deep Search, Fork, Rewind, /rename, Sessions, Kopieren, Plan-Leiste.",
     },
     {
       cmd: "TUI-Doku",
@@ -297,6 +327,8 @@ const SHORT_HANDBOOK = [
       ["Treffer", "Nur im Panel, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext."],
       ["Deep Search", "Strukturierte Multi-Quellen-Recherche"],
       ["Fork", "Session branchen; Text = optionale Directive"],
+      ["↑", "Leerer Composer: Prompt-History"],
+      ["Rewind", "Esc Esc · /rewind · ↺ an der Nutzer-Nachricht. Dateien bleiben."],
       ["Enter", "Desk: senden · Handy: Zeile (↵-Button sendet)"],
       ["Shift+Enter", "Neue Zeile ohne Senden (Desk)"],
     ],

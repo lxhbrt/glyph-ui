@@ -10,6 +10,7 @@
  *     vaultSearch?: boolean, vaultSelected?: VaultHit[] }
  *   { type: "deep_search", text: "...", attachments?: AttachmentMeta[] }
  *   { type: "fork", text?: "..." }        // ACP session/fork (+ optional directive)
+ *   { type: "rewind", dropUserIndex: number } // Verlauf vor diesem User-Turn kappen
  *   { type: "reset" }
  *   { type: "reconnect" }   // start/restart grok agent process
  *   { type: "disconnect" }  // quit agent (like /quit) — stay offline until reconnect
@@ -65,11 +66,13 @@ import {
 import {
   cleanupEmptySessions,
   closeSession,
+  applyDiskRewind,
   getSession,
   getSessionForOpen,
   isSessionId,
   listSessions,
   readSessionContext,
+  renameSession,
   resolveContextDefaults,
 } from "./sessions.js";
 import { buildActivity } from "./activity.js";
@@ -1541,6 +1544,28 @@ app.get("/api/sessions/:id", async (req, res) => {
 });
 
 /**
+ * Manual title (TUI /rename). Body: { title: string }
+ */
+app.patch("/api/sessions/:id", async (req, res) => {
+  try {
+    if (!isSessionId(req.params.id)) {
+      res.status(400).json({ error: "Invalid session id" });
+      return;
+    }
+    const result = await renameSession(req.params.id, req.body?.title);
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = /not found/i.test(message)
+      ? 404
+      : /titel|invalid/i.test(message)
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+/**
  * LVL-UP context meter: used/window for the active or named session.
  * Grok: signals.json ground truth. Others: window map + estimated used (client).
  * Query: ?sessionId=&profile=&model=
@@ -2918,6 +2943,102 @@ class GrokBridge {
   }
 
   /**
+   * Rewind: drop the chosen user turn and everything after.
+   * Files on disk stay. Grok: ACP method or disk+session/load.
+   * °_Agent / ^_Code: session.rewind on the adapter.
+   */
+  async rewindTurn(dropUserIndex) {
+    const drop = Number(dropUserIndex);
+    if (!Number.isInteger(drop) || drop < 0) {
+      throw new Error("dropUserIndex ungültig");
+    }
+    if (this.busy) throw new Error("Agent arbeitet noch — erst abbrechen oder warten");
+
+    const sessionId = this.sessionId;
+    const profile = this.agentId;
+    let via = "ui";
+
+    const tryRequest = async (method, params) => {
+      if (!this.connection?.agent?.request) return null;
+      try {
+        return await this.connection.agent.request(method, params);
+      } catch (err) {
+        const code = err?.code ?? err?.data?.code;
+        const msg = String(err?.message || err || "");
+        const missing =
+          code === -32601 ||
+          /method not found|unknown method|not implemented|unrecognized/i.test(
+            msg,
+          );
+        if (missing) return null;
+        throw err;
+      }
+    };
+
+    if (this.connected && this.connection && sessionId) {
+      const params = { sessionId, dropUserIndex: drop, promptIndex: drop };
+      const grok = await tryRequest("x.ai/rewind", params);
+      if (grok) {
+        via = "x.ai/rewind";
+      } else {
+        const grokApply = await tryRequest("x.ai/rewind/apply", params);
+        if (grokApply) via = "x.ai/rewind/apply";
+        else {
+          const local = await tryRequest("session.rewind", params);
+          if (local) via = "session.rewind";
+        }
+      }
+    }
+
+    if (
+      via === "ui" &&
+      profile === "grok" &&
+      sessionId &&
+      isSessionId(sessionId)
+    ) {
+      await applyDiskRewind(sessionId, drop);
+      via = "disk";
+      if (this.connected && this.connection && this.loadSessionSupported) {
+        this.suppressUpdates = true;
+        try {
+          await this.connection.agent.request(acp.methods.agent.session.load, {
+            sessionId,
+            cwd: WORK_CWD,
+            mcpServers: [],
+            _meta: { yoloMode: true },
+          });
+          via = "disk+load";
+        } catch {
+          /* disk truncated; live context may still hold later turns */
+        } finally {
+          this.suppressUpdates = false;
+        }
+      }
+    }
+
+    if (via === "ui" && profile !== "grok") {
+      throw new Error("Rewind: Adapter ohne session.rewind — Agent nicht verbunden?");
+    }
+
+    this.clearPlan({ broadcast: true });
+    this.broadcast({
+      type: "rewind_result",
+      ok: true,
+      dropUserIndex: drop,
+      via,
+      sessionId: sessionId || null,
+    });
+    this.broadcast({
+      type: "system",
+      text:
+        via === "ui"
+          ? `Rewind · Turn ${drop} (nur Anzeige).`
+          : `Rewind · Turn ${drop} weg (${via}). Dateien bleiben.`,
+    });
+    return { ok: true, dropUserIndex: drop, via, sessionId };
+  }
+
+  /**
    * Cancel the current prompt turn (ACP session/cancel).
    *
    * Soft cancel only — never kills the agent process mid-tool (that could
@@ -3168,6 +3289,9 @@ wss.on("connection", (ws, req) => {
       } else if (msg.type === "fork") {
         const result = await b.forkSession(msg.text || msg.directive || "");
         ws.send(JSON.stringify({ type: "fork_result", ...result }));
+      } else if (msg.type === "rewind") {
+        const result = await b.rewindTurn(msg.dropUserIndex);
+        ws.send(JSON.stringify({ type: "rewind_ack", ...result }));
       } else if (msg.type === "reset") {
         await b.reset();
       } else if (msg.type === "cancel" || msg.type === "stop") {

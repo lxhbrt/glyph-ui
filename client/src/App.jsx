@@ -14,6 +14,8 @@ import { CableLage, GraphGuard } from "./components/CableLage.jsx";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
 import { SlashPopup } from "./components/SlashPopup.jsx";
+import { PromptHistoryPopup } from "./components/PromptHistoryPopup.jsx";
+import { RewindPicker } from "./components/RewindPicker.jsx";
 import { SlashHighlightedText } from "./components/SlashHighlightedText.jsx";
 import { VaultSearchToggle } from "./components/VaultSearchToggle.jsx";
 import { VaultSearchHits } from "./components/VaultSearchHits.jsx";
@@ -45,6 +47,7 @@ import {
   IconLink,
   IconLinkOff,
   IconSummarize,
+  IconRewind,
 } from "./components/icons.jsx";
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
 import {
@@ -79,6 +82,15 @@ import {
 } from "./utils/toolCard.js";
 import { normalizeClientPlanEntries } from "./utils/plan.js";
 import { loadPersistedQueue, persistQueue } from "./utils/queue.js";
+import {
+  loadPromptHistory,
+  pushPromptHistory,
+  stepPromptHistory,
+} from "./utils/promptHistory.js";
+import {
+  rewindPointsFromMessages,
+  sliceMessagesBeforeUser,
+} from "./utils/rewind.js";
 import {
   loadVaultSearchOn,
   saveVaultSearchOn,
@@ -143,6 +155,13 @@ export default function App() {
   const [planCollapsed, setPlanCollapsed] = useState(false);
   /** × an der Plan-Leiste: Leiste aus, Einträge bleiben unter Kalender → Tab Plan. */
   const [planBarHidden, setPlanBarHidden] = useState(false);
+  const [rewindOpen, setRewindOpen] = useState(false);
+  const [rewindBusy, setRewindBusy] = useState(false);
+  const rewindEscAtRef = useRef(0);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyItems, setHistoryItems] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(null);
+  const historyDraftRef = useRef("");
   /** Live slash catalog from available_commands_update. */
   const [agentCommands, setAgentCommands] = useState([]);
   /** Flash "copied" on message action button. */
@@ -173,6 +192,7 @@ export default function App() {
   const runVaultSearchRef = useRef(null);
   const isAgentProfile =
     agent?.id === "glyph-agent" || agent?.id === "agent";
+  const isGrokProfile = agent?.id === "grok" || !agent?.id;
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("gbt-theme") === "light" ? "light" : "dark";
@@ -1259,6 +1279,17 @@ export default function App() {
           return;
         }
 
+        if (msg.type === "rewind_result") {
+          setRewindBusy(false);
+          setRewindOpen(false);
+          if (msg.ok) {
+            const drop = Number(msg.dropUserIndex);
+            setMessages((prev) => sliceMessagesBeforeUser(prev, drop));
+            setPlanEntries([]);
+          }
+          return;
+        }
+
         if (msg.type === "available_commands") {
           const list = Array.isArray(msg.commands) ? msg.commands : [];
           setAgentCommands(
@@ -1306,6 +1337,7 @@ export default function App() {
           finalizeStreaming();
           busyRef.current = false;
           setBusy(false);
+          setRewindBusy(false);
           setCancelling(false);
           lastActivityRef.current = Date.now();
           setSnackStuffed(false);
@@ -1517,6 +1549,12 @@ export default function App() {
       streamingRef.current = false;
       setBusy(true);
       setCancelling(false);
+      if (action === "chat" && text) {
+        const nextHist = pushPromptHistory(agent?.id || "grok", text);
+        setHistoryItems(nextHist);
+        setHistoryOpen(false);
+        setHistoryIndex(null);
+      }
       // User just sent — pin and follow the new turn
       scrollToBottom({ force: true });
 
@@ -1550,7 +1588,7 @@ export default function App() {
         );
       }
     },
-    [scrollToBottom],
+    [scrollToBottom, agent?.id],
   );
 
   const dispatchQueuedRef = useRef(dispatchPayload);
@@ -1602,8 +1640,48 @@ export default function App() {
 
   const send = useCallback(() => {
     const text = input.trim();
-    if (!connected || !wsRef.current) return;
     if (attachBusy) return;
+
+    if (sendAction === "chat" && text) {
+      if (/^\/(?:rewind|undo)(?:\s|$)/i.test(text)) {
+        setInput("");
+        setRewindOpen(true);
+        return;
+      }
+      const renameMatch = text.match(/^\/(?:rename|title)\s+(.+)$/i);
+      if (renameMatch) {
+        const sid = String(sessionId || "");
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sid)) {
+          setError("Umbenennen nur für Grok-Sessions auf Disk.");
+          return;
+        }
+        setInput("");
+        void seatFetch(`/api/sessions/${sid}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: renameMatch[1].trim() }),
+        })
+          .then(async (res) => {
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json.error || "Umbenennen fehlgeschlagen");
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `sys-rename-${Date.now()}`,
+                role: "system",
+                text: `Titel: ${json.title || renameMatch[1].trim()}`,
+                streaming: false,
+              },
+            ]);
+          })
+          .catch((err) => {
+            setError(err instanceof Error ? err.message : String(err));
+          });
+        return;
+      }
+    }
+
+    if (!connected || !wsRef.current) return;
 
     // Fork may run without a directive; chat & deep-search need text and/or files.
     const atts =
@@ -1671,6 +1749,7 @@ export default function App() {
     connected,
     input,
     isAgentProfile,
+    sessionId,
     messages,
     pendingAttachments,
     scrollToBottom,
@@ -1684,6 +1763,45 @@ export default function App() {
     vaultHitOn,
     runVaultSearch,
   ]);
+
+  const rewindPoints = useMemo(
+    () => rewindPointsFromMessages(messages),
+    [messages],
+  );
+
+  const requestRewind = useCallback(
+    (dropUserIndex, restoreText = "") => {
+      if (!connected || !wsRef.current || wsRef.current.readyState !== 1) return;
+      if (busy || rewindBusy) return;
+      const drop = Number(dropUserIndex);
+      if (!Number.isInteger(drop) || drop < 0) return;
+      setRewindBusy(true);
+      setRewindOpen(false);
+      if (restoreText) setInput(restoreText);
+      wsRef.current.send(
+        JSON.stringify({ type: "rewind", dropUserIndex: drop }),
+      );
+    },
+    [busy, connected, rewindBusy],
+  );
+
+  const sendCompact = useCallback(() => {
+    if (!connected || busy) return;
+    dispatchPayload({
+      text: "/compact",
+      action: "chat",
+      displayText: "/compact",
+    });
+  }, [busy, connected, dispatchPayload]);
+
+  const approvePlan = useCallback(() => {
+    if (!connected || busy) return;
+    dispatchPayload({
+      text: "Setze den Plan um.",
+      action: "chat",
+      displayText: "Setze den Plan um.",
+    });
+  }, [busy, connected, dispatchPayload]);
 
   /** „Mit Auswahl senden": markierte Treffer sofort als Agent-Kontext senden. */
   const sendVaultSelection = useCallback(() => {
@@ -3099,6 +3217,26 @@ export default function App() {
                           <IconCopy size={18} />
                         )}
                       </button>
+                      {m.role === "user" && !busy ? (
+                        <button
+                          type="button"
+                          className="msg-action-btn msg-bottom-btn"
+                          title="Rewind: ab dieser Nachricht zurück"
+                          aria-label="Rewind ab dieser Nachricht"
+                          disabled={rewindBusy}
+                          onClick={() => {
+                            const pts = rewindPointsFromMessages(messages);
+                            const hit = pts.find((p) => p.id === m.id);
+                            const idx =
+                              hit?.index ??
+                              pts.findIndex((p) => p.text === m.text);
+                            if (idx < 0) return;
+                            requestRewind(idx, m.text);
+                          }}
+                        >
+                          <IconRewind size={18} />
+                        </button>
+                      ) : null}
                       {m.role === "assistant" ? (
                         <button
                           type="button"
@@ -3249,6 +3387,12 @@ export default function App() {
                 setPlanBarHidden(true);
                 setPlanCollapsed(false);
               }}
+              approveDisabled={!connected || busy}
+              onApprove={approvePlan}
+              onRevise={() => {
+                setPlanCollapsed(false);
+                composerRef.current?.focus();
+              }}
             />
           ) : null}
           {queue.length > 0 ? (
@@ -3305,6 +3449,13 @@ export default function App() {
               model={effectiveModel || contextInfo.model}
               estimated={displayEstimated}
               animateKey={sessionId || agent?.id || "new"}
+              compactEnabled={
+                isGrokProfile &&
+                connected &&
+                !busy &&
+                contextFill >= (contextInfo.softCapPercent || 80) / 100
+              }
+              onCompact={sendCompact}
             />
             {isAgentProfile ? (
               <VaultSearchToggle
@@ -3418,6 +3569,26 @@ export default function App() {
                   onClose={() => setSlashOpen(false)}
                   onPick={(item) => applySlashInsert(item.name)}
                 />
+                <PromptHistoryPopup
+                  open={historyOpen && !slashOpen}
+                  items={historyItems}
+                  selectedIndex={historyIndex ?? 0}
+                  onSelectIndex={(i) => {
+                    setHistoryIndex(i);
+                    const t = historyItems[i];
+                    if (t) setInput(t);
+                  }}
+                  onPick={(text) => {
+                    setInput(text);
+                    setHistoryOpen(false);
+                    setHistoryIndex(null);
+                  }}
+                  onClose={() => {
+                    setHistoryOpen(false);
+                    setHistoryIndex(null);
+                    setInput(historyDraftRef.current);
+                  }}
+                />
                 <SlashHighlightedText
                   text={input}
                   skills={skillCatalog}
@@ -3480,7 +3651,25 @@ export default function App() {
                       }
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
+                        const raw = e.currentTarget.value.trim();
+                        if (
+                          /^\/(?:rewind|undo)(?:\s|$)/i.test(raw) ||
+                          /^\/(?:rename|title)\s+\S/.test(raw)
+                        ) {
+                          setSlashOpen(false);
+                          send();
+                          return;
+                        }
                         const item = slashItems[slashIndex];
+                        if (
+                          item &&
+                          /^(?:rewind|undo)$/i.test(String(item.name || ""))
+                        ) {
+                          setSlashOpen(false);
+                          setInput("");
+                          setRewindOpen(true);
+                          return;
+                        }
                         if (item) applySlashInsert(item.name);
                         return;
                       }
@@ -3490,12 +3679,73 @@ export default function App() {
                         return;
                       }
                     }
+                    if (e.key === "Escape") {
+                      if (historyOpen) {
+                        e.preventDefault();
+                        setHistoryOpen(false);
+                        setHistoryIndex(null);
+                        setInput(historyDraftRef.current);
+                        return;
+                      }
+                      if (input.trim()) {
+                        e.preventDefault();
+                        setInput("");
+                        rewindEscAtRef.current = 0;
+                        return;
+                      }
+                      if (!busy && rewindPoints.length) {
+                        const now = Date.now();
+                        if (now - rewindEscAtRef.current < 800) {
+                          e.preventDefault();
+                          rewindEscAtRef.current = 0;
+                          setRewindOpen(true);
+                        } else {
+                          rewindEscAtRef.current = now;
+                        }
+                      }
+                      return;
+                    }
+                    if (
+                      (e.key === "ArrowUp" || e.key === "ArrowDown") &&
+                      !e.altKey &&
+                      (historyOpen ||
+                        (e.key === "ArrowUp" &&
+                          !input.trim() &&
+                          (e.currentTarget.selectionStart ?? 0) === 0))
+                    ) {
+                      const list =
+                        historyItems.length
+                          ? historyItems
+                          : loadPromptHistory(agent?.id || "grok");
+                      if (!list.length) return;
+                      if (!historyOpen) {
+                        historyDraftRef.current = input;
+                        setHistoryItems(list);
+                      }
+                      e.preventDefault();
+                      const step = stepPromptHistory(
+                        list,
+                        historyOpen ? historyIndex : null,
+                        e.key === "ArrowDown" ? "down" : "up",
+                      );
+                      if (step.closed) {
+                        setHistoryOpen(false);
+                        setHistoryIndex(null);
+                        setInput(historyDraftRef.current);
+                        return;
+                      }
+                      setHistoryOpen(true);
+                      setHistoryItems(list);
+                      setHistoryIndex(step.index);
+                      setInput(step.text || "");
+                      return;
+                    }
                     if (e.key !== "Enter" || e.shiftKey) return;
                     // Phone: keyboard Return = newline. Send is the ↵ button
                     // (or ⌘/Ctrl+Enter on a hardware keyboard).
                     if (seat === "phone" && !e.metaKey && !e.ctrlKey) return;
                     e.preventDefault();
-                    if (connected) send();
+                    send();
                   }}
                 />
               </div>
@@ -3789,6 +4039,14 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <RewindPicker
+        open={rewindOpen}
+        points={rewindPoints}
+        busy={rewindBusy}
+        onClose={() => setRewindOpen(false)}
+        onPick={(p) => requestRewind(p.index, p.text)}
+      />
 
       <GraphGuard>
         <CableLage

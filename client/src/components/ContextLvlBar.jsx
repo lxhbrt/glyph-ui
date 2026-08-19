@@ -52,6 +52,8 @@ function mixColor(a, b, t) {
  *   model: string,
  *   estimated?: boolean,
  *   animateKey?: string | number | null,
+ *   onCompact?: () => void,
+ *   compactEnabled?: boolean,
  * }} props
  */
 export function ContextLvlBar({
@@ -63,6 +65,8 @@ export function ContextLvlBar({
   model = "",
   estimated = false,
   animateKey = null,
+  onCompact = null,
+  compactEnabled = false,
 }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -264,6 +268,18 @@ export function ContextLvlBar({
           <span>Steine = Kontext</span>
           <span>Schlange = Leseposition</span>
           <span>Strich = Soft-Cap</span>
+          {compactEnabled && onCompact ? (
+            <button
+              type="button"
+              className="context-lvl-compact"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCompact();
+              }}
+            >
+              Zusammenpressen
+            </button>
+          ) : null}
           <span>{tooltip}</span>
         </p>
       ) : null}

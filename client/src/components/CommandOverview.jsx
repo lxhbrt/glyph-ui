@@ -16,6 +16,10 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
   const [closingId, setClosingId] = useState(null);
   const [lastResult, setLastResult] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const renameRef = useRef(null);
   /** Aktive Session, deren Zusammenfassungs-Dialog geöffnet ist. */
   const [summaryTarget, setSummaryTarget] = useState(null);
   /** Cursor in the list — NOT the live agent session. */
@@ -44,6 +48,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
     if (open) {
       setLastResult(null);
       setConfirmId(null);
+      setRenamingId(null);
       setSelectedIndex(0);
       void load();
       // Lupe opens sessions + search together — focus filter field
@@ -126,6 +131,41 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
     [opening, onOpenSession, onClose],
   );
 
+  const saveRename = useCallback(
+    async (id, title) => {
+      const t = String(title || "").trim();
+      if (!id || !t) {
+        setRenamingId(null);
+        return;
+      }
+      setRenameBusy(true);
+      setError("");
+      try {
+        const res = await seatFetch(`/api/sessions/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: t }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Umbenennen fehlgeschlagen");
+        setRenamingId(null);
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setRenameBusy(false);
+      }
+    },
+    [load],
+  );
+
+  const startRename = useCallback((s) => {
+    if (!s) return;
+    setRenamingId(s.id);
+    setRenameValue(s.title || "");
+    requestAnimationFrame(() => renameRef.current?.select());
+  }, []);
+
   const openSelected = useCallback(async () => {
     const s = filtered[selectedIndex];
     if (!s) return;
@@ -137,6 +177,17 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
       // Don't steal keys while typing in search or confirming close buttons
       const tag = e.target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") {
+        if (e.target?.dataset?.rename === "1") {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void saveRename(renamingId, renameValue);
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setRenamingId(null);
+          }
+          return;
+        }
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
           // leave search and navigate list
           e.preventDefault();
@@ -167,13 +218,27 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
       } else if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         void openSelected();
+      } else if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        const s = filtered[selectedIndex];
+        if (s) startRename(s);
       } else if (e.key === "Escape") {
         e.preventDefault();
         if (confirmId) setConfirmId(null);
         else onClose();
       }
     },
-    [filtered.length, openSelected, onClose, confirmId],
+    [
+      filtered,
+      openSelected,
+      onClose,
+      confirmId,
+      renamingId,
+      renameValue,
+      saveRename,
+      startRename,
+      selectedIndex,
+    ],
   );
 
   if (!open) return null;
@@ -219,7 +284,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
         <p className="overview-hint">
           <strong>Auswählen:</strong> Klick oder ↑↓ — Markierung (nicht „aktiv“).{" "}
           <strong>Laden:</strong> Enter oder Doppelklick (Verlauf öffnen).{" "}
-          <strong>Schließen:</strong> Ja + Wiki · Löschen (/delete) · Abbrechen.
+          <strong>Name:</strong> r · <strong>Schließen:</strong> Ja + Wiki · Löschen (/delete) · Abbrechen.
           Disk: <code>~/.grok/sessions</code>.
         </p>
 
@@ -300,7 +365,21 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                 >
                   <div className="session-main">
                     <div className="session-title-row">
-                      <strong>{s.title}</strong>
+                      {renamingId === s.id ? (
+                        <input
+                          ref={renameRef}
+                          className="session-rename"
+                          data-rename="1"
+                          value={renameValue}
+                          disabled={renameBusy}
+                          maxLength={120}
+                          aria-label="Session-Titel"
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <strong>{s.title}</strong>
+                      )}
                       {isActive ? <span className="tag">aktiv</span> : null}
                       {isSelected && !isActive ? (
                         <span className="tag muted">markiert</span>
@@ -365,6 +444,26 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                       </>
                     ) : (
                       <>
+                        {renamingId === s.id ? (
+                          <>
+                            <button
+                              type="button"
+                              className="primary"
+                              disabled={renameBusy || !renameValue.trim()}
+                              onClick={() => void saveRename(s.id, renameValue)}
+                            >
+                              {renameBusy ? "…" : "Speichern"}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost"
+                              disabled={renameBusy}
+                              onClick={() => setRenamingId(null)}
+                            >
+                              Abbrechen
+                            </button>
+                          </>
+                        ) : (
                         <button
                           type="button"
                           className="primary"
@@ -377,6 +476,22 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                         >
                           Öffnen
                         </button>
+                        )}
+                        {renamingId === s.id ? null : (
+                        <button
+                          type="button"
+                          disabled={opening || renameBusy}
+                          title="Titel setzen (r) — TUI /rename"
+                          onClick={() => {
+                            setSelectedIndex(index);
+                            startRename(s);
+                          }}
+                        >
+                          Name
+                        </button>
+                        )}
+                        {renamingId === s.id ? null : (
+                          <>
                         {canSummarize && (
                           <button
                             type="button"
@@ -405,6 +520,8 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                         >
                           Schließen
                         </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
