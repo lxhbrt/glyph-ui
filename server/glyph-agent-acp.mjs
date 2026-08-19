@@ -15,13 +15,15 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
 import { buildPromptWithAttachments } from "../shared/attachments.mjs";
+import { createIdleTimer } from "./acpIdle.mjs";
 import { buildStepBanner } from "./stepBanner.mjs";
 import { agentVaultBodyFromMeta } from "./vaultFlags.mjs";
 
 // glyph-agent HTTP-Dienst (Standard wie in server.py)
 const AGENT_URL = process.env.GLYPH_AGENT_URL || "http://127.0.0.1:18899";
-// Wall-Clock für einen session/prompt-Turn (inkl. CODE-Genehmigungsschleife).
-// CODE: Default 8 min (mehrere DeepSeek-Runden); agent: 5 min.
+// Idle-Deadline eines session/prompt-Turns (kein Wall-Clock ab Start).
+// Reset bei jedem NDJSON-Event; Pause während Glyph-Freigabe.
+// CODE: Default 8 min ohne Aktivität; agent: 5 min.
 // Server-seitig greift zusätzlich CODE_CHAT_TIMEOUT/CHAT_TIMEOUT pro LLM-Call.
 const PROTOCOL_VERSION = acp.PROTOCOL_VERSION;
 const AGENT_MODE = String(process.env.GLYPH_AGENT_MODE || "agent").toLowerCase();
@@ -255,7 +257,7 @@ app.onRequest(acp.methods.agent.session.delete, async ({ params }) => {
 /**
  * Stream one /chat NDJSON response; returns { answerText, stepBlocks, trace, final }.
  */
-async function streamChat(body, client, sessionId, signal) {
+async function streamChat(body, client, sessionId, signal, onActivity) {
   const resp = await fetch(`${AGENT_URL}/chat`, {
     method: "POST",
     headers: {
@@ -299,6 +301,13 @@ async function streamChat(body, client, sessionId, signal) {
         continue;
       }
       const type = ev && ev.type;
+      if (typeof onActivity === "function") {
+        try {
+          onActivity();
+        } catch {
+          /* idle arm */
+        }
+      }
       if (type === "step") {
         const action = ev.action || "step";
         const status = ev.status || "";
@@ -427,12 +436,16 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
   let timedOut = false;
   const onAbort = () => abortController.abort();
   signal.addEventListener("abort", onAbort, { once: true });
-  // Hartes Wall-Clock-Cancel: TIMEOUT_MS war definiert, aber unbenutzt —
-  // ohne Timer wartet Glyph ewig, wenn der Agent-Stream hängt.
-  const timeoutTimer = setTimeout(() => {
-    timedOut = true;
-    abortController.abort();
-  }, TIMEOUT_MS);
+  // Idle, nicht Wall-Clock: lange Tool-Ketten bleiben lebendig, solange
+  // der Stream Events schickt. Hängender /chat ohne Bytes → Abbruch.
+  const idle = createIdleTimer({
+    timeoutMs: TIMEOUT_MS,
+    onFire: () => {
+      timedOut = true;
+      abortController.abort();
+    },
+  });
+  idle.arm();
 
   try {
     // Multi-Turn: prior Turns mitschicken (store enthält die gerade gepushte
@@ -462,6 +475,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       client,
       sessionId,
       abortController.signal,
+      () => idle.arm(),
     );
 
     // CODE: Genehmigungsschleife — primär Elevated Shell (Write unter r+w ohne Popup).
@@ -500,7 +514,9 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
           sessionId,
         );
       } else {
+        idle.pause();
         const decision = await askPermission(client, sessionId, pending);
+        idle.arm();
         allowed = Boolean(decision?.allowed);
         if (decision?.always && !isElevated) {
           store.allowWriteTools = true;
@@ -524,6 +540,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
         client,
         sessionId,
         abortController.signal,
+        () => idle.arm(),
       );
       // Fortsetzung anhängen (Antwort kann neu sein)
       if (resume.answerText) {
@@ -568,7 +585,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       if (timedOut) {
         const secs = Math.round(TIMEOUT_MS / 1000);
         const msg =
-          `Timeout nach ${secs}s — glyph-agent hat nicht rechtzeitig geantwortet ` +
+          `Timeout nach ${secs}s ohne Stream — glyph-agent hängt ` +
           `(GLYPH_AGENT_TIMEOUT). Bitte erneut versuchen oder Server prüfen.`;
         try {
           await streamChunks(msg, client, sessionId);
@@ -582,7 +599,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     }
     throw err;
   } finally {
-    clearTimeout(timeoutTimer);
+    idle.stop();
     signal.removeEventListener("abort", onAbort);
   }
 });
