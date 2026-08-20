@@ -13,12 +13,13 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | Node | Tut | Quellen (Einstieg) | Hängt an |
 |------|-----|--------------------|----------|
 | **Bridge** | Browser ↔ WebSocket ↔ ACP stdio (`grok agent` / glyph-agent-acp). Zwei Sitze: `desk` · `phone`. | `server/index.js`, `server/seats.js`, `server/glyph-agent-acp.mjs`, `server/acpIdle.mjs` | Sessions, Agents |
-| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel | `client/src/App.jsx`, `client/src/main.jsx` | Bridge-Events |
+| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel. Header-Unterzeile: Term · ACP (Handy nur am Sitz phone). cwd nicht in der Zeile — Tooltip auf Glyph #N + Workspace-Button. | `client/src/App.jsx`, `client/src/main.jsx` | Bridge-Events |
 | **Palette / Type** | Eine Gold-Hex, eine Danger-Hex, Neutrals via `color-mix`; IBM Plex; Type-Scale fest | `client/src/styles.css` (`:root`) | Client-Shell |
 | **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende. Über Soft-Cap (Grok): **Zusammenpressen** → `/compact`. | `ContextLvlBar.jsx` | Client-Shell |
+| **Arbeitsleiste** | Angedockte Fläche über der LVL-Leiste: Plan, Ordner-Suche, Zusammenfassen. Gleiches Chrome (Label · Zähler · ×). Kein Mitte-Modal. | `ComposerSheet.jsx`, `PlanBar.jsx`, `VaultSearchHits.jsx`, `SummarizeDialog.jsx` | Client-Shell |
 | **Tool-Karte** | Aufklappbare ACP-Toolzeile (Verb + Ziel, Diff/Ausgabe nach Klick) | `client/src/components/ToolCard.jsx`, `client/src/utils/toolCard.js`, `server/toolTitle.mjs` | Bridge `type: tool` |
 | **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen. Modus **Chat · Deep Search · Fork · Swarm**: Fork = `x.ai/session/fork` dann ACP `session/fork`; Deep Search = Grok `/deep-research` (andere Köpfe ausgegraut); Swarm = °_Agent/^_Code `POST /chat` `swarm: true`. | `client/src/App.jsx`, `shared/composerActions.mjs`, `server/glyph-agent-acp.mjs` | Bridge |
-| **Ordner-Suche** | °_Agent: Pixel-Apfel über ↵ (rot, ohne extra Höhe). Aus = keine Vault-Suche. An → `/api/vault/find`, Treffer nur im Panel, Default aus, nur aktivierte in den Kontext. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
+| **Ordner-Suche** | °_Agent: Pixel-Apfel über ↵ (rot, ohne extra Höhe). Aus = keine Vault-Suche. An → `/api/vault/find`, Treffer in der Arbeitsleiste, Default aus, nur aktivierte in den Kontext. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
 | **Sessions** | Session-Liste, Überblick, Summaries, **Name** (`/rename`) | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
 | **Rewind** | Nutzer-Turn und alles danach aus dem Verlauf. Esc Esc, `/rewind`, ↺ an der Nachricht. Dateien bleiben. | `shared/rewind.mjs`, `RewindPicker.jsx`, Bridge `type: rewind` | Sessions, Bridge |
 | **Prompt-History** | ↑ auf leerem Composer: letzte Prompts (lokal, pro Profil) | `utils/promptHistory.js`, `PromptHistoryPopup.jsx` | Composer |
@@ -34,7 +35,7 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 
 **Crux (häufige Bugs):** Write/Shell-Genehmigung und Workspace-Modi leben in **glyph-agent** (`code_loop` / `code_tools`), nicht in der UI. UI zeigt nur Popup/Banner. ACP-Bridge ≠ HTTP-API der Engine.
 
-**Session zusammenfassen → Skill:** Button **Zusammenfassen** im Header (rechts neben der Kette), sobald Agent verbunden + Session da; Grok zusätzlich in der Lupe. Beim Speichern (≥3 Nutzer-Turns) Workflow-Skill unter `~/.glyph/skills/<slug>/` (`source: session-summary`). Hand-Skills ohne Flag: nur `references/`. Opt-out im Dialog. Titel = letzte substanzielle Nutzerzeile, nicht Test-Pings („TEST TEST TEST“). Code: `server/summaries.js` (`buildDraftFromTurns`) + `SummarizeDialog.jsx`.
+**Session zusammenfassen → Skill:** Button **Zusammenfassen** im Header (rechts neben der Kette), sobald Agent verbunden + Session da; Grok zusätzlich in der Lupe. Vorschau in der **Arbeitsleiste** über der LVL-Leiste (kein Mitte-Modal). Beim Speichern (≥3 Nutzer-Turns) Workflow-Skill unter `~/.glyph/skills/<slug>/` (`source: session-summary`). Hand-Skills ohne Flag: nur `references/`. Opt-out in der Leiste. Titel = letzte substanzielle Nutzerzeile, nicht Test-Pings („TEST TEST TEST“). Code: `server/summaries.js` (`buildDraftFromTurns`) + `SummarizeDialog.jsx`.
 
 ## Language
 
@@ -79,8 +80,8 @@ Eine aufklappbare Zeile im Chat für einen ACP-Tool-Aufruf: Verb + Ziel in der Z
 _Avoid_: Tool-Card (EN), Paper-Card, grok-build-web Disclosure
 
 **Ordner-Suche**:
-Manueller Vault-Zugriff im Profil **°_Agent**. Pixel-Apfel **über dem Senden-Button** (nicht zwischen + und Chat), ohne die Composer-Höhe zu erhöhen. Minecraft: roter Körper, brauner Stiel, grünes Blatt; inaktiv abgedunkelt; an = Gold-Outline + Puls. Standard aus — Agent antwortet ohne VaultFind/ListVaultDir. An: nächste Sendung sucht, Treffer nur im Panel (nicht im Chat-Verlauf), jedes Ergebnis startet aus; nur explizit an = in den Agent-Kontext. Zustand pro Session (`sessionStorage`). Jobs/Engine ohne Flag bleiben beim B+-Precheck. ACP sendet `vault_search` nur wenn mindestens ein Treffer aktiv ist.
-_Avoid_: automatische Vault-Suche bei jeder °_Agent-Nachricht; Apfel zwischen + und Chat; Lupe (Sessions); Treffer als Chat-Nachrichten; Gold-gefüllter Apfel
+Manueller Vault-Zugriff im Profil **°_Agent**. Pixel-Apfel **über dem Senden-Button** (nicht zwischen + und Chat), ohne die Composer-Höhe zu erhöhen. Minecraft: roter Körper, brauner Stiel, grünes Blatt; inaktiv abgedunkelt; an = Gold-Outline + Puls. Standard aus — Agent antwortet ohne VaultFind/ListVaultDir. An: nächste Sendung sucht, Treffer in der **Arbeitsleiste** über der LVL-Leiste (nicht als Overlay über der Eingabe), nie im Chat-Verlauf, jedes Ergebnis startet aus; nur explizit an = in den Agent-Kontext. Zustand pro Session (`sessionStorage`). Jobs/Engine ohne Flag bleiben beim B+-Precheck. ACP sendet `vault_search` nur wenn mindestens ein Treffer aktiv ist.
+_Avoid_: automatische Vault-Suche bei jeder °_Agent-Nachricht; Apfel zwischen + und Chat; Lupe (Sessions); Treffer als Chat-Nachrichten; Gold-gefüllter Apfel; Treffer-Popup über der Composer-Box
 
 **Rewind**:
 Einen Nutzer-Turn und alles danach aus dem Chat-Verlauf nehmen. Dateien auf Disk bleiben (wie TUI `/rewind`). Einstiege: Esc Esc (idle, leerer Composer), `/rewind` / `/undo`, ↺ an der Nutzer-Nachricht. °_Agent/^_Code: Adapter `session.rewind`. Grok: ACP `x.ai/rewind*` oder Disk-Schnitt + `session/load`.
@@ -94,8 +95,12 @@ _Avoid_: Grok-Memory, TUI `prompt_history.jsonl` als Pflichtquelle
 Manueller Name einer Grok-Disk-Session (`title_is_manual`). Lupe: Button **Name** oder `r`. Composer: `/rename Titel`.
 _Avoid_: Auto-Titel überschreiben ohne Flag
 
+**Arbeitsleiste**:
+Angedockte Fläche über der LVL-Leiste für laufende Arbeit am Composer: **Plan**, **Ordner-Suche**, **Zusammenfassen**. Ein Chrome (Gold-Rand, Label, Zähler, ×, optionale Primäraktion). Nicht Bildschirmmitte, nicht zweites Overlay-System. Freigabe-Modal (^_Code Write/Shell) bleibt eigenes Blocking-Modal.
+_Avoid_: Zusammenfassen als Vollbild-Dialog; Ordner-Suche als schwebendes Overlay; zweite Bildsprache für diese drei Flächen
+
 **Plan-Freigabe**:
-Aktionen an der Plan-Leiste, solange jeder Eintrag `pending` ist: **Umsetzen** sendet den Auftrag, **Ändern** fokussiert den Composer. Kein TUI-Plan-Modus (`plan.md` / Approve-Preview).
+Aktionen an der Plan-Leiste (Arbeitsleiste), solange jeder Eintrag `pending` ist: **Umsetzen** sendet den Auftrag, **Ändern** fokussiert den Composer. Kein TUI-Plan-Modus (`plan.md` / Approve-Preview).
 _Avoid_: Plan-Mode, plan.md-Editor, automatisches Senden
 
 **Zusammenpressen**:
@@ -119,15 +124,19 @@ Gerätessessel für dasselbe Agent-Profil: **`desk`** (Schreibtisch) und **`phon
 _Avoid_: Schwarm, mehrere Agenten an einer Aufgabe, Geräte = Profile
 
 **Agent-Profil**:
-Eines der wählbaren ACP-Agenten in Glyph: **grok**, **`^_Code`** (`_code`), **`°_Agent`** (id `glyph-agent`). Glyph spawnt ein anderes Binary/Env, nicht „ein anderes Modell“.
-_Avoid_: OpenRouter (kein UI-Profil mehr), Claude (ersetzt durch ^_Code), Provider, Modell (als Profilname)
+Eines der wählbaren ACP-Agenten in Glyph: **Grok Build** (`grok`), **`^_Code`** (`_code`), **`°_Agent`** (id `glyph-agent`). Glyph spawnt ein anderes Binary/Env, nicht „ein anderes Modell“.
+_Avoid_: OpenRouter (kein UI-Profil mehr), Claude (ersetzt durch ^_Code), Provider, Modell (als Profilname); UI-String „Grok“ allein als Profil-/Kopf-Name
+
+**Grok Build**:
+UI-Label des grok-Profils (id bleibt **`grok`**). Die Grok-Build-CLI, nicht Grok Chat. Header: Picker **Grok Build**, Pille = Modell (oder CLI) — nicht noch einmal „Grok“.
+_Avoid_: Dropdown-/Pille-/Graph-Label „Grok“ (ergibt „Grok Grok“)
 
 **Anbindung**:
-Keys, Host-URL und Modelle unter `~/.glyph-ui/bindings.json`. Header-Pille öffnet den **Graph** auf dem aktiven Kopf. °_Agent / ^_Code-Legende setzt Direct-Key, OpenRouter-Key, Host (`DIRECT_API_URL`) und Modell (ohne Slash = Direct-ID, mit Slash = OpenRouter-Slug). Grok-OAuth bleibt Terminal (`grok login`).
+Keys, Host-URL und Modelle unter `~/.glyph-ui/bindings.json`. Header-Pille öffnet den **Graph** auf dem aktiven Kopf. Pille zeigt nur das **eingesetzte** Modell (Kürzel) — Primary→Reserve bleibt Graph/Tooltip. °_Agent / ^_Code-Legende setzt Direct-Key, OpenRouter-Key, Host (`DIRECT_API_URL`) und Modell (ohne Slash = Direct-ID, mit Slash = OpenRouter-Slug). Grok-OAuth bleibt Terminal (`grok login`).
 _Avoid_: Settings (zu generisch), Login-Dialog (impliziert eingebettetes OAuth), Kalender (nur Grok-Aktivität, oft disabled)
 
 **Graph**:
-Vollfenster, pechschwarz, kein Bild — auch im hellen App-Theme. Mitte = Glyph-Symbol. Köpfe = Snake-Pixel Grok / °_Agent / ^_Code, radial (Grok oben, Agent links, Code rechts). Klick Kopf → rutscht in die Mitte, zeigt Abhängigkeiten. Ordner (Vaults, Roots) = Kreise; Favorit und aktuell gewählter Ordner = Goldstern (*). Rechte am Knoten: ungebunden = eine Stufe dunkler, keine Linie; lesen = Standardkreis + vier kurze Striche; privat = eine Stufe dunkler + Punkte. Jeder Ordner darf an jeden Kopf, jede Kante eigene Rechte (`heads`: lesen / schreiben / privat / ungebunden). Grok startet offen (schreiben), außer Privat — einschränken, nicht erst freigeben. Kanten: Glyph↔Köpfe = Achse (dünn, ~40 % Opacity). Rechte: schreiben solid, lesen gestrichelt, privat gepunktet — pro Kopf. Auswahl eines Ordners: nur dessen Rechte-Kanten voll, Rest stark gedimmt. Klick Knoten: Name + Nachbarn; Legende setzt Rechte pro Kopf. Labels nur Hover/Selektion. `?graph=`.
+Vollfenster, pechschwarz, kein Bild — auch im hellen App-Theme. Mitte = Glyph-Symbol. Köpfe = Snake-Pixel Grok Build / °_Agent / ^_Code, radial (Grok Build oben, Agent links, Code rechts). Klick Kopf → rutscht in die Mitte, zeigt Abhängigkeiten. Ordner (Vaults, Roots) = Kreise; Favorit und aktuell gewählter Ordner = Goldstern (*). Rechte am Knoten: ungebunden = eine Stufe dunkler, keine Linie; lesen = Standardkreis + vier kurze Striche; privat = eine Stufe dunkler + Punkte. Jeder Ordner darf an jeden Kopf, jede Kante eigene Rechte (`heads`: lesen / schreiben / privat / ungebunden). Grok Build startet offen (schreiben), außer Privat — einschränken, nicht erst freigeben. Kanten: Glyph↔Köpfe = Achse (dünn, ~40 % Opacity). Rechte: schreiben solid, lesen gestrichelt, privat gepunktet — pro Kopf. Auswahl eines Ordners: nur dessen Rechte-Kanten voll, Rest stark gedimmt. Klick Knoten: Name + Nachbarn; Legende setzt Rechte pro Kopf. Labels nur Hover/Selektion. `?graph=`.
 _Avoid_: Lage, Gefäß, Tunnel-Foto, Tafel-Chips, hängende Kabel; ein Kopf pro Ordner; Kreis für den Favoriten
 
 **Plan & Aktivität (Tafel-Symbol)**:
@@ -193,7 +202,14 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 ### Ordner-Suche (2026-08-15)
 
 - °_Agent-Composer: Pixel-Apfel (Minecraft: rot / Stiel braun / Blatt grün) **über ↵**, außerhalb des Flow — Composer-Höhe unverändert. Standard **aus**. An = Gold-Outline + Puls, nicht goldene Füllung.
-- An: Suche erst beim Senden; Treffer nur im Ordner-Suche-Panel, nie im Chat-Verlauf. Default **aus**; nur explizit aktivierte Treffer gehen in den Agent-Kontext (`vault_search` + `vault_selected`). Ohne Auswahl: normale Nachricht, kein Vault.
+- An: Suche erst beim Senden; Treffer in der Arbeitsleiste über der LVL-Leiste, nie im Chat-Verlauf. Default **aus**; nur explizit aktivierte Treffer gehen in den Agent-Kontext (`vault_search` + `vault_selected`). Ohne Auswahl: normale Nachricht, kein Vault.
 - Toggle-Zustand pro Session, nicht global.
 - Interaktives ACP: `vault_search` nur bei mindestens einem aktivierten Treffer. Fehlt/aus = kein VaultFind. Jobs/`/chat` ohne Flag: B+ unverändert.
-- Suchfehler (404 etc.) rot im Panel; Chat bleibt sendbar.
+- Suchfehler (404 etc.) rot in der Arbeitsleiste; Chat bleibt sendbar.
+
+### Arbeitsleiste (2026-08-20)
+
+- Plan, Ordner-Suche und Zusammenfassen teilen **ein** Chrome über der LVL-Leiste (`ComposerSheet`, Vorbild Plan).
+- Zusammenfassen: kein Mitte-Modal. Header (aktive Session) und Lupe (andere Grok-Sessions) docken dieselbe Leiste; Lupe schließt vorher.
+- Freigabe Write/Shell bleibt Blocking-Modal (unterbricht). Slash-Popup / Rewind / Lupe selbst bleiben eigene Flächen.
+- Kein ADR — CONTEXT reicht.

@@ -8,7 +8,7 @@
  * UI can grey them out instead of failing at runtime.
  *
  * Rollen (C′ 2026-08-07):
- *   Grok         = Build (XAI/Grok Binary)
+ *   Grok Build   = Build (XAI/Grok-Build Binary, id grok)
  *   ^_Code       = Code (DeepSeek V4 Flash via OpenRouter, glyph-agent MODE=code)
  *   °_Agent      = Vault/Tools + Cloud-Antwort (id glyph-agent, MODE=agent, kein Shell)
  *
@@ -114,12 +114,12 @@ export function resolveClaudeCommand(env = process.env) {
  * @returns {AgentProfile[]}
  */
 export function buildAgentProfiles(env = process.env) {
-  // Drei Profile: Grok (Build), ^_Code (DeepSeek-Code), °_Agent (Vault; id glyph-agent).
+  // Drei Profile: Grok Build, ^_Code (DeepSeek-Code), °_Agent (Vault; id glyph-agent).
   // Claude OAuth entfernt — Code läuft über glyph-agent MODE=code + OpenRouter DeepSeek.
   return [
     {
       id: "grok",
-      label: "Grok",
+      label: "Grok Build",
       bin: String(env.GROK_BIN || "grok"),
       // Match TUI default: no --reasoning-effort override (model default).
       args: ["agent", "--always-approve", "--no-leader", "stdio"],
@@ -187,6 +187,8 @@ export function resolveAgent(profiles, id) {
     raw === "agent"
   ) {
     normalized = "glyph-agent";
+  } else if (raw === "Grok Build" || raw === "grok-build") {
+    normalized = "grok";
   }
   return (
     findAgent(profiles, normalized) ||

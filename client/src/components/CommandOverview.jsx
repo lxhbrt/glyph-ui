@@ -5,9 +5,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatWhen } from "../utils/format.js";
 import { seatFetch } from "../utils/seat.js";
-import { SummarizeDialog } from "./SummarizeDialog.jsx";
 
-function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, profile = "grok" }) {
+function CommandOverview({
+  open,
+  onClose,
+  onOpenSession,
+  canSummarize = false,
+  onSummarizeSession,
+}) {
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
@@ -20,8 +25,6 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
   const [renameValue, setRenameValue] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
   const renameRef = useRef(null);
-  /** Aktive Session, deren Zusammenfassungs-Dialog geöffnet ist. */
-  const [summaryTarget, setSummaryTarget] = useState(null);
   /** Cursor in the list — NOT the live agent session. */
   const [selectedIndex, setSelectedIndex] = useState(0);
   const panelRef = useRef(null);
@@ -503,7 +506,11 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                                   ? "Aktive Session geschützt — erst Stift (Neuer Chat)"
                                   : "Session zusammenfassen (Vorschau → Bestätigen)"
                             }
-                            onClick={() => setSummaryTarget({ id: s.id, title: s.title || "Session" })}
+                            onClick={() => {
+                              if (typeof onSummarizeSession === "function") {
+                                onSummarizeSession({ id: s.id, title: s.title || "Session" });
+                              }
+                            }}
                           >
                             Zusammenfassen
                           </button>
@@ -532,15 +539,6 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
         </div>
       </section>
 
-      {summaryTarget && (
-        <SummarizeDialog
-          sessionId={summaryTarget.id}
-          sessionTitle={summaryTarget.title}
-          profile={profile}
-          onClose={() => setSummaryTarget(null)}
-          onSaved={() => void load()}
-        />
-      )}
     </div>
   );
 }

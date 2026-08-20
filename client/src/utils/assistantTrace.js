@@ -157,6 +157,15 @@ export function shortModelLabel(model) {
 
   // Längere Patterns zuerst.
   const rules = [
+    [/grok[-_.]?4\.6/, "4.6"],
+    [/grok[-_.]?4\.1/, "4.1"],
+    [/grok[-_.]?4[-_.]?fast/, "4-fast"],
+    [/grok[-_.]?4[-_.]?heavy/, "4-heavy"],
+    [/grok[-_.]?3[-_.]?mini/, "3-mini"],
+    [/grok[-_.]?4/, "4"],
+    [/grok[-_.]?3/, "3"],
+    [/grok[-_.]?2/, "2"],
+    [/grok/, "Build"],
     [/deepseek[-_.]?v?4[-_.]?pro/, "DS-V4P"],
     [/deepseek[-_.]?v?4[-_.]?flash/, "DS-V4F"],
     [/deepseek[-_.]?v?3[-_.]?flash/, "DS-V3F"],
@@ -193,17 +202,56 @@ export function shortModelLabel(model) {
   return token.slice(0, 4);
 }
 
+function isModelChainLabel(value) {
+  const t = String(value || "");
+  return t.includes("→") || t.includes(" -> ");
+}
+
+function modelBelongsToPair(id, primary, fallback) {
+  const n = String(id || "").trim();
+  if (!n) return false;
+  const p = String(primary || "").trim();
+  const fb = String(fallback || "").trim();
+  if (n === p || (fb && n === fb)) return true;
+  const short = shortModelLabel(n);
+  if (p && short === shortModelLabel(p)) return true;
+  if (fb && short === shortModelLabel(fb)) return true;
+  return false;
+}
+
 /**
- * Kompakte HUD-Zeile: Primary [→ Fallback], jeweils als Kürzel.
- * @param {string} primary
- * @param {string} [fallback]
+ * Welches Modell die Header-Pille zeigt: Session-Trace, sonst Live-Label
+ * wenn es zum Primary/Reserve-Paar des Kopfs gehört, sonst Primary.
+ * Keine Kette (Primary→Reserve) — °_Agent wie ^_Code.
+ *
+ * @param {{ primary?: string, fallback?: string, used?: string, liveLabel?: string }} src
  * @returns {string}
  */
-export function modelHudText(primary, fallback) {
-  const p = shortModelLabel(primary);
-  const fb = String(fallback || "").trim();
-  if (!fb) return p;
-  return `${p} → ${shortModelLabel(fb)}`;
+export function resolveHudModel({ primary, fallback, used, liveLabel } = {}) {
+  const p = String(primary || "").trim();
+  const u = String(used || "").trim();
+  if (u && !isModelChainLabel(u)) return u;
+  const live = String(liveLabel || "").trim();
+  if (live && !isModelChainLabel(live) && modelBelongsToPair(live, p, fallback)) {
+    return live;
+  }
+  return p;
+}
+
+/**
+ * Header-Pille: nur das eingesetzte Modell als Kürzel.
+ * Primary→Reserve bleibt Config/Tooltip — nicht in der Pille.
+ *
+ * @param {string} primary
+ * @param {string} [fallback]
+ * @param {string} [used] Session-Trace
+ * @param {string} [liveLabel] Health `models.active.label` (kein Paar)
+ * @returns {string}
+ */
+export function modelHudText(primary, fallback, used, liveLabel) {
+  return shortModelLabel(
+    resolveHudModel({ primary, fallback, used, liveLabel }),
+  );
 }
 
 /**

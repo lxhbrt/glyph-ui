@@ -106,7 +106,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Zusammenfassen",
         need: "empfohlen",
-        desc: "Header rechts neben der Kette: aktive Session als Snapshot speichern (Vorschau → Bestätigen). Grok zusätzlich in der Lupe. Test-Pings werden nicht Titel.",
+        desc: "Header neben der Kette: Snapshot in der Arbeitsleiste über LVL (wie Plan). Grok zusätzlich in der Lupe. Test-Pings werden nicht Titel.",
       },
       {
         cmd: "Name · /rename",
@@ -141,7 +141,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Plan-Freigabe",
         need: "optional",
-        desc: "Frischer ACP-Plan (alles offen): Umsetzen sendet den Auftrag, Ändern fokussiert den Composer.",
+        desc: "Arbeitsleiste über LVL. Frischer Plan (alles offen): Umsetzen sendet, Ändern fokussiert den Composer.",
       },
       {
         cmd: "LVL · Zusammenpressen",
@@ -254,7 +254,7 @@ const SHORT_HANDBOOK = [
     title: "Was Glyph ist",
     body: [
       "**Glyph ist keine KI** — nur eine Browser-Hülle für Agenten (ACP).",
-      "Du bringst Grok / ^_Code / °_Agent mit; Glyph zeigt Chat, Tools und Status.",
+      "Du bringst Grok Build / ^_Code / °_Agent mit; Glyph zeigt Chat, Tools und Status.",
       "Für Leute, die lokal arbeiten und wissen, was sie tun (z. B. Mac Mini).",
     ],
   },
@@ -265,7 +265,7 @@ const SHORT_HANDBOOK = [
       "**Mac & Windows:** Node.js 22+ · `git clone` · `npm install` · `npm run build` · `npm start`.",
       "Browser: **http://127.0.0.1:5174** (Prod). Dev: `npm run dev` → UI :5173, Bridge :5174.",
       "macOS-Extras (LaunchAgent, Dock) sind optional — unter Windows weglassen.",
-      "**Graph**: Bind prüfen — Grok = `grok login`. Agent/Code = Direct in der Legende.",
+      "**Graph**: Bind prüfen — Grok Build = `grok login`. Agent/Code = Direct in der Legende.",
       "Profil wählen (Header) → **Kette** verbinden → chatten.",
     ],
   },
@@ -284,7 +284,7 @@ const SHORT_HANDBOOK = [
     title: "Anbindung (Keys / OAuth)",
     body: [
       "**Graph** (Leiste): pechschwarz. Köpfe um Glyph; Vaults/Roots als Punkte. Klick → Legende.",
-      "**Grok:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
+      "**Grok Build:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
       "**^_Code / °_Agent:** Header-Pille oder Graph-Kopf → Host-URL, Direct-Key, OpenRouter-Key, Modell. Ohne Slash = Direct (`deepseek-v4-flash`), mit Slash = OpenRouter (`google/gemini-3.7-flash`).",
       "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒 · Kabel an/ab. SoT: `~/.glyph/vaults.json`.",
       "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒 gesperrt. SoT: `~/.glyph/workspaces.json`.",
@@ -298,9 +298,9 @@ const SHORT_HANDBOOK = [
     title: "Oberfläche",
     body: [
       "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, Refresh, **Buch** (Handbuch · UI-Legende).",
-      "Header rechts: Profil · Modell-Pille · Kette · **Zusammenfassen** (aktive Session).",
+      "Header links: Glyph #N · Term · ACP. cwd nicht in der Zeile (Tooltip / Workspace-Button). Rechts: Profil · Modell-Pille (eingesetztes Modell, nicht Primary→Reserve) · Kette · **Zusammenfassen** (aktive Session).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
-      "Unten: Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
+      "Unten: **Arbeitsleiste** (Plan · Ordner · Zusammenfassen) über der LVL-Leiste · Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
     ],
   },
   {
@@ -324,7 +324,7 @@ const SHORT_HANDBOOK = [
     rows: [
       ["Chat", "Normale Nachricht an den aktiven Agenten"],
       ["Apfel", "°_Agent: über ↵ (ohne extra Höhe). Rot/Stiel/Blatt; an = Gold-Rand. Aus = keine Vault-Suche."],
-      ["Treffer", "Nur im Panel, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext."],
+      ["Treffer", "Arbeitsleiste über LVL, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext."],
       ["Deep Search", "Grok: strukturierte Multi-Quellen-Recherche. Andere Köpfe ausgegraut."],
       ["Fork", "Session branchen; Text = optionale Directive"],
       ["Swarm", "°_Agent / ^_Code: Planer, Suche, Synthese. Grok ausgegraut."],
@@ -353,6 +353,7 @@ const SHORT_HANDBOOK = [
       ["Überfressen", "Snack dick + X-Augen + Banner — Hänger, manuell neu starten"],
       ["Text + Enter", "Follow-up → Warteschlange (WARTE)"],
       ["Leer / Snack", "Soft-Stop (ACP-Cancel) im Kreis-Button"],
+      ["Arbeitsleiste", "Plan, Ordner-Suche, Zusammenfassen: Gold-Rand, Label, × — über der LVL-Leiste, nicht Bildmitte"],
       ["× / Leeren", "Queue-Eintrag bzw. ganze Queue löschen"],
       ["Neue Ausgabe ↓", "Wieder ans aktuelle Chat-Ende springen"],
     ],
@@ -364,7 +365,7 @@ const SHORT_HANDBOOK = [
       "Sessions liegen unter `~/.grok/sessions`. Lupe → suchen → Öffnen.",
       "Schließen: **Ja + Wiki** (Archiv + löschen) · **Löschen** (TUI `/delete`) · Abbrechen.",
       "Aktive Chat-Session ist geschützt (zuerst Stift = `/new`). Speicher freigeben = Ordner löschen.",
-      "**Zusammenfassen** (Header, neben der Kette): Snapshot der aktiven Session. Grok auch in der Lupe. Titel = letzte echte Aufgabe, nicht der erste Test-Ping.",
+      "**Zusammenfassen** (Header, neben der Kette): Snapshot in der Arbeitsleiste über LVL. Grok auch in der Lupe (Lupe schließt, Leiste dockt). Titel = letzte echte Aufgabe, nicht der erste Test-Ping.",
       "Wiki-Ziel: `…/OpenClaw memory-wiki/sources/grok-sessions/`.",
     ],
   },
@@ -394,7 +395,7 @@ const SHORT_HANDBOOK = [
     id: "tips",
     title: "Probleme & Tipps",
     rows: [
-      ["offline", "Kette klicken · Graph → Grok · `grok login`?"],
+      ["offline", "Kette klicken · Graph → Grok Build · `grok login`?"],
       ["Eingabe grau", "Erst verbinden"],
       [
         "hängt",
@@ -410,7 +411,7 @@ const SHORT_HANDBOOK = [
     id: "check",
     title: "Checkliste",
     body: [
-      "✓ Graph: Grok OAuth / Agent Direct · Status **verbunden**",
+      "✓ Graph: Grok Build OAuth / Agent Direct · Status **verbunden**",
       "✓ Workspace passt (Header-Pfad)",
       "✓ Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, ↵ = senden",
       "✓ Arbeit: Text → Queue, leer → Stop",

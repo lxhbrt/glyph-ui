@@ -1,5 +1,5 @@
 /**
- * Glyph UI — ACP browser UI (Grok, ^_Code, °_Agent)
+ * Glyph UI — ACP browser UI (Grok Build, ^_Code, °_Agent)
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
@@ -68,7 +68,7 @@ import {
 } from "./utils/attachments.js";
 import { invalidateWsToken, wsUrl } from "./utils/format.js";
 import { resolveSeat, seatFetch } from "./utils/seat.js";
-import { modelHudText } from "./utils/assistantTrace.js";
+import { modelHudText, shortModelLabel } from "./utils/assistantTrace.js";
 import {
   contextFillRatio,
   estimateTokensFromTexts,
@@ -132,8 +132,8 @@ export default function App() {
   const [reconnecting, setReconnecting] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [seat, setSeat] = useState(() => resolveSeat());
-  /** Öffnet den Summarize-Dialog für die AKTIVE Session (glyph-agent / aktive History). */
-  const [activeSummarizeOpen, setActiveSummarizeOpen] = useState(false);
+  /** Arbeitsleiste: Session zusammenfassen ({ id, title } oder null). */
+  const [summarizeTarget, setSummarizeTarget] = useState(null);
   const [cwd, setCwd] = useState("");
   /**
    * Active ACP agent + the catalog to switch between. Capabilities decide
@@ -142,7 +142,7 @@ export default function App() {
   const [agent, setAgent] = useState(null);
   const [agents, setAgents] = useState([]);
   const [agentSwitching, setAgentSwitching] = useState(false);
-  /** OpenRouter model badge (Code/Agent): active from agent, desired from bindings. */
+  /** Model badge (Code/Agent): profile primary, overridden by this session's last trace. */
   const [modelHud, setModelHud] = useState(null);
   /** ^_Code: Write/Shell-Genehmigung aus dem Bridge-Server */
   const [permissionReq, setPermissionReq] = useState(null);
@@ -2240,9 +2240,9 @@ export default function App() {
   const agentLabel = agent?.label || "Agent";
   /**
    * Product line by profile (roles in server/agents.js):
-   *   Grok      → Build Term
-   *   ^_Code    → Code Term
-   *   °_Agent   → Chat Term
+   *   Grok Build → Build Term
+   *   ^_Code     → Code Term
+   *   °_Agent    → Chat Term
    */
   const productTerm = useMemo(() => {
     const id = agent?.id || "";
@@ -2253,7 +2253,7 @@ export default function App() {
       // User-facing short name; picker keeps °_Agent.
       return "Chat Term for Agent";
     }
-    return `Build Term for ${agentLabel}`;
+    return "Build Term for Grok";
   }, [agent?.id, agentLabel]);
   const unavailableFor = useCallback(
     (what) => `${what} ist nur im grok-Profil verfügbar (aktiv: ${agentLabel})`,
@@ -2297,15 +2297,22 @@ export default function App() {
   const showWorking = isWorking || snackDemo;
   const showStuffed = snackStuffed || snackDemo;
 
-  // Effective model for window map (last assistant trace beats session signals)
-  const effectiveModel = useMemo(() => {
+  // Last assistant-trace model (this session). Not the configured primary→reserve pair.
+  const lastTraceModel = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]?.trace?.model;
       if (m) return String(m);
     }
     if (traceRef.current?.model) return String(traceRef.current.model);
-    return contextInfo.model || "";
-  }, [messages, contextInfo.model]);
+    return "";
+  }, [messages]);
+
+  // Effective model for window map (last assistant trace beats session signals)
+  const effectiveModel = lastTraceModel || contextInfo.model || "";
+  const grokHudText = useMemo(() => {
+    const short = shortModelLabel(effectiveModel);
+    return short === "—" ? "CLI" : short;
+  }, [effectiveModel]);
 
   // Client-side used estimate when server has no signals (claude / glyph-agent / new chat)
   const estimatedUsed = useMemo(() => {
@@ -2544,17 +2551,6 @@ export default function App() {
   }, [sessionId]);
   const workingSeconds = useWorkingSeconds(showWorking);
 
-  /** Short path for the header (home → ~). Full path stays in title tooltip. */
-  const cwdLabel = useMemo(() => {
-    if (!cwd) return "";
-    // /Users/name or /home/name → ~/…
-    const tilde = cwd.replace(/^\/(?:Users|home)\/[^/]+/, "~");
-    if (tilde.length <= 36) return tilde;
-    const parts = tilde.split("/").filter(Boolean);
-    if (parts.length <= 2) return tilde;
-    return `…/${parts.slice(-2).join("/")}`;
-  }, [cwd]);
-
   /** Session, paths, and build — only in the subtitle tooltip (quiet by default). */
   const headerTooltip = useMemo(() => {
     const lines = [];
@@ -2581,7 +2577,7 @@ export default function App() {
     if (!isOr) {
       setModelHud({
         kind: "grok",
-        label: "Grok (CLI)",
+        label: "Grok Build (CLI)",
         mismatch: false,
       });
       return undefined;
@@ -2608,11 +2604,13 @@ export default function App() {
             data.modelsActive?.shared?.fallback ??
             "";
         const label = primary && fb ? `${primary} → ${fb}` : primary || "—";
+        const liveLabel = String(data.modelsActive?.active?.label || "").trim();
         setModelHud({
           kind: "openrouter",
           label,
           primary,
           fallback: fb || "",
+          liveLabel,
           mismatch: Boolean(data.modelsMismatch),
         });
       } catch {
@@ -3019,7 +3017,6 @@ export default function App() {
               <span className="sub sub--inline" title={headerTooltip}>
                 {productTerm} · ACP
                 {seat === "phone" ? " · Handy" : ""}
-                {cwdLabel ? ` · ${cwdLabel}` : ""}
               </span>
             </h1>
           </div>
@@ -3050,7 +3047,7 @@ export default function App() {
                 }`}
                 title={
                   modelHud.kind === "grok"
-                    ? "Graph — Grok / Anbindung"
+                    ? "Graph — Grok Build / Anbindung"
                     : modelHud.mismatch
                       ? `Gespeichert ≠ aktiv: ${modelHud.label} — Graph`
                       : `${modelHud.label} — Graph`
@@ -3068,9 +3065,14 @@ export default function App() {
               >
                 <span className="model-hud-text">
                   {modelHud.kind === "grok"
-                    ? "Grok"
+                    ? grokHudText
                     : modelHud.primary
-                      ? modelHudText(modelHud.primary, modelHud.fallback)
+                      ? modelHudText(
+                          modelHud.primary,
+                          modelHud.fallback,
+                          lastTraceModel,
+                          modelHud.liveLabel,
+                        )
                       : "Model"}
                   {modelHud.mismatch ? " ⚠" : ""}
                 </span>
@@ -3114,9 +3116,15 @@ export default function App() {
               <button
                 type="button"
                 className="pill pill-btn pill-btn--icon active-session-summarize"
-                title="Aktive Session zusammenfassen (Vorschau → Bestätigen)"
+                title="Aktive Session zusammenfassen (Arbeitsleiste über LVL)"
                 aria-label="Session zusammenfassen"
-                onClick={() => setActiveSummarizeOpen(true)}
+                onClick={() =>
+                  setSummarizeTarget((cur) =>
+                    cur?.id === sessionId
+                      ? null
+                      : { id: sessionId, title: agentLabel },
+                  )
+                }
               >
                 <IconSummarize size={18} />
               </button>
@@ -3448,6 +3456,37 @@ export default function App() {
               }}
             />
           ) : null}
+          {summarizeTarget?.id ? (
+            <SummarizeDialog
+              sessionId={summarizeTarget.id}
+              sessionTitle={summarizeTarget.title}
+              profile={agent?.id || "glyph-agent"}
+              onClose={() => setSummarizeTarget(null)}
+            />
+          ) : null}
+          {isAgentProfile && (vaultSearchBusy || vaultHits || vaultSearchError) ? (
+            <VaultSearchHits
+              query={vaultHits?.query || input.trim()}
+              hits={vaultHits?.hits || []}
+              selectedIds={vaultHitOn}
+              busy={vaultSearchBusy}
+              error={vaultSearchError}
+              onToggle={(id) => {
+                setVaultHitOn((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                });
+              }}
+              onDismiss={() => {
+                setVaultHits(null);
+                setVaultHitOn(new Set());
+                setVaultSearchError("");
+              }}
+              onSend={sendVaultSelection}
+            />
+          ) : null}
           {queue.length > 0 ? (
             <div className="msg-queue" role="list" aria-label="Warteschlange">
               <div className="msg-queue-head">
@@ -3519,29 +3558,6 @@ export default function App() {
             ) : null}
           </div>
           <div className="composer-box-anchor">
-          {isAgentProfile && (vaultSearchBusy || vaultHits || vaultSearchError) ? (
-            <VaultSearchHits
-              query={vaultHits?.query || input.trim()}
-              hits={vaultHits?.hits || []}
-              selectedIds={vaultHitOn}
-              busy={vaultSearchBusy}
-              error={vaultSearchError}
-              onToggle={(id) => {
-                setVaultHitOn((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                });
-              }}
-              onDismiss={() => {
-                setVaultHits(null);
-                setVaultHitOn(new Set());
-                setVaultSearchError("");
-              }}
-              onSend={sendVaultSelection}
-            />
-          ) : null}
           <div
             className={`composer-box${attachBusy ? " composer-box--attach-busy" : ""}${
               dropActive ? " is-drop-target" : ""
@@ -4168,7 +4184,10 @@ export default function App() {
         onClose={() => setShowOverview(false)}
         onOpenSession={handleOpenSession}
         canSummarize={canSummarize}
-        profile={agent?.id || "grok"}
+        onSummarizeSession={(target) => {
+          setShowOverview(false);
+          setSummarizeTarget(target);
+        }}
       />
       <ActivityCalendar
         open={showCalendar}
@@ -4177,15 +4196,7 @@ export default function App() {
         canSeeActivity={canSeeActivity}
       />
 
-      {/* Aktive-Session-Zusammenfassung (glyph-agent; auch grok möglich) */}
-      {activeSummarizeOpen && sessionId ? (
-        <SummarizeDialog
-          sessionId={sessionId}
-          sessionTitle={agentLabel}
-          profile={agent?.id || "glyph-agent"}
-          onClose={() => setActiveSummarizeOpen(false)}
-        />
-      ) : null}
+
     </div>
   );
 }

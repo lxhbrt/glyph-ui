@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { hitId } from "../utils/vaultSearch.js";
+import { ComposerSheet } from "./ComposerSheet.jsx";
 
 export function VaultSearchHits({
   query,
@@ -21,11 +22,11 @@ export function VaultSearchHits({
 
   let body = null;
   if (busy) {
-    body = <p className="vault-hits-note">Suche…</p>;
+    body = <p className="composer-sheet-note">Suche…</p>;
   } else if (error) {
-    body = <p className="vault-hits-note vault-hits-note--err">{error}</p>;
+    body = <p className="composer-sheet-note composer-sheet-note--err">{error}</p>;
   } else if (n === 0) {
-    body = <p className="vault-hits-note">Keine Treffer im Vault.</p>;
+    body = <p className="composer-sheet-note">Keine Treffer im Vault.</p>;
   } else {
     body = (
       <ul className="vault-hits-list">
@@ -62,48 +63,33 @@ export function VaultSearchHits({
   }
 
   return (
-    <div className="vault-hits" aria-label="Ordner-Suche">
-      <div className="vault-hits-head">
-        <span className="vault-hits-label">
-          {busy
-            ? "Ordner-Suche"
-            : n
-              ? `Ordner-Suche · ${onCount}/${n}`
-              : "Ordner-Suche"}
-        </span>
-        {query ? (
-          <span className="vault-hits-query" title={query}>
-            {query}
-          </span>
-        ) : null}
-        <button
-          type="button"
-          className="vault-hits-dismiss"
-          onClick={onDismiss}
-          title="Treffer verwerfen"
-          aria-label="Treffer verwerfen"
-        >
-          ×
-        </button>
-      </div>
+    <ComposerSheet
+      label="ORDNER"
+      count={busy || !n ? null : `${onCount}/${n}`}
+      current={query || null}
+      onDismiss={onDismiss}
+      dismissTitle="Treffer verwerfen"
+      dismissLabel="Treffer verwerfen"
+      ariaLabel="Ordner-Suche"
+      footer={
+        !busy && !error && n > 0 ? (
+          <>
+            <span className="composer-sheet-footnote">
+              {onCount > 0 ? `${onCount} aktiviert` : "Keine Treffer aktiviert"}
+            </span>
+            <button
+              type="button"
+              className="composer-sheet-go"
+              disabled={onCount === 0}
+              onClick={onSend}
+            >
+              Mit Auswahl senden
+            </button>
+          </>
+        ) : null
+      }
+    >
       {body}
-      {!busy && !error && n > 0 ? (
-        <div className="vault-hits-footer">
-          <span className="vault-hits-count">
-            {onCount > 0
-              ? `${onCount} aktiviert`
-              : "Keine Treffer aktiviert"}
-          </span>
-          <button
-            type="button"
-            className="vault-hits-send"
-            disabled={onCount === 0}
-            onClick={onSend}
-          >
-            Mit Auswahl senden
-          </button>
-        </div>
-      ) : null}
-    </div>
+    </ComposerSheet>
   );
 }

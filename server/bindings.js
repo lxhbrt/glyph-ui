@@ -742,7 +742,7 @@ export async function buildBindingsStatus(opts = {}) {
     profiles: {
       grok: {
         id: "grok",
-        label: "Grok",
+        label: "Grok Build",
         auth: "oauth",
         ok: grokOk,
         checks: [

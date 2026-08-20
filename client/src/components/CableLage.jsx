@@ -188,7 +188,7 @@ export function CableLage({
         face: absorb,
         label:
           absorb === "grok"
-            ? "Grok"
+            ? "Grok Build"
             : absorb === "agent"
               ? "°_Agent"
               : absorb === "code"
@@ -361,7 +361,7 @@ export function CableLage({
           : id === "code"
             ? "^_Code"
             : id === "grok"
-              ? "Grok"
+              ? "Grok Build"
               : id;
       return {
         id,

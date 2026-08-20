@@ -29,6 +29,7 @@ describe("layoutLage", () => {
     }
     assert.ok(!ids.includes("plug-direct"));
     assert.ok(edges.some((e) => e.from === "hub" && e.to === "grok"));
+    assert.equal(nodes.find((n) => n.id === "grok").label, "Grok Build");
   });
 
   it("slides grok into Glyph; grok-bound folders pull in", () => {

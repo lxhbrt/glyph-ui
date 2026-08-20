@@ -2380,7 +2380,7 @@ class GrokBridge {
           agent:
             initialized.agentInfo?.title ||
             initialized.agentInfo?.name ||
-            "Grok",
+            "Grok Build",
         }),
       );
 

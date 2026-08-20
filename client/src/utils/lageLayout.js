@@ -217,7 +217,7 @@ function baseNodes({
   const grok = {
     id: "grok",
     kind: "profile",
-    label: "Grok",
+    label: "Grok Build",
     cluster: "grok",
     face: "grok",
     ...(compact ? compactHeadPoint("grok") : onRing(RING_HEAD, -90)),

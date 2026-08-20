@@ -1,9 +1,10 @@
 /**
- * Slim always-visible execution plan strip (above composer).
+ * Slim always-visible execution plan strip (above LVL bar).
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
 import { planNeedsApproval, planProgress, planStatusGlyph } from "../utils/plan.js";
+import { ComposerSheet } from "./ComposerSheet.jsx";
 
 /**
  * @param {{
@@ -31,40 +32,25 @@ export function PlanBar({
   const needsApproval = planNeedsApproval(entries);
 
   return (
-    <div
-      className={`plan-bar${allDone ? " plan-bar--done" : ""}${
-        collapsed ? " plan-bar--collapsed" : ""
-      }`}
+    <ComposerSheet
+      label="PLAN"
+      count={`${done}/${total}`}
+      current={collapsed ? (allDone ? "fertig" : current) : null}
+      collapsed={collapsed}
+      onToggle={onToggle}
+      onDismiss={onDismiss}
+      dismissTitle="Plan schließen (nur Anzeige — Agent behält seinen Stand)"
+      dismissLabel="Plan schließen"
+      done={allDone}
       role="status"
-      aria-label={`Plan ${done} von ${total}`}
-    >
-      <div className="plan-bar-toolbar">
-        <button
-          type="button"
-          className="plan-bar-head"
-          onClick={onToggle}
-          title={collapsed ? "Plan ausklappen" : "Plan einklappen"}
-          aria-expanded={!collapsed}
-        >
-          <span className="plan-bar-label">PLAN</span>
-          <span className="plan-bar-count">
-            {done}/{total}
-          </span>
-          {collapsed && current ? (
-            <span className="plan-bar-current" title={current}>
-              {allDone ? "fertig" : current}
-            </span>
-          ) : null}
-          <span className="plan-bar-chevron" aria-hidden="true">
-            {collapsed ? "▸" : "▾"}
-          </span>
-        </button>
-        {needsApproval && (onApprove || onRevise) ? (
-          <div className="plan-bar-actions">
+      ariaLabel={`Plan ${done} von ${total}`}
+      actions={
+        needsApproval && (onApprove || onRevise) ? (
+          <div className="composer-sheet-actions">
             {onApprove ? (
               <button
                 type="button"
-                className="plan-bar-approve"
+                className="composer-sheet-go"
                 disabled={approveDisabled}
                 onClick={onApprove}
               >
@@ -74,7 +60,7 @@ export function PlanBar({
             {onRevise ? (
               <button
                 type="button"
-                className="ghost plan-bar-revise"
+                className="ghost composer-sheet-quiet"
                 disabled={approveDisabled}
                 onClick={onRevise}
               >
@@ -82,35 +68,23 @@ export function PlanBar({
               </button>
             ) : null}
           </div>
-        ) : null}
-        {onDismiss ? (
-          <button
-            type="button"
-            className="plan-bar-dismiss"
-            onClick={onDismiss}
-            title="Plan schließen (nur Anzeige — Agent behält seinen Stand)"
-            aria-label="Plan schließen"
+        ) : null
+      }
+    >
+      <ol className="plan-bar-list">
+        {entries.map((e, i) => (
+          <li
+            key={`${i}-${e.content.slice(0, 24)}`}
+            className={`plan-bar-item plan-bar-item--${e.status}`}
+            title={e.content}
           >
-            ×
-          </button>
-        ) : null}
-      </div>
-      {!collapsed ? (
-        <ol className="plan-bar-list">
-          {entries.map((e, i) => (
-            <li
-              key={`${i}-${e.content.slice(0, 24)}`}
-              className={`plan-bar-item plan-bar-item--${e.status}`}
-              title={e.content}
-            >
-              <span className="plan-bar-glyph" aria-hidden="true">
-                {planStatusGlyph(e.status)}
-              </span>
-              <span className="plan-bar-text">{e.content}</span>
-            </li>
-          ))}
-        </ol>
-      ) : null}
-    </div>
+            <span className="plan-bar-glyph" aria-hidden="true">
+              {planStatusGlyph(e.status)}
+            </span>
+            <span className="plan-bar-text">{e.content}</span>
+          </li>
+        ))}
+      </ol>
+    </ComposerSheet>
   );
 }

@@ -12,6 +12,7 @@ import {
   formatSteps,
   modelHudText,
   modelLabel,
+  resolveHudModel,
   shortModelLabel,
   splitStepBanner,
   STEP_BANNER_SENTINEL,
@@ -50,6 +51,14 @@ describe("shortModelLabel / modelHudText", () => {
     assert.equal(shortModelLabel("google/gemini-2.5-flash"), "Gem-Flash");
   });
 
+  it("maps grok models to a version, never the word grok", () => {
+    assert.equal(shortModelLabel("grok-4.6"), "4.6");
+    assert.equal(shortModelLabel("grok-4-fast"), "4-fast");
+    assert.equal(shortModelLabel("grok-4"), "4");
+    assert.equal(shortModelLabel("grok-3-mini"), "3-mini");
+    assert.equal(shortModelLabel("xai/grok"), "Build");
+  });
+
   it("falls back to first 4 chars for long unknown tokens", () => {
     assert.equal(shortModelLabel("provider/superlongmodelname-v2"), "supe");
   });
@@ -64,15 +73,118 @@ describe("shortModelLabel / modelHudText", () => {
     assert.equal(shortModelLabel(null), "—");
   });
 
-  it("modelHudText joins primary → fallback as short codes", () => {
+  it("modelHudText shows only the model in use, not the configured pair", () => {
     assert.equal(
       modelHudText("deepseek/deepseek-v4-flash-0731", "openai/gpt-4o-mini"),
-      "DS-V4F → 4o-mini",
+      "DS-V4F",
     );
     assert.equal(modelHudText("deepseek/deepseek-v4-flash-0731", ""), "DS-V4F");
     assert.equal(
       modelHudText("deepseek-v4-pro", "deepseek/deepseek-v4-flash-0731"),
-      "DS-V4P → DS-V4F",
+      "DS-V4P",
+    );
+  });
+
+  it("modelHudText prefers the actually used model over primary", () => {
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash-0731",
+        "deepseek/deepseek-v4-flash-0731",
+      ),
+      "DS-V4F",
+    );
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash-0731",
+        "openai/gpt-4o-mini",
+      ),
+      "4o-mini",
+    );
+  });
+
+  it("modelHudText uses a live hop that belongs to the pair", () => {
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash-0731",
+        "",
+        "deepseek/deepseek-v4-flash-0731",
+      ),
+      "DS-V4F",
+    );
+  });
+
+  it("modelHudText ignores a chain live-label and falls back to primary", () => {
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash-0731",
+        "deepseek-v4-pro → deepseek/deepseek-v4-flash-0731",
+      ),
+      "DS-V4P",
+    );
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "x",
+        "deepseek-v4-pro -> deepseek/deepseek-v4-flash-0731",
+      ),
+      "DS-V4P",
+    );
+  });
+});
+
+describe("resolveHudModel", () => {
+  const agent = {
+    primary: "deepseek-v4-pro",
+    fallback: "deepseek/deepseek-v4-flash-0731",
+  };
+
+  it("defaults to primary when nothing has run yet", () => {
+    assert.equal(resolveHudModel(agent), "deepseek-v4-pro");
+  });
+
+  it("uses live fallback when that hop last ran (belongs to the pair)", () => {
+    assert.equal(
+      resolveHudModel({
+        ...agent,
+        liveLabel: "deepseek/deepseek-v4-flash-0731",
+      }),
+      "deepseek/deepseek-v4-flash-0731",
+    );
+  });
+
+  it("ignores a leftover CODE live-label on the agent pair", () => {
+    assert.equal(
+      resolveHudModel({
+        ...agent,
+        liveLabel: "google/gemini-3.7-flash",
+      }),
+      "deepseek-v4-pro",
+    );
+  });
+
+  it("session trace wins over live label", () => {
+    assert.equal(
+      resolveHudModel({
+        ...agent,
+        used: "deepseek-v4-pro",
+        liveLabel: "deepseek/deepseek-v4-flash-0731",
+      }),
+      "deepseek-v4-pro",
+    );
+  });
+
+  it("CODE primary stays even if shared provider still holds flash", () => {
+    assert.equal(
+      resolveHudModel({
+        primary: "google/gemini-3.7-flash",
+        fallback: "",
+        liveLabel: "deepseek/deepseek-v4-flash-0731",
+      }),
+      "google/gemini-3.7-flash",
     );
   });
 });

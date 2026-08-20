@@ -135,6 +135,11 @@ test("resolveAgent", async (t) => {
     assert.equal(resolveAgent(profiles, "^_Code").id, "_code");
   });
 
+  await t.test("maps Grok Build to grok", () => {
+    assert.equal(resolveAgent(profiles, "Grok Build").id, "grok");
+    assert.equal(resolveAgent(profiles, "grok-build").id, "grok");
+  });
+
   await t.test("maps °_Agent / legacy -_Agent / agent aliases to glyph-agent", () => {
     assert.equal(resolveAgent(profiles, "°_Agent").id, "glyph-agent");
     assert.equal(resolveAgent(profiles, "-_Agent").id, "glyph-agent");
@@ -164,6 +169,12 @@ test("publicAgent", async (t) => {
     assert.ok(wire.command.includes("glyph-agent-acp"));
     assert.equal(typeof wire.hint, "string");
     assert.ok(wire.hint.toLowerCase().includes("deepseek"));
+  });
+
+  await t.test("Grok Build is the public label for grok", () => {
+    const wire = publicAgent(findAgent(profiles, "grok"));
+    assert.equal(wire.id, "grok");
+    assert.equal(wire.label, "Grok Build");
   });
 
   await t.test("°_Agent is the public label for glyph-agent", () => {

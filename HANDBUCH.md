@@ -358,6 +358,10 @@ Aktive Chat-Session ist **geschützt** (nicht schließbar) — zuerst **Stift** 
 
 **Wichtig:** Nur „archiviert“ markieren spart **keinen** Speicher. Erst das **Löschen des Session-Ordners** entlastet die Disk (Sessions können hunderte MB sein). **Stift** (`/new`) leert nur den Chat — die alte Session bleibt auf Disk, bis du sie in der Lupe schließt.
 
+### Zusammenfassen
+
+Header (aktive Session) oder Lupe (andere Grok-Sessions): Vorschau in der **Arbeitsleiste** über der LVL-Leiste — gleiches Chrome wie Plan. Kein Fenster in der Bildmitte. **Speichern** = Snapshot; **×** bricht ab.
+
 ### Wiki-Ziel
 
 Standard:
@@ -635,7 +639,7 @@ Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
 - [ ] Aktives Profil passt (Header / `GLYPH_AGENT`)  
 - [ ] °_Agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
 - [ ] °_Agent Cloud-Antwort: `OPENROUTER_API_KEY` in der glyph-agent-Umgebung (Technik)  
-- [ ] Workspace passt (Header-Pfad / `GLYPH_UI_CWD`)  
+- [ ] Workspace passt (Tooltip auf Glyph #N / Workspace-Button / `GLYPH_UI_CWD`)  
 - [ ] Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, ↵-Button = senden 
 - [ ] Während Arbeit: Text → Queue, leer → Stop  
 - [ ] Sessions: Lupe · Aktivität: Kalender · Wissen: Wiki  

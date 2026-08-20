@@ -9,7 +9,7 @@ import { bindsOf } from "../utils/lageLayout.js";
 import { ModeGlyph } from "./ModeGlyph.jsx";
 
 const HEAD_ROWS = [
-  { id: "grok", label: "Grok", write: true },
+  { id: "grok", label: "Grok Build", write: true },
   { id: "agent", label: "°_Agent", write: true },
   { id: "code", label: "^_Code", write: true },
 ];
@@ -55,7 +55,7 @@ export function GraphLegend({
   const title = item
     ? state?.label || selected?.label
     : absorb === "grok"
-      ? "Grok"
+      ? "Grok Build"
       : absorb === "agent"
         ? "°_Agent"
         : absorb === "code"
