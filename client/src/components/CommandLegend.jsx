@@ -131,7 +131,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Kopieren",
         need: "optional",
-        desc: "Nachricht in die Zwischenablage (Button neben Vorlesen). Ersetzt TUI /copy.",
+        desc: "Klick auf die Nachricht: Kopieren/Vorlesen darunter. Letzte Antwort schiebt hoch, damit die Buttons nicht unter dem Composer liegen.",
       },
       {
         cmd: "Tool-Karte",
@@ -366,7 +366,7 @@ const SHORT_HANDBOOK = [
       "Schließen: **Ja + Wiki** (Archiv + löschen) · **Löschen** (TUI `/delete`) · Abbrechen.",
       "Aktive Chat-Session ist geschützt (zuerst Stift = `/new`). Speicher freigeben = Ordner löschen.",
       "**Zusammenfassen** (Header, neben der Kette): Snapshot in der Arbeitsleiste über LVL. Grok auch in der Lupe (Lupe schließt, Leiste dockt). Titel = letzte echte Aufgabe, nicht der erste Test-Ping.",
-      "Wiki-Ziel: `…/OpenClaw memory-wiki/sources/grok-sessions/`.",
+      "Wiki-Ziel: `…/memory-wiki/sources/grok-sessions/`.",
     ],
   },
   {

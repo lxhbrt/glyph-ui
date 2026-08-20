@@ -1781,8 +1781,7 @@ button.send.send--stuffed .send-snack {
   border: none;
   border-radius: 0;
   background: var(--bg);
-  /* Thin air only (≈1/4 of former 44px): action buttons fill under text when open,
-     they do not need a reserved strip that pushes the reply off the LVL edge. */
+  /* Thin air; Kopieren/Vorlesen reservieren Platz am Message, nicht am Pane. */
   padding: 8px 8px 11px 4px;
 }
 
@@ -1850,19 +1849,22 @@ button.send.send--stuffed .send-snack {
   box-shadow: none;
 }
 
-/* Message actions (copy / speak): overlay under the msg, no reflow.
-   display:none↔flex used to push text up/down on every toggle. */
+/* Message actions (copy / speak): under the text, not inside the bubble.
+   Closed = no layout. Open = padding so the bar is in the scroll box
+   (absolute overflow on the last msg cannot be scrolled). */
 .msg .msg-bottom-actions {
   display: none;
   position: absolute;
   z-index: 3;
   left: 2px;
-  top: 100%;
-  margin-top: 2px;
+  bottom: 4px;
   padding: 2px 0 0;
-  /* slight plate so icons stay readable over the next message */
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   border-radius: 9px;
+}
+
+.msg.is-actions-open {
+  padding-bottom: 40px;
 }
 
 .msg.is-actions-open .msg-bottom-actions {
@@ -2342,8 +2344,7 @@ button.tool-card-summary:hover .tool-card-verb {
   cursor: not-allowed;
 }
 
-/* Untere Aktionsleiste (Kopieren/Vorlesen) — Icon-only, 34px (Desktop = Mobil).
-   Layout/visibility: siehe .msg .msg-bottom-actions (absolute, kein Reflow). */
+/* Untere Aktionsleiste (Kopieren/Vorlesen) — Icon-only, 34px (Desktop = Mobil). */
 .msg-bottom-actions {
   display: flex;
   align-items: center;

@@ -1,10 +1,10 @@
 /**
  * Session-Summaries — nicht-destruktiver, bestätigter Speichervorgang in den
- * zentralen Wiki-Vault (OpenClaw memory-wiki), Unterordner `summaries/`.
+ * zentralen Wiki-Vault (memory-wiki), Unterordner `summaries/`.
  *
  * Prinzip (Nutzer-Spezifikation):
- *  - Zielpfad AUSSCHLIESSLICH aus `OPENCLAW_WIKI_PATH` abgeleitet.
- *  - Nur in `summaries/` schreiben; bestehende OpenClaw-Strukturen
+ *  - Zielpfad aus `WIKI_PATH` (Alias: `OPENCLAW_WIKI_PATH`).
+ *  - Nur in `summaries/` schreiben; bestehende Wiki-Strukturen
  *    (index.md, sources/, concepts/, entities/, managed blocks) NIE anfassen.
  *  - Pfad-Traversal + unsichere Dateinamen verhindern.
  *  - Bestehende Datei NIEMALS überschreiben — jeder Commit = neuer Snapshot
@@ -42,7 +42,7 @@ function agentSlug(profile) {
   return AGENT_SLUGS[p] || "Agent";
 }
 
-/** Expandiert `~/...` und leitet Zielpfad aus OPENCLAW_WIKI_PATH ab. */
+/** Expandiert `~/...` und leitet Zielpfad aus WIKI_PATH / OPENCLAW_WIKI_PATH ab. */
 function expandHome(p) {
   const s = String(p || "").trim();
   if (!s) return s;
@@ -54,7 +54,7 @@ function expandHome(p) {
 }
 
 export function getWikiRoot() {
-  const env = process.env.OPENCLAW_WIKI_PATH;
+  const env = process.env.WIKI_PATH || process.env.OPENCLAW_WIKI_PATH;
   if (env && env.trim()) return expandHome(env.trim());
   // Fallback ist der App-lokale Wiki (kein Suchen von Obsidian-Pfaden im Repo).
   return expandHome(path.join(os.homedir(), ".glyph-ui", "wiki"));
@@ -105,7 +105,7 @@ export function buildFileName({ title, sessionId, profile, date, time, stamp }) 
 
 /**
  * Erzeugt den Zielpfad (nur innerhalb von <wikiRoot>/summaries/).
- * Leitet den absoluten summaries-Pfad aus OPENCLAW_WIKI_PATH ab.
+ * Leitet den absoluten summaries-Pfad aus WIKI_PATH ab.
  */
 export function resolveSummariesDir(wikiRoot = getWikiRoot()) {
   return path.join(wikiRoot, "summaries");

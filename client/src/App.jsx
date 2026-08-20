@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AssistantText } from "./components/AssistantText.jsx";
 import { AssistantMeta } from "./components/AssistantMeta.jsx";
 import { PlanBar } from "./components/PlanBar.jsx";
@@ -766,6 +766,33 @@ export default function App() {
   const SCROLL_PIN_PX = 64;
   const [pinnedToBottom, setPinnedToBottom] = useState(true);
   const [hasNewBelow, setHasNewBelow] = useState(false);
+
+  /** Last answer sits on the composer edge — overlay buttons need a scroll nudge. */
+  useLayoutEffect(() => {
+    if (!actionsMsgId) return;
+    const list = listRef.current;
+    if (!list) return;
+    const msg = list.querySelector(
+      `[data-msg-id="${CSS.escape(String(actionsMsgId))}"]`,
+    );
+    const bar = msg?.querySelector(".msg-bottom-actions");
+    if (!bar) return;
+    const listBox = list.getBoundingClientRect();
+    const barBox = bar.getBoundingClientRect();
+    const pad = 8;
+    let delta = 0;
+    if (barBox.bottom > listBox.bottom - pad) {
+      delta = barBox.bottom - listBox.bottom + pad;
+    } else if (barBox.top < listBox.top + pad) {
+      delta = barBox.top - listBox.top - pad;
+    }
+    if (!delta) return;
+    programmaticScrollRef.current = true;
+    list.scrollTop += delta;
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
+  }, [actionsMsgId]);
 
   const isNearBottom = useCallback((el) => {
     if (!el) return true;

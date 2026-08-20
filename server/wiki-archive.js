@@ -4,8 +4,8 @@
  */
 
 /**
- * Write Grok session archives into OpenClaw memory-wiki as raw sources.
- * Uses a dedicated folder so OpenClaw managed index blocks stay untouched.
+ * Write Grok session archives into memory-wiki as raw sources.
+ * Uses a dedicated folder so wiki managed index blocks stay untouched.
  */
 
 import { promises as fs } from "node:fs";
@@ -25,11 +25,12 @@ function expandHome(p) {
 
 /**
  * Wiki root for session archives.
- * Override with OPENCLAW_WIKI_PATH (e.g. an Obsidian vault).
+ * Override with WIKI_PATH (alias: OPENCLAW_WIKI_PATH).
  * Default is app-local under ~/.glyph-ui — no personal vault path in repo.
  */
 const DEFAULT_WIKI = expandHome(
-  process.env.OPENCLAW_WIKI_PATH ||
+  process.env.WIKI_PATH ||
+    process.env.OPENCLAW_WIKI_PATH ||
     path.join(os.homedir(), ".glyph-ui", "wiki"),
 );
 

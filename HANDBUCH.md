@@ -370,7 +370,7 @@ Standard:
 ~/.glyph-ui/wiki/sources/grok-sessions/
 ```
 
-Mit `OPENCLAW_WIKI_PATH` auf einen beliebigen Ordner umleiten (z. B. Obsidian-Vault). Seiten sind als Rohquellen markiert und haben einen eigenen Index in diesem Ordner (OpenClaw-Hauptindex bleibt unberührt).
+Mit `WIKI_PATH` (Alias `OPENCLAW_WIKI_PATH`) auf einen beliebigen Ordner umleiten (z. B. Obsidian-Vault). Seiten sind als Rohquellen markiert und haben einen eigenen Index in diesem Ordner (Wiki-Hauptindex bleibt unberührt).
 
 ---
 
@@ -474,7 +474,8 @@ In der App: Symbol **Befehle** (filterbare Legende).
 | `GLYPH_AGENT` | `grok` | Agent-Profil beim Start (grok \| _code \| glyph-agent) |
 | `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil °_Agent) |
 | `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für °_Agent-Antwort |
-| `OPENCLAW_WIKI_PATH` | `~/.glyph-ui/wiki` | Wiki-Archiv (optional Obsidian-Vault o. Ä.) |
+| `WIKI_PATH` | `~/.glyph-ui/wiki` | Wiki-Archiv (optional Obsidian-Vault o. Ä.) |
+| `OPENCLAW_WIKI_PATH` | — | Alias für `WIKI_PATH` |
 | `GLYPH_UI_STATE_DIR` | `~/.glyph-ui` | UI-State (z. B. Closed-Log) |
 
 Beispiel:
