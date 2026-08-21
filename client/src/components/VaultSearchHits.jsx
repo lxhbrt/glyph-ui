@@ -3,8 +3,21 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { hitId } from "../utils/vaultSearch.js";
+import { hitId, hitKindLabel } from "../utils/vaultSearch.js";
 import { ComposerSheet } from "./ComposerSheet.jsx";
+
+function sheetLabel(fallback, hits) {
+  const src = String(fallback || "");
+  if (src === "dguv") return "DGUV";
+  if (src === "komnet") return "KOMNET";
+  if ((hits || []).some((h) => h.kind === "web")) {
+    const dguv = hits.some(
+      (h) => h.source === "dguv" || String(h.path || "").includes("dguv.de"),
+    );
+    return dguv ? "DGUV" : "KOMNET";
+  }
+  return "ORDNER";
+}
 
 export function VaultSearchHits({
   query,
@@ -12,6 +25,7 @@ export function VaultSearchHits({
   selectedIds,
   busy,
   error,
+  fallback = "",
   onToggle,
   onDismiss,
   onSend,
@@ -26,7 +40,11 @@ export function VaultSearchHits({
   } else if (error) {
     body = <p className="composer-sheet-note composer-sheet-note--err">{error}</p>;
   } else if (n === 0) {
-    body = <p className="composer-sheet-note">Keine Treffer im Vault.</p>;
+    body = (
+      <p className="composer-sheet-note">
+        Keine Treffer im Vault, KomNet oder DGUV.
+      </p>
+    );
   } else {
     body = (
       <ul className="vault-hits-list">
@@ -44,7 +62,7 @@ export function VaultSearchHits({
                 <span className="vault-hit-pip" aria-hidden="true" />
                 <span className="vault-hit-body">
                   <span className="vault-hit-title">
-                    {h.kind === "folder" ? "Ordner" : "Datei"}
+                    {hitKindLabel(h)}
                     {" · "}
                     {h.title}
                   </span>
@@ -64,12 +82,12 @@ export function VaultSearchHits({
 
   return (
     <ComposerSheet
-      label="ORDNER"
+      label={sheetLabel(fallback, hits)}
       count={busy || !n ? null : `${onCount}/${n}`}
       current={query || null}
       onDismiss={onDismiss}
-      dismissTitle="Treffer verwerfen"
-      dismissLabel="Treffer verwerfen"
+      dismissTitle={busy ? "Suche abbrechen" : "Treffer verwerfen"}
+      dismissLabel={busy ? "Suche abbrechen" : "Treffer verwerfen"}
       ariaLabel="Ordner-Suche"
       footer={
         !busy && !error && n > 0 ? (

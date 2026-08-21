@@ -30,6 +30,7 @@ const STEP_LABELS = {
   MailList: ["Mail", "listet E-Mails (himalaya)"],
   MailRead: ["Mail", "liest E-Mail (himalaya)"],
   MessageSend: ["MessageSend", "sendet Nachricht (openclaw)"],
+  OpenRouter: ["Think", "Cloud-Denker"],
   ReadNote: ["ReadNote", "liest Notiz aus dem Vault"],
   Summarize: ["Summarize", "fasst Notiz zusammen"],
   CreateNote: ["WriteNote", "erstellt Notiz"],
@@ -42,6 +43,19 @@ const STEP_LABELS = {
   WriteFile: ["WriteFile", "schreibt Datei (Diff+Backup)"],
   RunCommand: ["RunCommand", "Shell (Whitelist)"],
 };
+
+/**
+ * Live-Think-Zeile. Kein hartes „DeepSeek CODE“ — der Detailtext trägt das Modell.
+ *
+ * @param {string} [detail]
+ * @param {{ isCode?: boolean }} [opts]
+ * @returns {string}
+ */
+export function formatThinkStep(detail, { isCode = false } = {}) {
+  const d = String(detail || "").trim();
+  if (d) return `Think · ${d}`;
+  return isCode ? "Think · ^_Code" : "Think · Cloud-Denker";
+}
 
 /**
  * Baut den Grok-artigen Stufen-Banner aus dem Server-Trace.

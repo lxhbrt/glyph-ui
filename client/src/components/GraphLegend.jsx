@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useState } from "react";
-import { buildModelsPatch, modelsForHead } from "../utils/bindingsModels.js";
+import {
+  applyLiveStatus,
+  buildModelsPatch,
+  modelsForHead,
+} from "../utils/bindingsModels.js";
 import { bindsOf } from "../utils/lageLayout.js";
 import { ModeGlyph } from "./ModeGlyph.jsx";
 
@@ -270,17 +274,13 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       onBindingsChange?.(data);
-      const apply = data?.modelsApply;
-      if (body.models && apply) {
-        setOkMsg(
-          apply.ok && apply.applied
-            ? "Gespeichert · live am Agent."
-            : `Gespeichert. Apply: ${apply.error || "Agent offline"}.`,
-        );
-      } else if (body.DIRECT_API_URL || body.DIRECT_API_KEY || body.OPENROUTER_API_KEY) {
-        setOkMsg("Gespeichert.");
+      const live = applyLiveStatus(data?.modelsApply);
+      if (live.ok) {
+        setOkMsg(live.text);
+        return data;
       }
-      return data;
+      setErr(live.text);
+      return null;
     } catch (e) {
       setErr(e.message || String(e));
       return null;
@@ -332,7 +332,7 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
     <div className="lage-bind">
       <p className="lage-lede">
         {isCode
-          ? "Key + Host + Modell hier. Ohne Slash = Direct (deepseek-v4-flash). Mit Slash = OpenRouter (google/gemini-3.7-flash)."
+          ? "Key + Host + Modell hier. Ohne Slash = Direct (deepseek-v4-flash-vision-exp). Mit Slash = OpenRouter (deepseek/deepseek-v4-flash-0731)."
           : "Key + Host + Modell hier. Ohne Slash = Direct. Mit Slash = OpenRouter-Slug."}
       </p>
       <form
@@ -397,7 +397,7 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
         <p className="lage-lede">
           {isCode
             ? "Leer + Schreiben = gleiches Paar wie °_Agent."
-            : "z. B. deepseek-v4-pro oder google/gemini-3.7-flash."}
+            : "z. B. deepseek-v4-flash-vision-exp."}
         </p>
         <label className="lage-field-label" htmlFor={`lage-model-${absorb}`}>
           Primary
@@ -409,7 +409,7 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
             autoComplete="off"
             spellCheck={false}
             aria-label={isCode ? "Modell ^_Code" : "Modell °_Agent"}
-            placeholder={isCode ? "google/gemini-3.7-flash" : "deepseek-v4-pro"}
+            placeholder="deepseek-v4-flash-vision-exp"
             value={primary}
             disabled={busy}
             onChange={(e) => setPrimary(e.target.value)}

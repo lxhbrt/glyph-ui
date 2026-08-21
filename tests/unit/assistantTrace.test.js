@@ -41,6 +41,15 @@ describe("shortModelLabel / modelHudText", () => {
     assert.equal(shortModelLabel("deepseek-v4-flash"), "DS-V4F");
   });
 
+  it("maps DeepSeek V4 Flash Vision Exp to DS-V4V, not DS-V4F", () => {
+    assert.equal(shortModelLabel("deepseek-v4-flash-vision-exp"), "DS-V4V");
+    assert.equal(
+      shortModelLabel("deepseek/deepseek-v4-flash-vision-exp"),
+      "DS-V4V",
+    );
+    assert.equal(modelHudText("deepseek-v4-flash-vision-exp", ""), "DS-V4V");
+  });
+
   it("maps DeepSeek V4 Pro to DS-V4P", () => {
     assert.equal(shortModelLabel("deepseek-v4-pro"), "DS-V4P");
   });

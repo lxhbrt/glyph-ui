@@ -1155,6 +1155,7 @@ button:disabled {
 
 button.send {
   --send-morph: 0.48s cubic-bezier(0.34, 1.25, 0.64, 1);
+  touch-action: manipulation;
   /* Calm idle: soft accent tint, not a solid neon block */
   background: var(--send-idle-bg);
   color: var(--gold-bright);
@@ -5403,6 +5404,7 @@ button.cal-cell {
 
   .composer-row {
     padding: 8px 10px 10px;
+    touch-action: manipulation;
   }
 
   .composer-plus-btn {

@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useId, useState } from "react";
 import { cablePath } from "../utils/cables.js";
+import { applyLiveStatus } from "../utils/bindingsModels.js";
 import { GlyphMark } from "./EgyptMarks.jsx";
 
 /** Agent profiles on the map (full nodes). */
@@ -47,7 +48,7 @@ function prefillModels(data, fields) {
     shared?.primary ||
     healthPrimary ||
     fields.primary ||
-    "deepseek-v4-pro";
+    "deepseek-v4-flash-vision-exp";
   const fallback =
     shared?.fallback != null && shared?.primary
       ? shared.fallback
@@ -344,7 +345,14 @@ function BindingsPanel({ active }) {
       if (keyId === "DIRECT_API_KEY") setDirectKey("");
       if (keyId === "OPENROUTER_API_KEY") setOpenrouter("");
       if (keyId === "XAI_API_KEY") setXai("");
-      setOkMsg(`${keyId} entfernt.`);
+      const live = applyLiveStatus(data?.modelsApply);
+      if (keyId === "XAI_API_KEY") {
+        setOkMsg(`${keyId} entfernt.`);
+      } else if (live.ok) {
+        setOkMsg(`${keyId} entfernt · live am Agent.`);
+      } else {
+        setError(live.text);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -423,19 +431,18 @@ function BindingsPanel({ active }) {
         setCodeFallback("");
       }
 
-      const apply = data?.modelsApply;
-      if (body.models && apply) {
-        if (apply.ok && apply.applied) {
-          setOkMsg(
-            "Gespeichert + live am glyph-agent übernommen (nächster Chat).",
-          );
-        } else {
-          setOkMsg(
-            `Gespeichert in bindings.json. Apply ausstehend: ${apply.error || "Agent offline"} — greift beim Connect.`,
-          );
-        }
+      const needsLive =
+        Boolean(data?.modelsApply) ||
+        Object.prototype.hasOwnProperty.call(body, "DIRECT_API_KEY") ||
+        Object.prototype.hasOwnProperty.call(body, "DIRECT_API_URL") ||
+        Object.prototype.hasOwnProperty.call(body, "OPENROUTER_API_KEY") ||
+        Boolean(body.models);
+      if (needsLive) {
+        const live = applyLiveStatus(data?.modelsApply);
+        if (live.ok) setOkMsg(live.text);
+        else setError(live.text);
       } else {
-        setOkMsg("Gespeichert unter ~/.glyph-ui/bindings.json (nur lokal).");
+        setOkMsg("Gespeichert.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -516,8 +523,8 @@ function BindingsPanel({ active }) {
       <form className="bindings-form" onSubmit={(e) => void save(e)}>
         <h4 className="bindings-section-title">Stecker · Models</h4>
         <p className="bindings-hint">
-          Ohne Slash = Direct-ID (<code>deepseek-v4-flash</code>). Mit Slash =
-          OpenRouter-Slug (<code>google/gemini-3.7-flash</code>). Greift für{" "}
+          Ohne Slash = Direct-ID (<code>deepseek-v4-flash-vision-exp</code>). Mit Slash =
+          OpenRouter-Slug (<code>deepseek/deepseek-v4-flash-0731</code>). Greift für{" "}
           <code>°_Agent</code> / <code>^_Code</code>, unabhängig vom aktiven Profil.
         </p>
         {status?.modelsMismatch ? (
@@ -536,7 +543,7 @@ function BindingsPanel({ active }) {
             type="text"
             autoComplete="off"
             spellCheck={false}
-            placeholder="deepseek-v4-pro"
+            placeholder="deepseek-v4-flash-vision-exp"
             value={primary}
             disabled={saving}
             onChange={(e) => {
@@ -571,7 +578,7 @@ function BindingsPanel({ active }) {
             type="text"
             autoComplete="off"
             spellCheck={false}
-            placeholder="google/gemini-3.7-flash"
+            placeholder="deepseek-v4-flash-vision-exp"
             value={codePrimary}
             disabled={saving}
             onChange={(e) => {

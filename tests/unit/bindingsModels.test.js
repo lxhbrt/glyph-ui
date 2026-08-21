@@ -6,6 +6,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyLiveStatus,
   buildModelsPatch,
   modelsForHead,
 } from "../../client/src/utils/bindingsModels.js";
@@ -83,5 +84,25 @@ describe("buildModelsPatch", () => {
     assert.deepEqual(buildModelsPatch({ absorb: "code", primary: "", fallback: "x" }), {
       models: { code: null },
     });
+  });
+});
+
+describe("applyLiveStatus", () => {
+  it("success is live am Agent", () => {
+    assert.deepEqual(applyLiveStatus({ ok: true, applied: true }), {
+      ok: true,
+      text: "Gespeichert · live am Agent.",
+    });
+  });
+
+  it("failed apply is an error, not silent save", () => {
+    const s = applyLiveStatus({ ok: false, applied: false, error: "offline" });
+    assert.equal(s.ok, false);
+    assert.match(s.text, /offline/);
+  });
+
+  it("missing apply is an error", () => {
+    const s = applyLiveStatus(null);
+    assert.equal(s.ok, false);
   });
 });

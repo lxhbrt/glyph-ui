@@ -34,6 +34,8 @@ export const CONTEXT_WINDOWS = {
   "claude-3-7-sonnet": 200_000,
   "sonnet-5": 1_000_000,
   "sonnet 5": 1_000_000,
+  "deepseek/deepseek-v4-flash-vision-exp": 1_000_000,
+  "deepseek-v4-flash-vision-exp": 1_000_000,
   "deepseek/deepseek-v4-flash": 1_000_000,
   "deepseek/deepseek-v4-flash-0731": 1_000_000,
   "deepseek-v4-flash": 1_000_000,
@@ -106,6 +108,9 @@ export function isModelCompatibleWithProfile(model, profile) {
   if (!p) return true;
   // Aliase: claude/code → _code
   if (p === "claude" || p === "code" || p === "^_code") p = "_code";
+  const id = normalizeModelId(model);
+  // Direct DeepSeek is the hop for both °_Agent and ^_Code.
+  if (id.includes("deepseek")) return true;
   const fam = modelProfileFamily(model);
   if (!fam) return false;
   return fam === p;

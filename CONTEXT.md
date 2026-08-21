@@ -28,7 +28,7 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | **BindPanel** | Kompakt-Liste im Buch (Fallback) | `BindPanel.jsx`, `useBindResource.js` | Vaults-UI, Workspaces-UI |
 | **Vaults-UI** | Kabelsalat °_Agent | `VaultsPanel.jsx` → Proxy `/api/…` | **glyph-agent** `/vaults` |
 | **Workspaces-UI** | Kabelsalat ^_Code | `WorkspacesPanel.jsx` → `/api/workspaces` | **glyph-agent** `/workspaces` |
-| **Plan / Recurring** | Kalender-Tab Plan | `server/plan.js`, `PlanBar.jsx` | glyph-agent `/recurring` |
+| **Plan / Recurring** | Kalender-Tab Plan | `server/plan.js`, `PlanBar.jsx` | glyph-agent `/recurring`; Skill `einmal-job` |
 | **Domain-SoT** | Begriffe + settled decisions | **diese** `CONTEXT.md`, `docs/adr/` | `~/.glyph/AGENTS.md` |
 
 **Nicht hier:** Vault-Inhalte, HSEQ-Jobs, Embedding — das ist `glyph-agent`.
@@ -80,8 +80,8 @@ Eine aufklappbare Zeile im Chat für einen ACP-Tool-Aufruf: Verb + Ziel in der Z
 _Avoid_: Tool-Card (EN), Paper-Card, grok-build-web Disclosure
 
 **Ordner-Suche**:
-Manueller Vault-Zugriff im Profil **°_Agent**. Pixel-Apfel **über dem Senden-Button** (nicht zwischen + und Chat), ohne die Composer-Höhe zu erhöhen. Minecraft: roter Körper, brauner Stiel, grünes Blatt; inaktiv abgedunkelt; an = Gold-Outline + Puls. Standard aus — Agent antwortet ohne VaultFind/ListVaultDir. An: nächste Sendung sucht, Treffer in der **Arbeitsleiste** über der LVL-Leiste (nicht als Overlay über der Eingabe), nie im Chat-Verlauf, jedes Ergebnis startet aus; nur explizit an = in den Agent-Kontext. Zustand pro Session (`sessionStorage`). Jobs/Engine ohne Flag bleiben beim B+-Precheck. ACP sendet `vault_search` nur wenn mindestens ein Treffer aktiv ist.
-_Avoid_: automatische Vault-Suche bei jeder °_Agent-Nachricht; Apfel zwischen + und Chat; Lupe (Sessions); Treffer als Chat-Nachrichten; Gold-gefüllter Apfel; Treffer-Popup über der Composer-Box
+Manueller Vault-Zugriff im Profil **°_Agent**. Pixel-Apfel **über dem Senden-Button** (nicht zwischen + und Chat), ohne die Composer-Höhe zu erhöhen. Minecraft: roter Körper, brauner Stiel, grünes Blatt; inaktiv abgedunkelt; an = Gold-Outline + Puls. Standard aus — Agent antwortet ohne VaultFind/ListVaultDir. An: nächste Sendung sucht, Treffer in der **Arbeitsleiste** über der LVL-Leiste (nicht als Overlay über der Eingabe), nie im Chat-Verlauf, jedes Ergebnis startet aus; nur explizit an = in den Agent-Kontext. Zustand pro Session (`sessionStorage`). Jobs/Engine ohne Flag bleiben beim B+-Precheck. ACP sendet `vault_search` nur wenn mindestens ein Treffer aktiv ist. Vault leer → **KomNet** (`komnet.nrw.de`) einmal via Exa+TinyFish; ohne Treffer **DGUV** (`dguv.de`) ebenso. Kein HTML-Scrape, kein offenes Web.
+_Avoid_: automatische Vault-Suche bei jeder °_Agent-Nachricht; Apfel zwischen + und Chat; Lupe (Sessions); Treffer als Chat-Nachrichten; Gold-gefüllter Apfel; Treffer-Popup über der Composer-Box; KomNet-HTML direkt; KomNet und DGUV parallel; allgemeine Websuche als Apfel-Fallback
 
 **Rewind**:
 Einen Nutzer-Turn und alles danach aus dem Chat-Verlauf nehmen. Dateien auf Disk bleiben (wie TUI `/rewind`). Einstiege: Esc Esc (idle, leerer Composer), `/rewind` / `/undo`, ↺ an der Nutzer-Nachricht. °_Agent/^_Code: Adapter `session.rewind`. Grok: ACP `x.ai/rewind*` oder Disk-Schnitt + `session/load`.
@@ -103,13 +103,17 @@ _Avoid_: Zusammenfassen als Vollbild-Dialog; Ordner-Suche als schwebendes Overla
 Aktionen an der Plan-Leiste (Arbeitsleiste), solange jeder Eintrag `pending` ist: **Umsetzen** sendet den Auftrag, **Ändern** fokussiert den Composer. Kein TUI-Plan-Modus (`plan.md` / Approve-Preview).
 _Avoid_: Plan-Mode, plan.md-Editor, automatisches Senden
 
+**Einmal-Job**:
+Skill `einmal-job`: wiederkehrende Arbeit erst 1× mit Plan-Freigabe, dann Recurring im Kalender-Tab Plan. Irreversibles wartet auf Ja. Leben-Admin nicht in den Vault.
+_Avoid_: Grok Bot; Cloud-VM; Chat-Cron; `recurring.json` per Hand patchen
+
 **Zusammenpressen**:
 `/compact` aus der LVL-Legende, sobald die Füllung den Soft-Cap erreicht (nur Grok, idle).
 _Avoid_: Compact für °_Agent/^_Code; Compact-Button immer sichtbar
 
 **Multiline (Composer)**:
-Desk: Enter = senden, Shift+Enter = Zeile. Phone: Tastatur-Enter = Zeile; der runde ↵-Button sendet (⌘/Ctrl+Enter ebenfalls). Slash-Popup: Enter = auswählen, beide Sitze. Kein globaler Multiline-Toggle.
-_Avoid_: textarea rows (nur visuelle Höhe)
+Desk: Enter = senden, Shift+Enter = Zeile. Phone: Tastatur-Enter = Zeile; der runde ↵-Button sendet (⌘/Ctrl+Enter ebenfalls). Erster Tap auf ↵ sendet — die Tastatur darf den Klick nicht schlucken. Slash-Popup: Enter = auswählen, beide Sitze. Kein globaler Multiline-Toggle.
+_Avoid_: textarea rows (nur visuelle Höhe); erster Tap schließt nur die Tastatur
 
 **Agent-Command**:
 Ein vom verbundenen Agenten per ACP gemeldeter Slash-Befehl (Live-Katalog `available_commands`), z. B. `/compact`, `/plan`.
@@ -132,7 +136,7 @@ UI-Label des grok-Profils (id bleibt **`grok`**). Die Grok-Build-CLI, nicht Grok
 _Avoid_: Dropdown-/Pille-/Graph-Label „Grok“ (ergibt „Grok Grok“)
 
 **Anbindung**:
-Keys, Host-URL und Modelle unter `~/.glyph-ui/bindings.json`. Header-Pille öffnet den **Graph** auf dem aktiven Kopf. Pille zeigt nur das **eingesetzte** Modell (Kürzel) — Primary→Reserve bleibt Graph/Tooltip. °_Agent / ^_Code-Legende setzt Direct-Key, OpenRouter-Key, Host (`DIRECT_API_URL`) und Modell (ohne Slash = Direct-ID, mit Slash = OpenRouter-Slug). Grok-OAuth bleibt Terminal (`grok login`).
+Keys, Host-URL und Modelle unter `~/.glyph-ui/bindings.json`. Header-Pille öffnet den **Graph** auf dem aktiven Kopf. Pille zeigt nur das **eingesetzte** Modell (Kürzel) — Primary→Reserve bleibt Graph/Tooltip. °_Agent / ^_Code-Legende setzt Direct-Key, OpenRouter-Key, Host (`DIRECT_API_URL`) und Modell (ohne Slash = Direct-ID, mit Slash = OpenRouter-Slug). **Schreiben gilt sofort** am laufenden Agent — kein Kickstart, kein zweites Terminal. Schlägt der Live-Push fehl, steht das als Fehler, nicht als „Gespeichert“. Ein Direct-Key für beide Köpfe. Grok-OAuth bleibt Terminal (`grok login`).
 _Avoid_: Settings (zu generisch), Login-Dialog (impliziert eingebettetes OAuth), Kalender (nur Grok-Aktivität, oft disabled)
 
 **Graph**:
@@ -148,8 +152,8 @@ Tab im **Buch**-Panel: Code-Roots anbinden/lösen, Rechte r · r+w · 🔒, Prim
 _Avoid_: Vaults-Tab (Obsidian/°_Agent), Finder-„Workspace“-Leistenbutton (nur cwd öffnen)
 
 **^_Code**:
-Code-Profil (id `_code`): DeepSeek V4 Flash via OpenRouter, Workspace-Tools, Genehmigung in Glyph. Nutzt dieselbe ACP-Brücke wie `°_Agent` mit `GLYPH_AGENT_MODE=code`.
-_Avoid_: Claude-Profil, Anthropic-OAuth
+Code-Profil (id `_code`): Workspace-Tools, Genehmigung in Glyph. Direct `deepseek-v4-flash-vision-exp` für Text und Screenshots, Reserve OpenRouter `deepseek/deepseek-v4-flash-0731`. Dieselbe ACP-Brücke wie `°_Agent` mit `GLYPH_AGENT_MODE=code`.
+_Avoid_: Claude-Profil, Anthropic-OAuth; Gemini als ^_Code-Default; Bild-Hop auf ein zweites Modell
 
 **°_Agent**:
 UI-Label des Vault/Tools-Profils (id bleibt **`glyph-agent`**). Bindet die lokale Engine `~/glyph-agent` an (Vault/Tools + Cloud-Antwort). Engine-Vokabular lebt in `glyph-agent/CONTEXT.md`.
@@ -203,9 +207,18 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 
 - °_Agent-Composer: Pixel-Apfel (Minecraft: rot / Stiel braun / Blatt grün) **über ↵**, außerhalb des Flow — Composer-Höhe unverändert. Standard **aus**. An = Gold-Outline + Puls, nicht goldene Füllung.
 - An: Suche erst beim Senden; Treffer in der Arbeitsleiste über der LVL-Leiste, nie im Chat-Verlauf. Default **aus**; nur explizit aktivierte Treffer gehen in den Agent-Kontext (`vault_search` + `vault_selected`). Ohne Auswahl: normale Nachricht, kein Vault.
+- Erste ↵ startet die Suche und **leert den Composer**; Query steht in der Leiste. Weiterer Prompt sofort tippbar.
+- Suche abbrechen: × in der Leiste, Snack, oder ↵ ohne neuen Text. Fetch bricht ab — Leiste zu ≠ Suche läuft weiter.
 - Toggle-Zustand pro Session, nicht global.
 - Interaktives ACP: `vault_search` nur bei mindestens einem aktivierten Treffer. Fehlt/aus = kein VaultFind. Jobs/`/chat` ohne Flag: B+ unverändert.
 - Suchfehler (404 etc.) rot in der Arbeitsleiste; Chat bleibt sendbar.
+- Treffer: Ordner- und Dateinamen auf Disk (nicht nur Index-Eltern). Gleichnamige Ordner in HSEQ Sync und Hauptarchiv beide listen.
+- Vault leer: Exa+TinyFish auf KomNet; 0 Treffer → dieselben auf DGUV. Gleiche Leiste, Label **KOMNET** / **DGUV**, `kind: web`. Nur aktivierte URLs in den Kontext — nicht als Vault-Pfad.
+
+### Direct Vision-Exp (2026-08-21)
+
+- °_Agent und ^_Code: Direct `deepseek-v4-flash-vision-exp` (Text + Bilder). Reserve `deepseek/deepseek-v4-flash-0731`.
+- Kein Auto-Hop nur bei Screenshot. Graph/Anbindung Default und Placeholder = Vision-Exp.
 
 ### Arbeitsleiste (2026-08-20)
 

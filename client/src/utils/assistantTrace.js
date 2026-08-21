@@ -167,6 +167,7 @@ export function shortModelLabel(model) {
     [/grok[-_.]?2/, "2"],
     [/grok/, "Build"],
     [/deepseek[-_.]?v?4[-_.]?pro/, "DS-V4P"],
+    [/deepseek[-_.]?v?4[-_.]?flash[-_.]?vision/, "DS-V4V"],
     [/deepseek[-_.]?v?4[-_.]?flash/, "DS-V4F"],
     [/deepseek[-_.]?v?3[-_.]?flash/, "DS-V3F"],
     [/deepseek[-_.]?r1/, "DS-R1"],

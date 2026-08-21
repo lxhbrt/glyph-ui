@@ -97,6 +97,7 @@ import {
 } from "./voice.js";
 import {
   buildBindingsStatus,
+  buildAgentPush,
   loadBindingsIntoEnv,
   updateBindings,
   pushModelsToAgent,
@@ -1132,7 +1133,7 @@ app.post("/api/vault/find", async (req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body || {}),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(45000),
     });
     const json = await r.json().catch(() => ({}));
     if (r.ok) {
@@ -1369,13 +1370,10 @@ app.put("/api/bindings", async (req, res) => {
           saved.settings?.GLYPH_AGENT_URL ||
           "",
       ).trim() || "http://127.0.0.1:18899";
-    const directPush = {};
-    if (saved.keys?.DIRECT_API_KEY) directPush.api_key = saved.keys.DIRECT_API_KEY;
-    if (saved.settings?.DIRECT_API_URL) directPush.url = saved.settings.DIRECT_API_URL;
-    const hasDirectPush = Object.keys(directPush).length > 0;
-    if ((body.models && saved.models?.shared?.primary) || hasDirectPush) {
-      modelsApply = await pushModelsToAgent(agentUrl, saved.models, {
-        direct: hasDirectPush ? directPush : undefined,
+    const plan = buildAgentPush(saved, body);
+    if (plan.push) {
+      modelsApply = await pushModelsToAgent(agentUrl, plan.models, {
+        direct: plan.direct,
       });
     }
 

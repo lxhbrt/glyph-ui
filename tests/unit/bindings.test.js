@@ -18,10 +18,12 @@ import {
   modelsToAgentPayload,
   normalizeBindingsFile,
   normalizeModels,
+  pushModelsToAgent,
   readBindingsFile,
   resolveKeySource,
   updateBindings,
   writeBindingsFile,
+  buildAgentPush,
 } from "../../server/bindings.js";
 
 test("maskSecret", () => {
@@ -242,4 +244,52 @@ test("buildBindingsStatus: OpenRouter alone enables Voice profile", async () => 
   assert.equal(status.profiles.voice.ok, true);
   assert.equal(status.profiles.voice.auth, "openrouter");
   assert.equal(status.keys.XAI_API_KEY.set, false);
+});
+
+test("buildAgentPush: Direct-Key Schreiben sends live api_key", () => {
+  const saved = {
+    keys: { DIRECT_API_KEY: "sk-new-3e4e" },
+    settings: { DIRECT_API_URL: "https://api.deepseek.com" },
+    models: {
+      shared: {
+        primary: "deepseek-v4-flash-vision-exp",
+        fallback: "deepseek/deepseek-v4-flash-0731",
+      },
+    },
+  };
+  const plan = buildAgentPush(saved, { DIRECT_API_KEY: "sk-new-3e4e" });
+  assert.equal(plan.push, true);
+  assert.equal(plan.direct.api_key, "sk-new-3e4e");
+  assert.equal(plan.direct.url, "https://api.deepseek.com");
+  assert.equal(plan.models.shared.primary, "deepseek-v4-flash-vision-exp");
+});
+
+test("buildAgentPush: clearing Direct-Key still notifies the agent", () => {
+  const plan = buildAgentPush(
+    {
+      keys: {},
+      settings: { DIRECT_API_URL: "https://api.deepseek.com" },
+      models: { shared: { primary: "deepseek-v4-flash-vision-exp", fallback: "" } },
+    },
+    { DIRECT_API_KEY: "" },
+  );
+  assert.equal(plan.push, true);
+  assert.equal(plan.direct.api_key, "");
+});
+
+test("pushModelsToAgent posts direct.api_key even when empty", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return { ok: true, json: async () => ({ ok: true }) };
+  };
+  const result = await pushModelsToAgent(
+    "http://127.0.0.1:18899",
+    { shared: { primary: "deepseek-v4-flash-vision-exp", fallback: "" } },
+    { fetchImpl, direct: { api_key: "", url: "https://api.deepseek.com" } },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.applied, true);
+  assert.equal(calls[0].body.direct.api_key, "");
+  assert.equal(calls[0].body.direct.url, "https://api.deepseek.com");
 });

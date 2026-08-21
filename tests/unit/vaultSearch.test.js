@@ -14,6 +14,8 @@ import {
   selectedHits,
   normalizePreviewPayload,
   toWireSelected,
+  vaultSendIntent,
+  hitKindLabel,
 } from "../../client/src/utils/vaultSearch.js";
 
 function installSessionStorage() {
@@ -91,5 +93,111 @@ describe("vaultSearch hits", () => {
     const wire = toWireSelected(picked);
     assert.equal(wire[0].kind, "file");
     assert.equal(wire[0].excerpt, "PSA Pflicht");
+  });
+
+  it("keeps KomNet/DGUV web hits (kind web, not file)", () => {
+    const preview = normalizePreviewPayload(
+      {
+        query: "xyz",
+        status: "success",
+        fallback: "komnet",
+        tried: ["komnet"],
+        hits: [
+          {
+            id: "web:https://www.komnet.nrw.de/_sitetools/dialog/1",
+            kind: "web",
+            path: "https://www.komnet.nrw.de/_sitetools/dialog/1",
+            title: "PSA Pflicht?",
+            excerpt: "ArbSchG",
+            source: "komnet",
+          },
+        ],
+      },
+      "xyz",
+    );
+    assert.equal(preview.fallback, "komnet");
+    assert.equal(preview.hits[0].kind, "web");
+    assert.equal(preview.hits[0].source, "komnet");
+    assert.equal(hitKindLabel(preview.hits[0]), "KomNet");
+    assert.equal(hitKindLabel({ kind: "web", source: "dguv" }), "DGUV");
+    const wire = toWireSelected(preview.hits);
+    assert.equal(wire[0].kind, "web");
+    assert.equal(wire[0].source, "komnet");
+  });
+});
+
+describe("vaultSendIntent", () => {
+  it("apple off → send", () => {
+    assert.equal(vaultSendIntent({ appleOn: false, query: "PSA" }), "send");
+  });
+
+  it("apple on, no hits yet → search (composer must clear)", () => {
+    assert.equal(
+      vaultSendIntent({ appleOn: true, query: "Arbeitssicherheit" }),
+      "search",
+    );
+  });
+
+  it("same query while find in flight → abort, not a second blocked send", () => {
+    assert.equal(
+      vaultSendIntent({
+        appleOn: true,
+        searchBusy: true,
+        query: "PSA",
+        hitsQuery: "PSA",
+        hitsStatus: "pending",
+      }),
+      "abort",
+    );
+  });
+
+  it("empty send while find in flight → abort", () => {
+    assert.equal(
+      vaultSendIntent({
+        appleOn: true,
+        searchBusy: true,
+        query: "",
+        hitsQuery: "PSA",
+        hitsStatus: "pending",
+      }),
+      "abort",
+    );
+  });
+
+  it("new query while find in flight → abort then search", () => {
+    assert.equal(
+      vaultSendIntent({
+        appleOn: true,
+        searchBusy: true,
+        query: "Brandschutz",
+        hitsQuery: "PSA",
+        hitsStatus: "pending",
+      }),
+      "abort-then-search",
+    );
+  });
+
+  it("hits for this query → send", () => {
+    assert.equal(
+      vaultSendIntent({
+        appleOn: true,
+        query: "PSA",
+        hitsQuery: "PSA",
+        hitsStatus: "success",
+      }),
+      "send",
+    );
+  });
+
+  it("pending hits do not count as ready to send", () => {
+    assert.equal(
+      vaultSendIntent({
+        appleOn: true,
+        query: "PSA",
+        hitsQuery: "PSA",
+        hitsStatus: "pending",
+      }),
+      "search",
+    );
   });
 });

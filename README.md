@@ -149,7 +149,7 @@ Auswahl in der UI (Header), Start-Profil via `GLYPH_AGENT` (Default `grok`).
 | Profil | Spawnt | Hinweis |
 |--------|--------|---------|
 | **grok** (Default) | `grok agent --always-approve --no-leader stdio` | Volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
-| **^_Code** | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | DeepSeek CODE · Write/Shell mit Glyph-Freigabe |
+| **^_Code** | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | Workspace-Tools, Write/Shell mit Glyph-Freigabe; Modell aus Graph/Anbindung |
 | **°_Agent** (id `glyph-agent`) | `node server/glyph-agent-acp.mjs` | Dünne Brücke zum lokalen glyph-agent-Dienst (Vault/Tools + Cloud-Antwort) |
 
 **°_Agent** nutzt die Engine `~/glyph-agent/` — lokale Tool-/Recherche-Schicht:
@@ -177,8 +177,8 @@ hängt vom aktiven Profil ab.
 | Profil | Textanhänge | Bilder | Hinweis |
 |--------|-------------|--------|---------|
 | **grok** | ✅ | ✅ | native ACP-Unterstützung gemäß Grok-Profil |
-| **^_Code** | ✅ | ❌ | Textanhänge ja; Write/Shell brauchen Genehmigung |
-| **°_Agent** | ✅ | ❌ | Bilder werden NICHT an das Modell übertragen (Stufe-1-Hinweis) |
+| **^_Code** | ✅ | ✅ | Direct `deepseek-v4-flash-vision-exp` (`image_url`); Write/Shell brauchen Genehmigung |
+| **°_Agent** | ✅ | ✅ | Direct `deepseek-v4-flash-vision-exp` (`image_url`) |
 
 ### Erlaubte Formate & Limits
 
@@ -186,7 +186,7 @@ hängt vom aktiven Profil ab.
 - Whitelist-MIME: `text/*`, `application/json`, `application/xml`, `text/yaml`, `text/x-log`
 - max. **2 MiB** extrahierte Zeichen pro Anhang · max. **4 MiB** Byte-Größe
 
-**Bilder** (wo das Profil es unterstützt, z. B. grok): `image/png`, `image/jpeg`, `image/webp`, `image/gif`
+**Bilder** (grok, °_Agent, ^_Code): `image/png`, `image/jpeg`, `image/webp`, `image/gif`
 - max. **4 MiB** pro Bild
 
 **Allgemein:** max. **8 Anhänge pro Nachricht** · max. **12 MiB** pro Datei (Upload-Limit)
@@ -199,8 +199,8 @@ hängt vom aktiven Profil ab.
 - **Zu großer Anhang:** klare Fehlermeldung (`Textanhang zu groß` / `Bild zu groß`) —
   keine stille Verwerfung.
 - **Leerer Anhang:** Hinweis `Übergangen (leer)`.
-- **Bilder bei `glyph-agent`:** werden nicht an das Modell gesendet — ein Stufe-1-Hinweis
-  (`[Übergangen: Bild (multimodale Stufe 2 …)]`) macht das sichtbar.
+- **Bilder bei `glyph-agent` / `^_Code`:** OpenAI-`image_url` (data-URI) an Direct
+  `deepseek-v4-flash-vision-exp`. Andere Direct-Modelle (Flash/Pro ohne Vision) → API 400.
 
 ### Beispiele
 

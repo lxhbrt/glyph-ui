@@ -22,7 +22,7 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 | Profil | Typ | Auth | Fähigkeiten (in Glyph) |
 |--------|-----|------|-------------------------|
 | **grok** (Standard) | Cloud | OAuth | Sessions ✅ · Deep Search ✅ · Swarm ✗ · Aktivität ✅ · Voice ✅ |
-| **^_Code** | Lokal + Cloud (DeepSeek) | OpenRouter | Read/Write/Shell mit Genehmigung in Glyph · Swarm ✅ |
+| **^_Code** | Lokal + Cloud (Direct Vision-Exp) | Direct + OpenRouter-Reserve | Read/Write/Shell mit Genehmigung in Glyph · Swarm ✅ |
 | **°_Agent** (id `glyph-agent`) | Lokal + Cloud-Antwort | — | VaultFind, Web-Recherche, Cloud-Antwort (Engine); Swarm ✅; Deep Search ✗ |
 
 > 📊 Grafische Abläufe (warum + wie jedes Profil): `docs/glyph-profile-diagrams.html`
@@ -206,7 +206,7 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 | **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
 | **Buch** (unten) | Handbuch | Tabs: Kurzhandbuch · Befehle · **Anbindung** (Keys/OAuth-Status) |
-| **4 Kästchen** | Kalender | Aktivitäts-Heatmap (wann / woran gearbeitet) |
+| **4 Kästchen** | Kalender | Tab **Plan** = wiederkehrende To-dos · Tab **Aktivität** = Heatmap (Grok) |
 | **Wiki (i)** | Wiki | Öffnet den Wiki-Index (`.md`) in Obsidian / Standard-App |
 | **Workspace** | Ordner | Öffnet den aktuellen Arbeitsordner (`cwd`) im Finder |
 | **Theme** | Hell/Dunkel | Darstellung umschalten |
@@ -235,7 +235,8 @@ Ohne **verbunden** ist das Eingabefeld deaktiviert.
 1. Status **verbunden** sicherstellen.
 2. Nachricht tippen (Pfad, Fehler, Ziel — je klarer, desto besser).
 3. **Desk:** Enter senden · Shift+Enter = neue Zeile. **Handy:** Tastatur-Enter = neue Zeile;
-   der runde **↵**-Button sendet. Während der Agent arbeitet: **Snack** (Klick = Stopp).
+   der runde **↵**-Button sendet (erster Tap). Während der Agent arbeitet oder die Ordner-Suche
+   läuft: **Snack** (Klick = Stopp / Suche abbrechen).
 4. Antwort streamt live flach im Chat; dein Prompt erscheint als Bubble. Rollen: **Agent** (der
    aktive Name, z. B. Grok), **Thinking**, **Tool**, **System** (Prompts ohne „Du“-Label).
 
@@ -312,8 +313,9 @@ Markdown (Codeblöcke, Links, …) wird vor dem TTS grob bereinigt.
 |---------|----------------|
 | Idle | Button zeigt **↵** (Enter) → senden |
 | Arbeitet | Snack-Animation (Schlange jagt Apfel) |
+| Ordner-Suche | Snack; Composer leer, Query in der Leiste. × oder Snack = Fetch abbrechen. Vault leer: KomNet einmal, sonst DGUV |
 | Text + Enter während Arbeit | Nachricht landet in der **Warteschlange** |
-| Leerer Klick / Snack während Arbeit | **Soft-Stop** (ACP-Cancel). Kritische Tools können noch sauber enden |
+| Leerer Klick / Snack während Arbeit | **Soft-Stop** (ACP-Cancel bzw. Vault-Suche). Kritische Tools können noch sauber enden |
 
 ### Warteschlange (WARTE)
 
@@ -376,7 +378,15 @@ Mit `WIKI_PATH` (Alias `OPENCLAW_WIKI_PATH`) auf einen beliebigen Ordner umleite
 
 ## 8. Aktivitäts-Kalender
 
-Symbol: **4 Kästchen** in der linken Leiste.
+Symbol: **4 Kästchen** in der linken Leiste. Zwei Tabs: **Plan** und **Aktivität**.
+
+### Tab Plan (wiederkehrende To-dos)
+
+Täglich/wöchentlich · Pause · Einmal jetzt · Löschen. Nach erfolgreichem Lauf: **Fertig** löscht die To-do.
+
+Neue wiederkehrende Arbeit nicht jeden Morgen im Chat erklären. Skill **`einmal-job`**: erst 1× mit Plan→Ja in der Session, dann hier **Neu**. Irreversibles (löschen, senden, buchen, kündigen) wartet auf Ja. Leben-Admin nicht in den Vault.
+
+### Heatmap (Tab Aktivität, Grok)
 
 | Kästchen im Icon | Bedeutung |
 |------------------|-----------|
@@ -384,8 +394,6 @@ Symbol: **4 Kästchen** in der linken Leiste.
 | Dunkel + Punkt | Kopf / Peak-Tag |
 | Gold | mittlere Aktivität |
 | Hellgold | leichte Aktivität |
-
-### Heatmap
 
 - **Gelb/Gold** = aktiver Tag  
 - **Heller** = weniger Events · **Dunkler** = mehr Events  
@@ -444,6 +452,7 @@ Viele `/Befehle` sind **TUI-Builtins**. Im Browser reichen oft **Freitext** + di
 | `/compact [notiz]` | Kontext komprimieren |
 | `/context` · `/session-info` | Status / Context |
 | `/plan` · `/view-plan` | Erst planen, dann umsetzen |
+| `/einmal-job` | Wiederkehrendes 1× mit Ja, dann Kalender → Plan |
 | `/effort low\|medium\|high\|xhigh` | Reasoning-Tiefe (TUI) |
 | `/model <name>` | Modell (TUI) |
 | `/deep-research <query>` | Recherche (UI: Deep Search) |
@@ -558,7 +567,7 @@ Aktives Profil wird beim Start aus `GLYPH_AGENT` übernommen (Default: `grok`).
 | Profil | Spawnt | Hinweis |
 |--------|--------|---------|
 | **grok** (Default) | `grok agent --always-approve --no-leader stdio` | `GROK_BIN`; volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
-| **^_Code** (id `_code`) | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | DeepSeek CODE · Write/Shell mit Glyph-Freigabe |
+| **^_Code** (id `_code`) | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | Workspace-Tools, Write/Shell mit Glyph-Freigabe; Modell aus Graph/Anbindung |
 | **°_Agent** (id `glyph-agent`) | `node server/glyph-agent-acp.mjs` | Vault/Tools + Cloud-Antwort; dünne ACP-Brücke zum lokalen Dienst auf `127.0.0.1:18899` |
 
 ### °_Agent (Vault/Tools + Cloud-Antwort)
@@ -616,18 +625,18 @@ je nach Profil verarbeitet:
 
 | Profil | Textanhänge | Bilder |
 |--------|-------------|--------|
-| **°_Agent** | ✅ | ❌ (Stufe-1-Hinweis) |
+| **°_Agent** | ✅ | ✅ Direct Vision-Exp |
+| **^_Code** | ✅ | ✅ Direct Vision-Exp |
 | **grok** | ✅ | ✅ native ACP |
 
 - **Textformate:** `.txt` `.md` `.csv` `.json` `.xml` `.yaml` `.log` `.html` · max. **2 MiB**
-- **Bildformate (grok u. a., nicht °_Agent):** PNG, JPEG, WebP, GIF · max. **4 MiB**
+- **Bildformate:** PNG, JPEG, WebP, GIF · max. **4 MiB** (°_Agent / ^_Code: `image_url` an Vision-Exp)
 - **Limit:** max. **8 Anhänge** / max. **12 MiB** pro Datei
 - **Fehler:** ungültiger Typ / kaputtes Base64 / zu groß → blockiert mit klarer Meldung,
   nie still verworfen und nie an das Modell gesendet.
-- **°_Agent + Bild:** wird **nicht** an das Modell übertragen → sichtbarer Hinweis.
-- **Datenschutz:** Bilder können den Rechner verlassen (Cloud-Profile). Keys nur in
-  geschützten Env/.env (gitignored), nie in Dateien/Logs/Commits. Sensible Uploads nicht
-  ungeprüft an externe Modelle; dafür bleibt `glyph-agent` (lokal).
+- **Anderes Direct-Modell (Flash/Pro ohne Vision) + Bild:** API 400.
+- **Datenschutz:** Bilder verlassen den Rechner (Direct/OpenRouter, auch °_Agent/^_Code).
+  Keys nur in geschützten Env/.env (gitignored), nie in Dateien/Logs/Commits.
 
 Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
 

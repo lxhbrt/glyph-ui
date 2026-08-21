@@ -7,7 +7,7 @@
  *
  * Modi (Env GLYPH_AGENT_MODE):
  *   agent (Default) — Web + Cloud-Antwort; VaultFind nur bei UI-Toggle
- *   code            — ^_Code: DeepSeek + Read/Write/Shell, Genehmigung via ACP
+ *   code            — ^_Code: Read/Write/Shell, Genehmigung via ACP; Modell aus Bindings
  *
  * Protokoll: ACP v1 über NDJSON-Stdio (acp.ndJsonStream).
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
@@ -16,7 +16,7 @@ import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
 import { buildPromptWithAttachments } from "../shared/attachments.mjs";
 import { createIdleTimer } from "./acpIdle.mjs";
-import { buildStepBanner } from "./stepBanner.mjs";
+import { buildStepBanner, formatThinkStep } from "./stepBanner.mjs";
 import { agentVaultBodyFromMeta } from "./vaultFlags.mjs";
 import { sliceMessagesBeforeUser } from "../shared/rewind.mjs";
 import { cloneSessionStore } from "../shared/composerActions.mjs";
@@ -138,7 +138,7 @@ const STEP_MARKERS = {
   MessageSend: ["MessageSend", "sendet Nachricht (openclaw)"],
   OpenRouter: [
     "Think",
-    IS_CODE ? "DeepSeek CODE" : "Cloud-Denker",
+    IS_CODE ? "^_Code" : "Cloud-Denker",
   ],
   ReadNote: ["ReadNote", "liest Notiz aus dem Vault"],
   Summarize: ["Summarize", "fasst Notiz zusammen"],
@@ -159,6 +159,9 @@ function stepLabel(action) {
 }
 
 function renderStepStart(action, detail) {
+  if (action === "OpenRouter") {
+    return formatThinkStep(detail, { isCode: IS_CODE });
+  }
   const m = STEP_MARKERS[action] || [action, action];
   const base = `${m[0]} · ${m[1]}`;
   return detail ? `${base} — ${detail}` : base;
@@ -195,7 +198,7 @@ app.onRequest(acp.methods.agent.initialize, async () => ({
     loadSession: false,
     promptCapabilities: {
       // Stufe 1: Text (resource / embedded_resource / resource_link)
-      // Stufe 2: Bilder → OpenRouter multimodal (image_url data-URI)
+      // Stufe 2: Bilder → Direct Vision-Exp / OpenRouter (image_url data-URI)
       attachments: true,
       image: true,
       text: true,
@@ -473,7 +476,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
     throw err;
   }
 
-  // Text + Textänge + Bilder (Stufe 1 Text / Stufe 2 multimodal image_url).
+  // Text + Textanhänge + Bilder (Stufe 1 Text / Stufe 2 Vision image_url).
   const built = await buildPromptWithAttachments(params.prompt || []);
   store.messages.push({ role: "user", content: built.message });
 

@@ -42,7 +42,21 @@ function migrateVaultSearchOn(fromId, toId) {
 function hitId(hit) {
   if (!hit) return "";
   if (hit.id) return String(hit.id);
-  return `${hit.kind === "folder" ? "folder" : "file"}:${hit.path || ""}`;
+  const kind =
+    hit.kind === "folder" ? "folder" : hit.kind === "web" ? "web" : "file";
+  return `${kind}:${hit.path || ""}`;
+}
+
+function hitKindLabel(hit) {
+  if (!hit) return "Datei";
+  if (hit.kind === "folder") return "Ordner";
+  if (hit.kind === "web") {
+    const src = String(hit.source || "").toLowerCase();
+    const path = String(hit.path || "").toLowerCase();
+    if (src === "dguv" || path.includes("dguv.de")) return "DGUV";
+    return "KomNet";
+  }
+  return "Datei";
 }
 
 function defaultSelectedIds(_hits) {
@@ -59,8 +73,14 @@ function normalizeHit(raw) {
   if (!raw || typeof raw !== "object") return null;
   const path = String(raw.path || "").trim();
   if (!path) return null;
-  const kind = raw.kind === "folder" ? "folder" : "file";
+  const isWeb =
+    raw.kind === "web" || /^https?:\/\//i.test(path);
+  const kind = raw.kind === "folder" ? "folder" : isWeb ? "web" : "file";
   const excerpt = String(raw.excerpt || raw.text || "").slice(0, 280);
+  let source = String(raw.source || "").slice(0, 40);
+  if (kind === "web" && !source) {
+    source = path.toLowerCase().includes("dguv.de") ? "dguv" : "komnet";
+  }
   return {
     id: String(raw.id || `${kind}:${path}`),
     kind,
@@ -68,6 +88,7 @@ function normalizeHit(raw) {
     title: String(raw.title || path.split("/").pop() || path),
     excerpt,
     score: typeof raw.score === "number" ? raw.score : null,
+    source,
   };
 }
 
@@ -80,6 +101,8 @@ function normalizePreviewPayload(json, query) {
     hits,
     status: json?.status || (hits.length ? "success" : "empty"),
     error: json?.error ? String(json.error) : "",
+    fallback: json?.fallback ? String(json.fallback) : "",
+    tried: Array.isArray(json?.tried) ? json.tried.map(String) : [],
   };
 }
 
@@ -91,7 +114,35 @@ function toWireSelected(hits) {
     title: h.title,
     excerpt: h.excerpt || "",
     score: h.score,
+    source: h.source || "",
   }));
+}
+
+/**
+ * Composer-↵ with apple on: search, send, or abort the in-flight find.
+ * `abort-then-search` = new query while a find is running.
+ */
+function vaultSendIntent({
+  appleOn,
+  searchBusy,
+  query,
+  hitsQuery,
+  hitsStatus,
+  error,
+} = {}) {
+  if (!appleOn) return "send";
+  const q = String(query || "").trim();
+  const hq = String(hitsQuery || "").trim();
+  if (searchBusy) {
+    if (!q || q === hq) return "abort";
+    return "abort-then-search";
+  }
+  const same = Boolean(q) && q === hq;
+  const haveHits =
+    same && hitsStatus && hitsStatus !== "error" && hitsStatus !== "pending";
+  const failedThis = Boolean(error) && same;
+  if (q && !haveHits && !failedThis) return "search";
+  return "send";
 }
 
 export {
@@ -101,9 +152,11 @@ export {
   saveVaultSearchOn,
   migrateVaultSearchOn,
   hitId,
+  hitKindLabel,
   defaultSelectedIds,
   selectedHits,
   normalizeHit,
   normalizePreviewPayload,
   toWireSelected,
+  vaultSendIntent,
 };

@@ -104,6 +104,7 @@ import {
   selectedHits,
   normalizePreviewPayload,
   toWireSelected,
+  vaultSendIntent,
 } from "./utils/vaultSearch.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
 import { GLYPH_BUILD, GLYPH_VERSION } from "./version.js";
@@ -202,6 +203,7 @@ export default function App() {
   const [vaultSearchBusy, setVaultSearchBusy] = useState(false);
   const [vaultSearchError, setVaultSearchError] = useState("");
   const runVaultSearchRef = useRef(null);
+  const vaultSearchAbortRef = useRef(null);
   const isAgentProfile =
     agent?.id === "glyph-agent" || agent?.id === "agent";
   const isGrokProfile = agent?.id === "grok" || !agent?.id;
@@ -1048,7 +1050,6 @@ export default function App() {
     ) {
       queueRef.current = queueRef.current.slice(1);
       setQueue([...queueRef.current]);
-      setInput(next.text || "");
       void runVaultSearchRef.current?.(next.text || "");
       window.setTimeout(() => {
         drainingRef.current = false;
@@ -1662,11 +1663,25 @@ export default function App() {
     return text || att || "";
   }, []);
 
+  const abortVaultSearch = useCallback(() => {
+    vaultSearchAbortRef.current?.abort();
+    vaultSearchAbortRef.current = null;
+    setVaultSearchBusy(false);
+    setVaultHits(null);
+    setVaultHitOn(new Set());
+    setVaultSearchError("");
+  }, []);
+
   const runVaultSearch = useCallback(async (query) => {
     const q = String(query || "").trim();
     if (!q) return;
+    vaultSearchAbortRef.current?.abort();
+    const ac = new AbortController();
+    vaultSearchAbortRef.current = ac;
     setVaultSearchBusy(true);
     setVaultSearchError("");
+    setVaultHits({ query: q, hits: [], status: "pending" });
+    setVaultHitOn(new Set());
     try {
       const res = await seatFetch("/api/vault/find", {
         method: "POST",
@@ -1675,8 +1690,10 @@ export default function App() {
           Accept: "application/json",
         },
         body: JSON.stringify({ query: q }),
+        signal: ac.signal,
       });
       const json = await res.json().catch(() => ({}));
+      if (ac.signal.aborted) return;
       if (!res.ok || json.ok === false) {
         throw new Error(json.error || `Suche fehlgeschlagen (HTTP ${res.status})`);
       }
@@ -1684,11 +1701,15 @@ export default function App() {
       setVaultHits(preview);
       setVaultHitOn(defaultSelectedIds(preview.hits));
     } catch (err) {
+      if (ac.signal.aborted || err?.name === "AbortError") return;
       setVaultSearchError(err instanceof Error ? err.message : String(err));
       setVaultHits({ query: q, hits: [], status: "error" });
       setVaultHitOn(new Set());
     } finally {
-      setVaultSearchBusy(false);
+      if (vaultSearchAbortRef.current === ac) {
+        setVaultSearchBusy(false);
+        vaultSearchAbortRef.current = null;
+      }
     }
   }, []);
   runVaultSearchRef.current = runVaultSearch;
@@ -1696,6 +1717,10 @@ export default function App() {
   const send = useCallback(() => {
     const text = input.trim();
     if (attachBusy) return;
+    if (!text && vaultSearchBusy && sendAction !== "fork") {
+      abortVaultSearch();
+      return;
+    }
 
     if (sendAction === "chat" && text) {
       if (/^\/(?:rewind|undo)(?:\s|$)/i.test(text)) {
@@ -1763,16 +1788,27 @@ export default function App() {
     const wantsVault =
       isAgentProfile && action === "chat" && vaultSearchOn && Boolean(body);
 
-    if (wantsVault && vaultSearchBusy) return;
     if (wantsVault) {
-      const haveHits =
-        vaultHits &&
-        vaultHits.query === text &&
-        vaultHits.status !== "error" &&
-        !vaultSearchError;
-      const failedThisQuery =
-        Boolean(vaultSearchError) && vaultHits?.query === text;
-      if (!haveHits && !failedThisQuery) {
+      const intent = vaultSendIntent({
+        appleOn: true,
+        searchBusy: vaultSearchBusy,
+        query: text,
+        hitsQuery: vaultHits?.query,
+        hitsStatus: vaultHits?.status,
+        error: vaultSearchError,
+      });
+      if (intent === "abort") {
+        abortVaultSearch();
+        return;
+      }
+      if (intent === "abort-then-search") {
+        abortVaultSearch();
+        setInput("");
+        void runVaultSearch(text);
+        return;
+      }
+      if (intent === "search") {
+        setInput("");
         void runVaultSearch(text);
         return;
       }
@@ -1836,6 +1872,7 @@ export default function App() {
     vaultHits,
     vaultHitOn,
     runVaultSearch,
+    abortVaultSearch,
   ]);
 
   const rewindPoints = useMemo(
@@ -1894,6 +1931,7 @@ export default function App() {
     };
     setVaultHits(null);
     setVaultHitOn(new Set());
+    if (input.trim() === String(vaultHits?.query || "").trim()) setInput("");
     if (busy || messages.some((m) => m.streaming)) {
       queueRef.current = [...queueRef.current, payload];
       setQueue([...queueRef.current]);
@@ -1925,6 +1963,10 @@ export default function App() {
    * while the agent is still working in the background.
    */
   const cancelTurn = useCallback(async () => {
+    if (vaultSearchBusy || vaultSearchAbortRef.current) {
+      abortVaultSearch();
+      if (!busy && !streamingRef.current && !busyRef.current) return;
+    }
     if (cancelling) return;
     // Allow stop while streaming even if busy flag lagged
     if (!busy && !streamingRef.current && !busyRef.current) return;
@@ -1991,7 +2033,14 @@ export default function App() {
         /* ignore */
       }
     }
-  }, [busy, cancelling, finalizeStreaming, scheduleDrainQueue]);
+  }, [
+    abortVaultSearch,
+    busy,
+    cancelling,
+    finalizeStreaming,
+    scheduleDrainQueue,
+    vaultSearchBusy,
+  ]);
 
   const openWiki = useCallback(async () => {
     setError("");
@@ -2317,9 +2366,35 @@ export default function App() {
 
   // Working UI: server busy OR any in-flight stream (thought / answer / tools)
   const isWorking = useMemo(
-    () => busy || messages.some((m) => m.streaming),
-    [busy, messages],
+    () => busy || vaultSearchBusy || messages.some((m) => m.streaming),
+    [busy, messages, vaultSearchBusy],
   );
+  const sendPointerArmedRef = useRef(false);
+  const onSendButton = useCallback(() => {
+    const canQueue =
+      input.trim() ||
+      sendAction === "fork" ||
+      (pendingAttachments.length > 0 && sendAction !== "fork");
+    if (isWorking) {
+      if (canQueue) {
+        send();
+        return;
+      }
+      if (!cancelling) void cancelTurn();
+      return;
+    }
+    if (snackDemo) return;
+    send();
+  }, [
+    cancelling,
+    cancelTurn,
+    input,
+    isWorking,
+    pendingAttachments.length,
+    send,
+    sendAction,
+    snackDemo,
+  ]);
   /** Demo forces the working send face so the stuffed board is visible. */
   const showWorking = isWorking || snackDemo;
   const showStuffed = snackStuffed || snackDemo;
@@ -2680,7 +2755,7 @@ export default function App() {
       return "Suche im Vault…";
     }
     if (isAgentProfile && vaultSearchOn && vaultHits) {
-      return "Treffer im Panel anwählen · ↵ sendet (nur aktive ins Vault)";
+      return "Treffer in der Leiste anwählen · Mit Auswahl senden";
     }
     if (sendAction === "deep-search") {
       return "Deep Search Query… z. B. Compare Postgres 17 vs MySQL 9";
@@ -3498,6 +3573,7 @@ export default function App() {
               selectedIds={vaultHitOn}
               busy={vaultSearchBusy}
               error={vaultSearchError}
+              fallback={vaultHits?.fallback || ""}
               onToggle={(id) => {
                 setVaultHitOn((prev) => {
                   const next = new Set(prev);
@@ -3506,11 +3582,7 @@ export default function App() {
                   return next;
                 });
               }}
-              onDismiss={() => {
-                setVaultHits(null);
-                setVaultHitOn(new Set());
-                setVaultSearchError("");
-              }}
+              onDismiss={abortVaultSearch}
               onSend={sendVaultSelection}
             />
           ) : null}
@@ -3953,22 +4025,19 @@ export default function App() {
                 className={`send${showWorking ? " send--working" : " send--idle"}${
                   snackAlive && !showWorking ? " send--morph-out" : ""
                 }${showStuffed ? " send--stuffed" : ""}`}
+                onPointerDown={(e) => {
+                  if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+                  // Keep composer focused so iOS doesn't drop the tap; click may not follow.
+                  e.preventDefault();
+                  sendPointerArmedRef.current = true;
+                  onSendButton();
+                }}
                 onClick={() => {
-                  // While working: text/attachments → queue; empty → stop (Snack)
-                  const canQueue =
-                    input.trim() ||
-                    sendAction === "fork" ||
-                    (pendingAttachments.length > 0 && sendAction !== "fork");
-                  if (isWorking) {
-                    if (canQueue) {
-                      send();
-                      return;
-                    }
-                    if (!cancelling) void cancelTurn();
+                  if (sendPointerArmedRef.current) {
+                    sendPointerArmedRef.current = false;
                     return;
                   }
-                  if (snackDemo) return; // preview only
-                  send();
+                  onSendButton();
                 }}
                 disabled={
                   snackDemo

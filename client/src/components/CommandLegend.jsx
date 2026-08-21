@@ -36,7 +36,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Glyph · Plan & Aktivität",
         need: "optional",
-        desc: "Kalender-Icon: Tab Plan = wiederkehrende To-dos (täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte). Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
+        desc: "Kalender-Icon: Tab Plan = wiederkehrende To-dos (täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte). Neue To-do erst 1× mit Plan-Freigabe (Skill einmal-job), dann hier. Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
       },
       {
         cmd: "Wiki (i)",
@@ -66,7 +66,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Enter",
         need: "normal",
-        desc: "Desk: Senden (ohne Shift), Shift+Enter = Zeile. Handy: Tastatur-Enter = Zeile, ↵-Button = senden. Slash-Popup: Enter = auswählen. Agent arbeitet → Warteschlange.",
+        desc: "Desk: Senden (ohne Shift), Shift+Enter = Zeile. Handy: Tastatur-Enter = Zeile, ↵-Button sendet beim ersten Tap. Slash-Popup: Enter = auswählen. Agent arbeitet → Warteschlange.",
       },
       {
         cmd: "/ · Slash-Popup",
@@ -91,7 +91,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "↵ / Snack · Stopp",
         need: "auto",
-        desc: "Runder Button: idle = ↵. Während Arbeit: Text+Enter = Queue; leerer Klick/Snack (runder Stopp-Punkt) = Soft-Abbruch (ACP). Kritische Tools laufen sicher zu Ende mit Hinweis.",
+        desc: "Runder Button: idle = ↵ (Handy: erster Tap sendet). Während Arbeit oder Vault-Suche: Text = Queue/neue Suche; leerer Klick/Snack = Stopp (ACP bzw. Fetch-Abbruch). Kritische Tools laufen sicher zu Ende mit Hinweis.",
       },
       {
         cmd: "Chat | Deep Search | Fork | Swarm",
@@ -285,7 +285,7 @@ const SHORT_HANDBOOK = [
     body: [
       "**Graph** (Leiste): pechschwarz. Köpfe um Glyph; Vaults/Roots als Punkte. Klick → Legende.",
       "**Grok Build:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
-      "**^_Code / °_Agent:** Header-Pille oder Graph-Kopf → Host-URL, Direct-Key, OpenRouter-Key, Modell. Ohne Slash = Direct (`deepseek-v4-flash`), mit Slash = OpenRouter (`google/gemini-3.7-flash`).",
+      "**^_Code / °_Agent:** Header-Pille oder Graph-Kopf → Host-URL, Direct-Key, OpenRouter-Key, Modell. Ohne Slash = Direct (`deepseek-v4-flash-vision-exp`), mit Slash = OpenRouter (`deepseek/deepseek-v4-flash-0731`).",
       "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒 · Kabel an/ab. SoT: `~/.glyph/vaults.json`.",
       "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒 gesperrt. SoT: `~/.glyph/workspaces.json`.",
       "**An/Ab** = Kabel durchtrennen, Eintrag bleibt.",
@@ -323,14 +323,14 @@ const SHORT_HANDBOOK = [
     title: "Schreiben & senden",
     rows: [
       ["Chat", "Normale Nachricht an den aktiven Agenten"],
-      ["Apfel", "°_Agent: über ↵ (ohne extra Höhe). Rot/Stiel/Blatt; an = Gold-Rand. Aus = keine Vault-Suche."],
-      ["Treffer", "Arbeitsleiste über LVL, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext."],
+      ["Apfel", "°_Agent: über ↵. An = Suche beim Senden, Composer leer, Query in der Leiste. ×/Snack bricht die Suche ab. Vault leer → KomNet, sonst DGUV."],
+      ["Treffer", "Arbeitsleiste über LVL, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext. Web: KomNet/DGUV."],
       ["Deep Search", "Grok: strukturierte Multi-Quellen-Recherche. Andere Köpfe ausgegraut."],
       ["Fork", "Session branchen; Text = optionale Directive"],
       ["Swarm", "°_Agent / ^_Code: Planer, Suche, Synthese. Grok ausgegraut."],
       ["↑", "Leerer Composer: Prompt-History"],
       ["Rewind", "Esc Esc · /rewind · ↺ an der Nutzer-Nachricht. Dateien bleiben."],
-      ["Enter", "Desk: senden · Handy: Zeile (↵-Button sendet)"],
+      ["Enter", "Desk: senden · Handy: Tastatur = Zeile, ↵-Button sendet (erster Tap)"],
       ["Shift+Enter", "Neue Zeile ohne Senden (Desk)"],
     ],
   },

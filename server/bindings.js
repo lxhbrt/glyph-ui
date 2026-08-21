@@ -408,6 +408,49 @@ export async function probeAgentHealth(baseUrl, opts = {}) {
  * @param {{ shared?: object|null, code?: object|null }} models
  * @param {{ fetchImpl?: typeof fetch, timeoutMs?: number }} [opts]
  */
+/**
+ * Whether PUT /api/bindings must hot-apply credentials/models to glyph-agent.
+ * Key-only saves still push — Graph-Schreiben is live, not "file only".
+ * @param {{ keys?: object, settings?: object, models?: object } | null | undefined} saved
+ * @param {Record<string, unknown>} [body]
+ */
+export function buildAgentPush(saved, body = {}) {
+  const keys = saved?.keys && typeof saved.keys === "object" ? saved.keys : {};
+  const settings =
+    saved?.settings && typeof saved.settings === "object" ? saved.settings : {};
+  const direct = {};
+  const dk = String(keys.DIRECT_API_KEY || "").trim();
+  const url = String(settings.DIRECT_API_URL || "").trim();
+  const ork = String(keys.OPENROUTER_API_KEY || "").trim();
+  const clearingDirect =
+    Object.prototype.hasOwnProperty.call(body, "DIRECT_API_KEY") && !dk;
+  const clearingOr =
+    Object.prototype.hasOwnProperty.call(body, "OPENROUTER_API_KEY") && !ork;
+  if (dk) direct.api_key = dk;
+  else if (clearingDirect) direct.api_key = "";
+  if (url) direct.url = url;
+  if (ork) direct.openrouter_key = ork;
+  else if (clearingOr) direct.openrouter_key = "";
+
+  const modelsTouched = Boolean(body?.models);
+  const credsTouched = [
+    "DIRECT_API_KEY",
+    "DIRECT_API_URL",
+    "OPENROUTER_API_KEY",
+  ].some((id) => Object.prototype.hasOwnProperty.call(body, id));
+  const hasShared = Boolean(saved?.models?.shared?.primary);
+  const push = Boolean(
+    (modelsTouched && hasShared) ||
+      Object.keys(direct).length > 0 ||
+      credsTouched,
+  );
+  return {
+    push,
+    models: saved?.models || null,
+    direct: Object.keys(direct).length ? direct : undefined,
+  };
+}
+
 export async function pushModelsToAgent(baseUrl, models, opts = {}) {
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
   const timeoutMs = opts.timeoutMs ?? 8000;
@@ -415,7 +458,12 @@ export async function pushModelsToAgent(baseUrl, models, opts = {}) {
   if (opts.direct && typeof opts.direct === "object") {
     const d = {};
     if (opts.direct.url) d.url = String(opts.direct.url).trim();
-    if (opts.direct.api_key) d.api_key = String(opts.direct.api_key).trim();
+    if (Object.prototype.hasOwnProperty.call(opts.direct, "api_key")) {
+      d.api_key = String(opts.direct.api_key || "").trim();
+    }
+    if (Object.prototype.hasOwnProperty.call(opts.direct, "openrouter_key")) {
+      d.openrouter_key = String(opts.direct.openrouter_key || "").trim();
+    }
     if (Object.keys(d).length) payload.direct = d;
   }
   if (!payload.shared && !payload.direct) {

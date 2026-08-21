@@ -50,7 +50,7 @@ export const MAX_ATTACH_BYTES = 4 * 1024 * 1024; // 4 MiB
 /** Maximale Dateiendung in einer Quelldatei. */
 const MAX_NAME = 200;
 
-// --- Bildunterstützung (Stufe 2, nur OpenRouter) ---
+// --- Bildunterstützung (Stufe 2: Direct Vision-Exp / OpenRouter image_url) ---
 /** Erlaubte Bild-MIME-Typen (sichere Whitelist). */
 export const IMAGE_MIME_WHITELIST = new Set([
   "image/png",
@@ -347,7 +347,7 @@ export async function buildPromptWithAttachments(blocks) {
 }
 
 /**
- * Stufe 2 (nur OpenRouter): Baut aus ACP-Blöcken eine geordnete OpenAI-Content-Liste,
+ * Stufe 2: Baut aus ACP-Blöcken eine geordnete OpenAI-Content-Liste,
  * in der Text- und Bildblöcke in ihrer ORIGINAL-Reihenfolge stehen.
  *
  * @param {Array<object>} blocks ACP-Prompt-ContentBlocks

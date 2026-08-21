@@ -28,6 +28,22 @@ export function modelsForHead(bindings, absorb) {
  * PUT /api/bindings body fragment. null = nicht speichern (leeres Agent-Primary).
  * @param {{ absorb?: string, primary?: string, fallback?: string }} input
  */
+/**
+ * Status after PUT /api/bindings pushed credentials to glyph-agent.
+ * @param {{ ok?: boolean, applied?: boolean, error?: string } | null | undefined} apply
+ * @returns {{ ok: boolean, text: string }}
+ */
+export function applyLiveStatus(apply) {
+  if (apply && apply.ok && apply.applied) {
+    return { ok: true, text: "Gespeichert · live am Agent." };
+  }
+  const reason = String(apply?.error || "").trim() || "offline";
+  return {
+    ok: false,
+    text: `Gespeichert, Agent nahm es nicht: ${reason}`,
+  };
+}
+
 export function buildModelsPatch({ absorb, primary, fallback } = {}) {
   const p = String(primary || "").trim();
   const fb = String(fallback || "").trim();
