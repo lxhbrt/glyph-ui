@@ -20,10 +20,12 @@ import { VaultSearchHits } from "./components/VaultSearchHits.jsx";
 import { SummarizeDialog } from "./components/SummarizeDialog.jsx";
 import { TaskHandoffDialog } from "./components/TaskHandoffDialog.jsx";
 import {
+  findSlashHighlightRanges,
   insertSlashCommand,
   rankCatalog,
   slashTokenAt,
 } from "./utils/slash.js";
+import { applyComposerMirrorMetrics } from "./utils/composerMirror.js";
 import {
   canSwarm,
   composerActionLabel,
@@ -2983,6 +2985,11 @@ export default function App() {
     [skillCatalog, commandCatalog, slashQuery],
   );
 
+  const composerSlashHl = useMemo(
+    () => findSlashHighlightRanges(input, skillCatalog, commandCatalog).length > 0,
+    [input, skillCatalog, commandCatalog],
+  );
+
   useEffect(() => {
     if (!slashOpen) return;
     if (slashItems.length === 0) {
@@ -2993,9 +3000,7 @@ export default function App() {
   }, [slashOpen, slashItems.length, slashQuery]);
 
   /** 1-line default; grow *up* (toolbar stays put) to CSS --composer-max-h.
-   *  Mirror must match textarea *content* box (clientWidth/Height), not the
-   *  border box — otherwise scrollbar / gutter shifts wraps by ~10–15 chars
-   *  from line 2 onward and the caret drifts from the visible text.
+   *  Overlay metrics copy from the textarea (applyComposerMirrorMetrics).
    *  Empty value: force min-height — iOS Safari scrollHeight grows with a
    *  wrapped placeholder and balloons the empty composer (narrow phones). */
   const resizeComposer = useCallback(() => {
@@ -3028,17 +3033,10 @@ export default function App() {
     ta.style.height = `${h}px`;
     ta.style.minHeight = `${h}px`;
 
-    if (mirror) {
-      // clientWidth excludes scrollbar — wrap points match caret column
-      mirror.style.width = `${ta.clientWidth}px`;
-      mirror.style.height = `${ta.clientHeight}px`;
-      mirror.style.minHeight = "";
-      mirror.scrollTop = ta.scrollTop;
-      mirror.scrollLeft = ta.scrollLeft;
-    }
+    if (mirror) applyComposerMirrorMetrics(ta, mirror);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     resizeComposer();
   }, [input, resizeComposer]);
 
@@ -3921,7 +3919,7 @@ export default function App() {
               </div>
             ) : null}
             {/* Composer card: textarea on top (grows up), toolbar stays on the bottom. */}
-            <div className={`composer-row${isAgentProfile ? " composer-row--vault" : ""}`}>
+            <div className="composer-row">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -3945,7 +3943,11 @@ export default function App() {
               >
                 <IconPlus size={18} />
               </button>
-              <div className="composer-input-wrap">
+              <div
+                className={`composer-input-wrap${
+                  composerSlashHl ? " composer-input-wrap--slash-hl" : ""
+                }`}
+              >
                 <SlashPopup
                   open={slashOpen}
                   items={slashItems}

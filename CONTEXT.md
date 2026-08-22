@@ -33,7 +33,7 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 
 **Nicht hier:** Vault-Inhalte, HSEQ-Jobs, Embedding — das ist `glyph-agent`.
 
-**Crux (häufige Bugs):** Workspace-Recht und Freigaben leben in **glyph-agent** (`code_loop` / `code_tools`). UI zeigt Dialog, Aktiven Task und Banner — sie entscheidet nicht. `r+w` ist Capability, nicht Auto-Write. ACP-Bridge ≠ HTTP-API der Engine.
+**Crux (häufige Bugs):** Workspace-Recht und Freigaben leben in **glyph-agent** (`code_loop` / `code_tools`). UI zeigt Dialog, Aktiven Task und Banner — sie entscheidet nicht. `r+w` ist Capability, nicht Auto-Write. ACP-Bridge ≠ HTTP-API der Engine. Composer-Caret: Overlay (Slash-Gold) nur wenn ein Katalog-Command im Entwurf steht — sonst malt die Textarea selbst. Extra-Pad nur auf dem Mirror wrappt früher → Caret ab Zeile 2 mitten im Text.
 
 **Session zusammenfassen → Skill:** Button **Zusammenfassen** im Header (rechts neben der Kette), sobald Agent verbunden + Session da; Grok zusätzlich in der Lupe. Vorschau in der **Arbeitsleiste** über der LVL-Leiste (kein Mitte-Modal). Beim Speichern (≥3 Nutzer-Turns) Workflow-Skill unter `~/.glyph/skills/<slug>/` (`source: session-summary`). Hand-Skills ohne Flag: nur `references/`. Opt-out in der Leiste. Titel = letzte substanzielle Nutzerzeile, nicht Test-Pings („TEST TEST TEST“). Code: `server/summaries.js` (`buildDraftFromTurns`) + `SummarizeDialog.jsx`.
 

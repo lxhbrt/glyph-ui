@@ -3138,12 +3138,6 @@ button.composer-sheet-head:hover {
   overflow: visible;
 }
 
-/* Apfel schwebt über ↵ — Text darf nicht darunter laufen (Höhe bleibt). */
-.composer-row--vault .composer-highlight,
-.composer-row--vault textarea {
-  padding-right: calc(var(--composer-pad-x) + 2rem);
-}
-
 .composer-row .composer-input-wrap {
   flex: 1 0 100%;
   order: 0;
@@ -3275,6 +3269,21 @@ button.composer-sheet-head:hover {
   color: var(--muted);
   -webkit-text-fill-color: var(--muted);
   opacity: 0.85;
+}
+
+/*
+  No slash highlight → paint the textarea itself. Overlay wrap ≠ native
+  wrap from line 2 (caret sits mid-text). Overlay stays in DOM for size
+  sync and only paints when a catalog command is in the draft.
+*/
+.composer-input-wrap:not(.composer-input-wrap--slash-hl) .composer-highlight {
+  visibility: hidden;
+}
+.composer.composer--grok
+  .composer-input-wrap:not(.composer-input-wrap--slash-hl)
+  textarea.composer-textarea--overlay {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
 }
 
 .user-text-with-slash {
