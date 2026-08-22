@@ -11,14 +11,14 @@ const TITLES = {
   private: "zu",
 };
 
-export function modeTitle(mode, kind) {
+export function modeTitle(mode, _kind) {
   if (mode === "rw") return TITLES.rw;
   if (mode === "private") return "zu";
   return TITLES.r;
 }
 
-export function ModeGlyph({ mode, size = 12, kind }) {
-  const title = modeTitle(mode, kind);
+export function ModeGlyph({ mode, size = 12, kind: _kind }) {
+  const title = modeTitle(mode);
   if (mode === "private") {
     return (
       <span className="vaults-mode-glyph-wrap" title={title}>

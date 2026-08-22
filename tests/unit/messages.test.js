@@ -5,8 +5,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  TRANSCRIPT_WINDOW,
   formatToolText,
   toolMessageId,
+  transcriptWindow,
   upsertToolMessage,
 } from "../../client/src/utils/messages.js";
 
@@ -154,5 +156,42 @@ describe("upsertToolMessage", () => {
     assert.equal(list[0].status, "completed");
     assert.deepEqual(list[0].rawInput, { target_file: "/tmp/a.js" });
     assert.equal(list[0].content[0].content.text, "ok");
+  });
+});
+
+describe("transcriptWindow", () => {
+  const ids = (n) => Array.from({ length: n }, (_, i) => ({ id: String(i) }));
+
+  it("mounts the whole list when it fits the window", () => {
+    const list = ids(3);
+    const slice = transcriptWindow(list, 0, 40);
+    assert.equal(slice.hiddenCount, 0);
+    assert.equal(slice.start, 0);
+    assert.equal(slice.visible, list);
+  });
+
+  it("keeps only the last window by default", () => {
+    const list = ids(100);
+    const slice = transcriptWindow(list);
+    assert.equal(slice.hiddenCount, 100 - TRANSCRIPT_WINDOW);
+    assert.equal(slice.visible.length, TRANSCRIPT_WINDOW);
+    assert.equal(slice.visible[0].id, String(100 - TRANSCRIPT_WINDOW));
+    assert.equal(slice.visible.at(-1).id, "99");
+  });
+
+  it("reveals extra older rows without mounting the rest", () => {
+    const list = ids(100);
+    const slice = transcriptWindow(list, TRANSCRIPT_WINDOW);
+    assert.equal(slice.visible.length, TRANSCRIPT_WINDOW * 2);
+    assert.equal(slice.hiddenCount, 100 - TRANSCRIPT_WINDOW * 2);
+    assert.equal(slice.visible[0].id, "20");
+  });
+
+  it("clamps when revealed covers the whole transcript", () => {
+    const list = ids(50);
+    const slice = transcriptWindow(list, 1000);
+    assert.equal(slice.hiddenCount, 0);
+    assert.equal(slice.visible.length, 50);
+    assert.equal(slice.start, 0);
   });
 });

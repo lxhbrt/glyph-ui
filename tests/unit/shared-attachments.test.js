@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildPromptWithAttachments,
+  escapeName,
   extractImages,
   isImageMime,
   toOpenAIImage,
@@ -79,5 +80,13 @@ describe("buildPromptWithAttachments", () => {
     ]);
     assert.match(built.message, /hello from resource/);
     assert.equal(built.attachments.length, 1);
+  });
+});
+
+describe("escapeName", () => {
+  it("strips path segments and control characters", () => {
+    assert.equal(escapeName("a/b\\c.txt"), "c.txt");
+    assert.equal(escapeName("ok\u0000name\u001f.md"), "okname.md");
+    assert.equal(escapeName("\u0000\u007f"), "datei");
   });
 });

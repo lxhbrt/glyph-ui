@@ -35,5 +35,20 @@ export default defineConfig({
   build: {
     outDir: path.join(__dirname, "dist"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (
+            id.includes("/react-dom/") ||
+            id.includes("/react/") ||
+            id.includes("/scheduler/")
+          ) {
+            return "react";
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

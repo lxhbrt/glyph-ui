@@ -53,6 +53,7 @@ export function GraphLegend({
   busy,
   pendingDetach,
   setPendingDetach,
+  openBind = false,
 }) {
   const item = state?.item;
   const hook = selected?.kind === "workspace" ? workspaces : vaults;
@@ -72,55 +73,86 @@ export function GraphLegend({
     : state?.live
       ? "verbunden"
       : "";
+  const canBind = (absorb === "agent" || absorb === "code") && !item;
+  const [bindOpen, setBindOpen] = useState(Boolean(openBind && canBind));
+
+  useEffect(() => {
+    setBindOpen(Boolean(openBind && canBind));
+  }, [openBind, canBind, absorb, item?.id]);
 
   return (
-    <div className="lage-dock-card">
+    <div className={`lage-dock-card${bindOpen && canBind ? " is-bind-sheet" : ""}`}>
       <p className="lage-kicker">{kindWord || "Legende"}</p>
-      <h3>
+      <h3 title={title}>
         {state?.primary ? "★ " : ""}
         {title}
       </h3>
       {modeWord ? <p className="lage-fact">{modeWord}</p> : null}
 
-      {neighbors.length ? (
-        <ul className="lage-deps">
-          {neighbors.map((n) => (
-            <li key={n.id}>
-              <button
-                type="button"
-                className="lage-link"
-                onClick={() => onPick?.(n.id)}
-              >
-                {n.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {bindOpen && canBind ? (
+        <div className="lage-bind-sheet">
+          <button
+            type="button"
+            className="lage-link"
+            onClick={() => setBindOpen(false)}
+          >
+            Zurück
+          </button>
+          <CloudBind
+            absorb={absorb}
+            bindings={bindings}
+            onBindingsChange={onBindingsChange}
+          />
+        </div>
+      ) : (
+        <>
+          {neighbors.length ? (
+            <ul className="lage-deps">
+              {neighbors.map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    className="lage-link"
+                    onClick={() => onPick?.(n.id)}
+                  >
+                    {n.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
-      {!absorb && !item ? (
-        <p className="lage-lede">Kopf in die Mitte. Stern: Favorit. Punkt: Rechte.</p>
-      ) : null}
+          {!absorb && !item ? (
+            <p className="lage-lede">
+              Kopf in die Mitte. Solid = schreiben, Strich = lesen, Punkte =
+              privat.
+            </p>
+          ) : null}
 
-      {absorb === "grok" && !item ? <GrokBind grok={grok} /> : null}
-      {(absorb === "agent" || absorb === "code") && !item ? (
-        <CloudBind
-          absorb={absorb}
-          bindings={bindings}
-          onBindingsChange={onBindingsChange}
-        />
-      ) : null}
+          {absorb === "grok" && !item ? <GrokBind grok={grok} /> : null}
 
-      {item ? (
-        <ResourceTools
-          item={item}
-          kind={selected?.kind || "vault"}
-          hook={hook}
-          busy={busy}
-          pendingDetach={pendingDetach}
-          setPendingDetach={setPendingDetach}
-        />
-      ) : null}
+          {canBind ? (
+            <button
+              type="button"
+              className="lage-link lage-bind-open"
+              onClick={() => setBindOpen(true)}
+            >
+              Anbindung
+            </button>
+          ) : null}
+
+          {item ? (
+            <ResourceTools
+              item={item}
+              kind={selected?.kind || "vault"}
+              hook={hook}
+              busy={busy}
+              pendingDetach={pendingDetach}
+              setPendingDetach={setPendingDetach}
+            />
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

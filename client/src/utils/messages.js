@@ -16,6 +16,35 @@ export function toolMessageId(toolCallId, now = Date.now) {
   return `tool-${now()}`;
 }
 
+/** How many transcript rows stay mounted by default (from the end). */
+export const TRANSCRIPT_WINDOW = 40;
+
+/**
+ * Slice the transcript for the DOM. Older rows stay in React state;
+ * only the last window (+ extra revealed) is mounted.
+ *
+ * @param {unknown[]} messages
+ * @param {number} [revealed]
+ * @param {number} [windowSize]
+ */
+export function transcriptWindow(
+  messages,
+  revealed = 0,
+  windowSize = TRANSCRIPT_WINDOW,
+) {
+  const list = Array.isArray(messages) ? messages : [];
+  const n = list.length;
+  const win = Math.max(1, Number(windowSize) || TRANSCRIPT_WINDOW);
+  const extra = Math.max(0, Number(revealed) || 0);
+  const mounted = Math.min(n, win + extra);
+  const start = n - mounted;
+  return {
+    start,
+    hiddenCount: start,
+    visible: start > 0 ? list.slice(start) : list,
+  };
+}
+
 /**
  * Opaque ACP ids that must never be shown as the tool label.
  * @param {unknown} s

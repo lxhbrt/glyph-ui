@@ -89,7 +89,7 @@ function lineDelta(out) {
 
 /**
  * @param {object} msg
- * @returns {{ verb: string, target: string, deltaAdd: number, deltaDel: number }}
+ * @returns {{ verb: string, target: string, deltaAdd: number, deltaDel: number, allowedBy: string }}
  */
 export function summarizeTool(msg = {}) {
   const raw = msg.rawInput && typeof msg.rawInput === "object" ? msg.rawInput : {};
@@ -97,6 +97,9 @@ export function summarizeTool(msg = {}) {
   const lower = title.toLowerCase();
   const kind = String(msg.kind || "").toLowerCase();
   const deltas = lineDelta(msg.rawOutput);
+  const allowedBy = String(
+    msg.allowedBy || raw._allowedBy || raw.allowed_by || "",
+  ).trim();
 
   if (kind === "read" || /^read\b/.test(lower)) {
     return {
@@ -104,6 +107,7 @@ export function summarizeTool(msg = {}) {
       target: pathTarget(raw, msg.locations, title),
       deltaAdd: 0,
       deltaDel: 0,
+      allowedBy,
     };
   }
   if (kind === "edit" || /^(edit|write)\b/.test(lower)) {
@@ -112,11 +116,12 @@ export function summarizeTool(msg = {}) {
       target: pathTarget(raw, msg.locations, title),
       deltaAdd: deltas.add,
       deltaDel: deltas.del,
+      allowedBy,
     };
   }
   if (kind === "execute" || /^(run|execute|bash|shell)\b/.test(lower)) {
     const cmd = firstRaw(raw, ["command", "cmd"]) || title.replace(/^(Execute|Ran|Run)\s+`?/, "").replace(/`$/, "");
-    return { verb: "Ausgeführt", target: cmd, deltaAdd: 0, deltaDel: 0 };
+    return { verb: "Ausgeführt", target: cmd, deltaAdd: 0, deltaDel: 0, allowedBy };
   }
   if (
     kind === "search" ||
@@ -129,6 +134,7 @@ export function summarizeTool(msg = {}) {
       target: firstRaw(raw, ["query", "q", "pattern", "search"]) || title,
       deltaAdd: 0,
       deltaDel: 0,
+      allowedBy,
     };
   }
   if (kind === "delete") {
@@ -137,6 +143,7 @@ export function summarizeTool(msg = {}) {
       target: pathTarget(raw, msg.locations, title),
       deltaAdd: 0,
       deltaDel: 0,
+      allowedBy,
     };
   }
   if (kind === "fetch" || /fetch/.test(lower)) {
@@ -145,6 +152,7 @@ export function summarizeTool(msg = {}) {
       target: firstRaw(raw, ["url", "path"]) || title,
       deltaAdd: 0,
       deltaDel: 0,
+      allowedBy,
     };
   }
   if (kind === "move") {
@@ -153,6 +161,7 @@ export function summarizeTool(msg = {}) {
       target: pathTarget(raw, msg.locations, title),
       deltaAdd: 0,
       deltaDel: 0,
+      allowedBy,
     };
   }
   if (/^list/.test(lower) || kind === "list") {
@@ -161,6 +170,7 @@ export function summarizeTool(msg = {}) {
       target: pathTarget(raw, msg.locations, title),
       deltaAdd: 0,
       deltaDel: 0,
+      allowedBy,
     };
   }
 
@@ -169,6 +179,7 @@ export function summarizeTool(msg = {}) {
     target: "",
     deltaAdd: 0,
     deltaDel: 0,
+    allowedBy,
   };
 }
 
@@ -297,6 +308,7 @@ export const TOOLCARD_DEMO_MESSAGES = [
       file_path: "client/src/App.jsx",
       old_string: "const x = 1;",
       new_string: "const x = 2;",
+      _allowedBy: "Task Dark Mode",
     },
     rawOutput: { lines_added: 1, lines_removed: 1 },
   },

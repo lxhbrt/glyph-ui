@@ -12,6 +12,49 @@ const SNACK_CELL = 10;
 const SNACK_GAP = Math.max(1, Math.floor(SNACK_CELL * 0.14)); // 1
 const SNACK_PIXEL = SNACK_CELL - SNACK_GAP * 2; // 8
 const SNACK_STEP = SNACK_CELL; // center-to-center = cell
+const SNACK_BODY_N = 4; // rotating body stones (not head)
+const SNACK_BODY_GAP = SNACK_STEP - SNACK_PIXEL; // 2
+const SNACK_BODY_TRAIL = SNACK_BODY_N * SNACK_STEP; // head → last body slot
+const SNACK_RAIL_W = SNACK_PIXEL + 4;
+
+function snackDrawSquare(ctx, x, y, fill) {
+  ctx.fillStyle = fill;
+  ctx.fillRect(Math.round(x), Math.round(y), SNACK_PIXEL, SNACK_PIXEL);
+}
+
+function snackDrawApple(ctx, x, y, stop, stopInner) {
+  const ix = Math.round(x);
+  const iy = Math.round(y);
+  ctx.fillStyle = stop;
+  ctx.fillRect(ix, iy, SNACK_PIXEL, SNACK_PIXEL);
+  ctx.fillStyle = stopInner;
+  ctx.fillRect(ix + 3, iy + 3, 2, 2);
+}
+
+/** Head travel range so snout touches apple at destination. */
+function snackHeadRange(trackH, dir) {
+  const appleBelow = dir >= 0;
+  const appleY = appleBelow ? trackH - SNACK_PIXEL : 0;
+  let headMin;
+  let headMax;
+  if (appleBelow) {
+    headMin = SNACK_BODY_TRAIL;
+    headMax = appleY - SNACK_PIXEL;
+  } else {
+    headMin = appleY + SNACK_PIXEL;
+    headMax = trackH - SNACK_PIXEL - SNACK_BODY_TRAIL;
+  }
+  if (headMax < headMin) {
+    const mid = Math.max(0, Math.floor((trackH - SNACK_PIXEL) / 2));
+    headMin = appleBelow ? 0 : mid;
+    headMax = appleBelow ? mid : Math.max(0, trackH - SNACK_PIXEL);
+    if (headMax < headMin) {
+      headMin = 0;
+      headMax = 0;
+    }
+  }
+  return { appleY, headMin, headMax };
+}
 
 /** Parse #rgb / #rrggbb / rgb() / rgba() → [r,g,b] */
 function snackParseColor(c) {
@@ -649,56 +692,6 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     snakeBot: 0,
   });
 
-  const PIXEL = SNACK_PIXEL; // 8×8 every stone + apple
-  const BODY_N = 4; // rotating body stones (not head)
-  const TOTAL = 1 + BODY_N; // head + body
-  const BODY_GAP = SNACK_STEP - SNACK_PIXEL; // 2
-  const STEP = SNACK_STEP; // 10
-  const BODY_TRAIL = (TOTAL - 1) * STEP; // distance from head to last body slot
-  const RAIL_W = PIXEL + 4;
-
-  const drawSquare = (ctx, x, y, fill) => {
-    ctx.fillStyle = fill;
-    ctx.fillRect(Math.round(x), Math.round(y), PIXEL, PIXEL);
-  };
-
-  const drawApple = (ctx, x, y, stop, stopInner) => {
-    const ix = Math.round(x);
-    const iy = Math.round(y);
-    ctx.fillStyle = stop;
-    ctx.fillRect(ix, iy, PIXEL, PIXEL);
-    ctx.fillStyle = stopInner;
-    ctx.fillRect(ix + 3, iy + 3, 2, 2);
-  };
-
-  /** Head travel range so snout touches apple at destination. */
-  const headRange = (trackH, dir) => {
-    const appleBelow = dir >= 0;
-    const appleY = appleBelow ? trackH - PIXEL : 0;
-    let headMin;
-    let headMax;
-    if (appleBelow) {
-      // Body trails upward. Start near top; finish with snout on bottom apple.
-      headMin = BODY_TRAIL;
-      headMax = appleY - PIXEL; // head bottom edge = apple top edge
-    } else {
-      // Body trails downward. Finish near bottom; start with snout on top apple.
-      headMin = appleY + PIXEL; // head top edge = apple bottom edge
-      headMax = trackH - PIXEL - BODY_TRAIL;
-    }
-    if (headMax < headMin) {
-      // Tiny track: collapse to centered contact if possible
-      const mid = Math.max(0, Math.floor((trackH - PIXEL) / 2));
-      headMin = appleBelow ? 0 : mid;
-      headMax = appleBelow ? mid : Math.max(0, trackH - PIXEL);
-      if (headMax < headMin) {
-        headMin = 0;
-        headMax = 0;
-      }
-    }
-    return { appleY, headMin, headMax };
-  };
-
   const paint = useCallback(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
@@ -712,7 +705,7 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     const stopInnerC = col("--snack-stop-inner", "#e07070");
 
     const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
-    const w = RAIL_W;
+    const w = SNACK_RAIL_W;
     const h = Math.max(1, Math.floor(wrap.clientHeight));
     if (
       canvas.width !== w * dpr ||
@@ -732,55 +725,56 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     ctx.clearRect(0, 0, w, h);
     if (!st.visible) return;
 
-    const x = Math.floor((w - PIXEL) / 2);
+    const x = Math.floor((w - SNACK_PIXEL) / 2);
     const appleBelow = st.dir >= 0;
     const headY = Math.round(st.headY);
     const appleY = Math.round(st.appleY);
 
     // ── HEAD: fixed brick, eye toward destination apple ───────────
-    drawSquare(ctx, x, headY, headC);
+    snackDrawSquare(ctx, x, headY, headC);
     {
       const eye = 2;
-      const ex = x + Math.floor((PIXEL - eye) / 2);
+      const ex = x + Math.floor((SNACK_PIXEL - eye) / 2);
       const ey = appleBelow
-        ? Math.round(headY) + PIXEL - eye - 1
+        ? Math.round(headY) + SNACK_PIXEL - eye - 1
         : Math.round(headY) + 1;
       ctx.fillStyle = "rgba(0,0,0,0.78)";
       ctx.fillRect(ex, ey, eye, eye);
     }
 
     // ── BODY: crawl wrap; head→tail gets lighter ─────────────────
-    const phase = ((st.scrollTop * 0.55) % STEP + STEP) % STEP;
-    const band = BODY_N * STEP;
-    for (let k = 0; k < BODY_N; k++) {
-      let dist = (k + 1) * STEP - phase;
+    const phase =
+      ((st.scrollTop * 0.55) % SNACK_STEP + SNACK_STEP) % SNACK_STEP;
+    const band = SNACK_BODY_N * SNACK_STEP;
+    for (let k = 0; k < SNACK_BODY_N; k++) {
+      let dist = (k + 1) * SNACK_STEP - phase;
       dist = ((dist % band) + band) % band;
-      if (dist < BODY_GAP) continue;
+      if (dist < SNACK_BODY_GAP) continue;
 
       // Soft edge only when a stone wraps at the tail band
       let alpha = 1;
-      if (dist > band - PIXEL) {
-        alpha = Math.max(0, (band - dist) / PIXEL);
+      if (dist > band - SNACK_PIXEL) {
+        alpha = Math.max(0, (band - dist) / SNACK_PIXEL);
       }
 
       const y = appleBelow
         ? headY - dist // body trails upward (away from bottom apple)
         : headY + dist; // body trails downward (away from top apple)
 
-      if (y + PIXEL < 0 || y > h) continue;
+      if (y + SNACK_PIXEL < 0 || y > h) continue;
       // k=0 nearest head, k→tail lighter (mix toward white only)
-      const t = (k + 1) / BODY_N;
+      const t = (k + 1) / SNACK_BODY_N;
       const fill = snackMixColor(bodyC, "#ffffff", 0.08 + t * 0.5);
       ctx.globalAlpha = Math.max(0.45, alpha);
-      drawSquare(ctx, x, y, fill);
+      snackDrawSquare(ctx, x, y, fill);
     }
     ctx.globalAlpha = 1;
 
     // ── APPLE: pinned to endpoint, PIXEL×PIXEL ────────────────────
-    if (appleY + PIXEL >= 0 && appleY <= h) {
-      drawApple(ctx, x, appleY, stopC, stopInnerC);
+    if (appleY + SNACK_PIXEL >= 0 && appleY <= h) {
+      snackDrawApple(ctx, x, appleY, stopC, stopInnerC);
     }
-  }, [PIXEL, RAIL_W, STEP, BODY_N, BODY_GAP]);
+  }, []);
 
   const measure = useCallback(() => {
     const el = scrollRef?.current;
@@ -810,14 +804,14 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     }
 
     const ratio = Math.min(1, Math.max(0, scrollTop / overflow));
-    const { appleY, headMin, headMax } = headRange(trackH, dir);
+    const { appleY, headMin, headMax } = snackHeadRange(trackH, dir);
     const headY = headMin + ratio * (headMax - headMin);
     const appleBelow = dir >= 0;
     // Hit-box for the tight snake (body + head), not the empty hunt gap
-    const snakeTop = appleBelow ? headY - BODY_TRAIL : headY;
+    const snakeTop = appleBelow ? headY - SNACK_BODY_TRAIL : headY;
     const snakeBot = appleBelow
-      ? headY + PIXEL
-      : headY + BODY_TRAIL + PIXEL;
+      ? headY + SNACK_PIXEL
+      : headY + SNACK_BODY_TRAIL + SNACK_PIXEL;
 
     stateRef.current = {
       visible: true,
@@ -834,7 +828,7 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     };
     setVisible(true);
     paint();
-  }, [scrollRef, paint, PIXEL, BODY_TRAIL]);
+  }, [scrollRef, paint]);
 
   useEffect(() => {
     const el = scrollRef?.current;
@@ -885,7 +879,10 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
       e.currentTarget.setPointerCapture?.(e.pointerId);
     } else {
       // Click track / apple → jump so head would sit near click
-      const targetHead = Math.min(headMax, Math.max(headMin, yIn - PIXEL / 2));
+      const targetHead = Math.min(
+        headMax,
+        Math.max(headMin, yIn - SNACK_PIXEL / 2),
+      );
       const span = headMax - headMin;
       scrollToRatio(span > 0 ? (targetHead - headMin) / span : 0);
     }
@@ -915,7 +912,7 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     <div
       ref={wrapRef}
       className={`snack-scroll${visible ? " snack-scroll--on" : ""}`}
-      style={{ width: RAIL_W }}
+      style={{ width: SNACK_RAIL_W }}
       aria-hidden={!visible}
     >
       <canvas

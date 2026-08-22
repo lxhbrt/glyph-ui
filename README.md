@@ -25,7 +25,7 @@ nach je ein weiteres Profil hinzu:
 | Schritt | Profil | Grund |
 |---------|--------|-------|
 | Start | **grok** | Browser-Oberfläche für die lokale Grok-CLI (OAuth) |
-| +1 | **^_Code** | DeepSeek V4 Flash (OpenRouter) · Workspace Read/Write/Shell · Genehmigung in Glyph |
+| +1 | **^_Code** | DeepSeek V4 Flash (OpenRouter) · Workspace Read/Write/Shell · Freigabe in Glyph |
 | +2 | **°_Agent** | Vault/Tools + Cloud-Antwort intern (B+, Engine; id `glyph-agent`) |
 
 Heute ist grok **nur noch das Standard-Profil**, nicht das Produkt. Alle Profile teilen
@@ -177,7 +177,7 @@ hängt vom aktiven Profil ab.
 | Profil | Textanhänge | Bilder | Hinweis |
 |--------|-------------|--------|---------|
 | **grok** | ✅ | ✅ | native ACP-Unterstützung gemäß Grok-Profil |
-| **^_Code** | ✅ | ✅ | Direct `deepseek-v4-flash-vision-exp` (`image_url`); Write/Shell brauchen Genehmigung |
+| **^_Code** | ✅ | ✅ | Direct `deepseek-v4-flash-vision-exp` (`image_url`); Write/Shell brauchen Freigabe (Einmal / Auftrag / Task) |
 | **°_Agent** | ✅ | ✅ | Direct `deepseek-v4-flash-vision-exp` (`image_url`) |
 
 ### Erlaubte Formate & Limits

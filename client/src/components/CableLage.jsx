@@ -10,6 +10,7 @@ import {
   adjacentIds,
   bindsOf,
   displayBind,
+  filterBindItems,
   graphFrame,
   HEAD_IDS,
   LAGE_CX,
@@ -17,9 +18,11 @@ import {
   LAGE_W,
   layoutLage,
   PHONE_PAD,
+  profileHeadId,
   lerpGraph,
   reaches,
 } from "../utils/lageLayout.js";
+import { handleDialogTab } from "../utils/focusTrap.js";
 import { GraphLegend } from "./GraphLegend.jsx";
 import { GlyphVessel, SnakeHead } from "./GraphFaces.jsx";
 
@@ -36,14 +39,21 @@ export function CableLage({
   open,
   onClose,
   focus = "",
-  activeProfile: _activeProfile = "",
+  activeProfile = "",
   working = false,
 }) {
-  const vaults = useBindResource({ apiBase: "/api/vaults", listKey: "vaults" });
+  const vaults = useBindResource({
+    apiBase: "/api/vaults",
+    listKey: "vaults",
+    autoload: false,
+  });
   const workspaces = useBindResource({
     apiBase: "/api/workspaces",
     listKey: "workspaces",
+    autoload: false,
   });
+  const stageRef = useRef(null);
+  const currentHead = profileHeadId(activeProfile);
   const [bindings, setBindings] = useState(null);
   const [bindErr, setBindErr] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -51,6 +61,8 @@ export function CableLage({
   const [pendingDetach, setPendingDetach] = useState(null);
   const [attachInput, setAttachInput] = useState("");
   const [cluster, setCluster] = useState("all");
+  const [folderQuery, setFolderQuery] = useState("");
+  const [connectedOnly, setConnectedOnly] = useState(false);
   const [narrow, setNarrow] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -82,7 +94,13 @@ export function CableLage({
 
   useEffect(() => {
     if (!open) return undefined;
+    const prev = document.activeElement;
+    const focusClose = () => {
+      stageRef.current?.querySelector(".lage-close")?.focus();
+    };
+    requestAnimationFrame(focusClose);
     const onKey = (e) => {
+      if (handleDialogTab(stageRef.current, e)) return;
       if (e.key !== "Escape") return;
       e.preventDefault();
       if (selectedId || cluster !== "all") {
@@ -95,7 +113,16 @@ export function CableLage({
       onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (prev && typeof prev.focus === "function") {
+        try {
+          prev.focus();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
   }, [open, onClose, selectedId, cluster]);
 
   useEffect(() => {
@@ -129,15 +156,35 @@ export function CableLage({
     return () => mq.removeEventListener("change", on);
   }, []);
 
+  const folderCount = vaults.items.length + workspaces.items.length;
+  const shownVaults = useMemo(
+    () =>
+      filterBindItems(vaults.items, {
+        query: folderQuery,
+        connectedOnly,
+        kind: "vault",
+      }),
+    [vaults.items, folderQuery, connectedOnly],
+  );
+  const shownWorkspaces = useMemo(
+    () =>
+      filterBindItems(workspaces.items, {
+        query: folderQuery,
+        connectedOnly,
+        kind: "workspace",
+      }),
+    [workspaces.items, folderQuery, connectedOnly],
+  );
+
   const targetGraph = useMemo(
     () =>
       layoutLage({
-        vaults: vaults.items,
-        workspaces: workspaces.items,
+        vaults: shownVaults,
+        workspaces: shownWorkspaces,
         focus: cluster,
         compact: narrow,
       }),
-    [vaults.items, workspaces.items, cluster, narrow],
+    [shownVaults, shownWorkspaces, cluster, narrow],
   );
   const fromRef = useRef(targetGraph);
   const [graph, setGraph] = useState(targetGraph);
@@ -332,12 +379,12 @@ export function CableLage({
   const allLayout = useMemo(
     () =>
       layoutLage({
-        vaults: vaults.items,
-        workspaces: workspaces.items,
+        vaults: shownVaults,
+        workspaces: shownWorkspaces,
         focus: "all",
         compact: narrow,
       }),
-    [vaults.items, workspaces.items, narrow],
+    [shownVaults, shownWorkspaces, narrow],
   );
   const field = useMemo(
     () =>
@@ -403,13 +450,46 @@ export function CableLage({
     if (!ok) setAttachInput(raw);
   }
 
+  const wantBind =
+    focus === "bindings" || focus === "agent" || focus === "code";
+
   if (!open) return null;
 
   return (
-    <div className="lage-stage" role="dialog" aria-modal="true" aria-label="Graph">
+    <div
+      ref={stageRef}
+      className="lage-stage"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Graph"
+    >
       <button type="button" className="lage-close" onClick={onClose}>
         Schließen
       </button>
+      <p className="lage-edge-key" aria-label="Kanten">
+        <span className="lage-edge-key-item is-rw">schreiben</span>
+        <span className="lage-edge-key-item is-r">lesen</span>
+        <span className="lage-edge-key-item is-private">privat</span>
+      </p>
+      {folderCount >= 8 ? (
+        <div className="lage-filter">
+          <input
+            type="search"
+            value={folderQuery}
+            onChange={(e) => setFolderQuery(e.target.value)}
+            placeholder="Ordner suchen"
+            aria-label="Ordner suchen"
+          />
+          <button
+            type="button"
+            className={`lage-filter-btn${connectedOnly ? " is-on" : ""}`}
+            aria-pressed={connectedOnly}
+            onClick={() => setConnectedOnly((v) => !v)}
+          >
+            Nur verbunden
+          </button>
+        </div>
+      ) : null}
 
       {bindErr || vaults.error || workspaces.error ? (
         <p className="lage-alert" role="alert">
@@ -479,12 +559,18 @@ export function CableLage({
                   dimmed(node) ? " is-dim" : ""
                 }${st.stepDim ? " is-step-dim" : ""}${
                   starred ? " is-star" : ""
-                }${st.mode ? ` is-mode-${st.mode}` : ""}`}
+                }${st.mode ? ` is-mode-${st.mode}` : ""}${
+                  currentHead && node.id === currentHead ? " is-current" : ""
+                }`}
                 style={{
                   left: `${((node.x - field.x) / field.w) * 100}%`,
                   top: `${((node.y - field.y) / field.h) * 100}%`,
                 }}
                 aria-label={name}
+                title={name}
+                aria-current={
+                  currentHead && node.id === currentHead ? "true" : undefined
+                }
                 aria-pressed={selectedId === node.id}
                 onMouseEnter={() => setHoverId(node.id)}
                 onMouseLeave={() =>
@@ -538,6 +624,7 @@ export function CableLage({
                 busy={busy}
                 pendingDetach={pendingDetach}
                 setPendingDetach={setPendingDetach}
+                openBind={wantBind && !selectedState?.item}
               />
             </LegendCatch>
 
@@ -580,10 +667,29 @@ export class GraphGuard extends Component {
   render() {
     if (this.state.err) {
       return (
-        <div className="lage-stage">
+        <div
+          className="lage-stage"
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Graph-Fehler"
+        >
+          <button
+            type="button"
+            className="lage-close"
+            onClick={this.props.onClose}
+          >
+            Schließen
+          </button>
           <p className="lage-alert" role="alert">
             {this.state.err}
           </p>
+          <button
+            type="button"
+            className="lage-link lage-guard-retry"
+            onClick={() => this.setState({ err: "" })}
+          >
+            Nochmal
+          </button>
         </div>
       );
     }

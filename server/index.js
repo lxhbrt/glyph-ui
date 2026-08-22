@@ -1062,6 +1062,13 @@ function proxyAgent(
       }
       const r = await fetch(`${base}${relPath}`, init);
       const json = await r.json().catch(() => ({}));
+      if (!r.ok && r.status === 404 && (!json.error || json.error === "Not found")) {
+        res.status(502).json({
+          ok: false,
+          error: `${prefix}: Endpoint fehlt (glyph-agent neu starten).`,
+        });
+        return;
+      }
       const status = r.ok
         ? 200
         : pass400(method) && r.status === 400
@@ -1164,6 +1171,84 @@ app.post("/api/vault/find", async (req, res) => {
  * Kabelsalat — Workspace-Registry (^_Code /workspaces → ~/.glyph/workspaces.json).
  */
 proxyAgent("workspaces");
+
+app.get("/api/code/grants", async (_req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/code/grants`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/code/grants/close-task", async (_req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/code/grants/close-task`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(10000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/code/grants/:id/revoke", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(req.params.id);
+    const r = await fetch(`${base}/code/grants/${id}/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(10000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/** Gemeinsame, manuell übergebene Aufgaben (SoT: ~/.glyph/tasks.json). */
+proxyAgent("tasks");
+app.get("/api/tasks/:id/prompt", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/tasks/${id}/prompt`, {
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok && r.status === 404 && (!json.error || json.error === "Not found")) {
+      res.status(502).json({
+        ok: false,
+        error: "tasks: Endpoint fehlt (glyph-agent neu starten).",
+      });
+      return;
+    }
+    res.status(r.ok ? 200 : r.status === 404 ? 404 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 /**
  * Proxy againkehrende To-dos (glyph-agent /recurring).
@@ -2101,6 +2186,10 @@ class GrokBridge {
         }
       }, 5 * 60 * 1000);
       this.pendingPermission = { id, resolve, params, timer };
+      const raw = toolCall.rawInput && typeof toolCall.rawInput === "object"
+        ? toolCall.rawInput
+        : {};
+      const grant = raw._grant && typeof raw._grant === "object" ? raw._grant : null;
       this.broadcast({
         type: "permission_request",
         id,
@@ -2113,6 +2202,7 @@ class GrokBridge {
           name: o.name || o.optionId,
           kind: o.kind || "allow_once",
         })),
+        grant,
       });
     });
   }

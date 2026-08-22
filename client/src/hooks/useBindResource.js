@@ -23,9 +23,9 @@ async function api(method, path, body) {
   return data;
 }
 
-function useBindResource({ apiBase, listKey }) {
+function useBindResource({ apiBase, listKey, autoload = true }) {
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(autoload));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -45,8 +45,10 @@ function useBindResource({ apiBase, listKey }) {
   }, [apiBase, listKey]);
 
   useEffect(() => {
+    if (!autoload) return undefined;
     void refresh();
-  }, [refresh]);
+    return undefined;
+  }, [refresh, autoload]);
 
   const attach = useCallback(
     async (input, mode, extra = {}) => {

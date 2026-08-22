@@ -17,6 +17,37 @@ export const FRAME_PAD = 80;
 export const PHONE_PAD = 48;
 export const HEAD_IDS = ["grok", "agent", "code"];
 
+/** UI profile id (`grok` / `glyph-agent` / `_code`) → graph head id. */
+export function profileHeadId(profileId) {
+  const id = String(profileId || "");
+  if (id === "_code" || id === "code") return "code";
+  if (id === "glyph-agent" || id === "agent") return "agent";
+  if (id === "grok") return "grok";
+  return "";
+}
+
+/**
+ * Filter vaults/workspaces before layout. connectedOnly drops unbound + disabled.
+ * @param {Array<object>} items
+ * @param {{ query?: string, connectedOnly?: boolean, kind?: string }} [opts]
+ */
+export function filterBindItems(
+  items,
+  { query = "", connectedOnly = false, kind = "vault" } = {},
+) {
+  const q = String(query || "").trim().toLowerCase();
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    if (connectedOnly) {
+      if (item?.enabled === false) return false;
+      const vis = displayBind(bindsOf(item, kind));
+      if (vis.unbound) return false;
+    }
+    if (!q) return true;
+    const hay = `${item?.name || ""} ${item?.path || ""} ${item?.id || ""}`.toLowerCase();
+    return hay.includes(q);
+  });
+}
+
 /** Compact (phone): Grok high, Agent/Code slightly below Glyph — tall triangle. */
 const COMPACT_HEAD = {
   grok: { dx: 0, dy: -300 },

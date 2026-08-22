@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 import {
   applyLiveStatus,
   buildModelsPatch,
+  isCloudModelProfile,
+  modelHudFromBindings,
   modelsForHead,
 } from "../../client/src/utils/bindingsModels.js";
 
@@ -104,5 +106,44 @@ describe("applyLiveStatus", () => {
   it("missing apply is an error", () => {
     const s = applyLiveStatus(null);
     assert.equal(s.ok, false);
+  });
+});
+
+describe("isCloudModelProfile", () => {
+  it("is true for °_Agent and ^_Code, not Grok", () => {
+    assert.equal(isCloudModelProfile("glyph-agent"), true);
+    assert.equal(isCloudModelProfile("_code"), true);
+    assert.equal(isCloudModelProfile("grok"), false);
+  });
+});
+
+describe("modelHudFromBindings", () => {
+  const payload = {
+    modelsMismatch: true,
+    models: {
+      shared: { primary: "deepseek-v4-flash-vision-exp", fallback: "deepseek/deepseek-v4-flash-0731" },
+      code: { primary: "deepseek-v4-flash-vision-exp", fallback: "" },
+    },
+    modelsActive: {
+      shared: { primary: "old-shared", fallback: "old-fb" },
+      code: { primary: "old-code", fallback: "" },
+      active: { primary: "live-shared", fallback: "live-fb", label: "live-shared" },
+    },
+  };
+
+  it("uses live shared models for °_Agent", () => {
+    const hud = modelHudFromBindings(payload, "glyph-agent");
+    assert.equal(hud.kind, "openrouter");
+    assert.equal(hud.primary, "live-shared");
+    assert.equal(hud.fallback, "live-fb");
+    assert.equal(hud.liveLabel, "live-shared");
+    assert.equal(hud.mismatch, true);
+    assert.match(hud.label, /live-shared/);
+  });
+
+  it("uses code override for ^_Code when present", () => {
+    const hud = modelHudFromBindings(payload, "_code");
+    assert.equal(hud.primary, "old-code");
+    assert.equal(hud.fallback, "");
   });
 });

@@ -65,6 +65,11 @@ export function ToolCard({ msg }) {
       {statusLabel ? (
         <span className="tool-card-status">{statusLabel}</span>
       ) : null}
+      {summary.allowedBy ? (
+        <span className="tool-card-why" title="Warum erlaubt?">
+          {summary.allowedBy}
+        </span>
+      ) : null}
       {has ? (
         <span className="tool-card-chev" aria-hidden="true">
           {open ? "▾" : "▸"}

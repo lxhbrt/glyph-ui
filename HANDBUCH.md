@@ -22,7 +22,7 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 | Profil | Typ | Auth | Fähigkeiten (in Glyph) |
 |--------|-----|------|-------------------------|
 | **grok** (Standard) | Cloud | OAuth | Sessions ✅ · Deep Search ✅ · Swarm ✗ · Aktivität ✅ · Voice ✅ |
-| **^_Code** | Lokal + Cloud (Direct Vision-Exp) | Direct + OpenRouter-Reserve | Read/Write/Shell mit Genehmigung in Glyph · Swarm ✅ |
+| **^_Code** | Lokal + Cloud (Direct Vision-Exp) | Direct + OpenRouter-Reserve | Read/Write/Shell mit Freigabe (Einmal / Auftrag / Task) · Swarm ✅ |
 | **°_Agent** (id `glyph-agent`) | Lokal + Cloud-Antwort | — | VaultFind, Web-Recherche, Cloud-Antwort (Engine); Swarm ✅; Deep Search ✗ |
 
 > 📊 Grafische Abläufe (warum + wie jedes Profil): `docs/glyph-profile-diagrams.html`
@@ -206,7 +206,7 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 | **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
 | **Buch** (unten) | Handbuch | Tabs: Kurzhandbuch · Befehle · **Anbindung** (Keys/OAuth-Status) |
-| **4 Kästchen** | Kalender | Tab **Plan** = wiederkehrende To-dos · Tab **Aktivität** = Heatmap (Grok) |
+| **4 Kästchen** | Kalender | Tab **Plan** = Aufgaben + wiederkehrende To-dos · Tab **Aktivität** = Heatmap (Grok) |
 | **Wiki (i)** | Wiki | Öffnet den Wiki-Index (`.md`) in Obsidian / Standard-App |
 | **Workspace** | Ordner | Öffnet den aktuellen Arbeitsordner (`cwd`) im Finder |
 | **Theme** | Hell/Dunkel | Darstellung umschalten |
@@ -380,7 +380,9 @@ Mit `WIKI_PATH` (Alias `OPENCLAW_WIKI_PATH`) auf einen beliebigen Ordner umleite
 
 Symbol: **4 Kästchen** in der linken Leiste. Zwei Tabs: **Plan** und **Aktivität**.
 
-### Tab Plan (wiederkehrende To-dos)
+### Tab Plan (Aufgaben + wiederkehrende To-dos)
+
+**Aufgaben:** Kette an einer Antwort → Titel, optionales Ziel, Notiz. Nur diese Belege, nicht die Session. Zielkopf Default leer, später hier zuweisen. **Übernehmen** legt den Startkontext in den Composer — kein automatischer Kopfwechsel. Aufgabe ≠ Task-Freigabe.
 
 Täglich/wöchentlich · Pause · Einmal jetzt · Löschen. Nach erfolgreichem Lauf: **Fertig** löscht die To-do.
 
@@ -425,7 +427,9 @@ Workspace steuert, wo der Agent Dateien liest/schreibt (Standard oft Home oder `
 
 ## 10. Was der Agent in dieser UI kann
 
-**Nicht alle Fähigkeiten gelten für alle Profile.** **grok** hat als einziges Sessions-Liste, Deep Search und Aktivitäts-Kalender. Terminal/Shell und freies Workspace-Schreiben sind **nicht** bei °_Agent.
+**Nicht alle Fähigkeiten gelten für alle Profile.** **grok** hat als einziges Sessions-Liste, Deep Search und Aktivitäts-Kalender. Terminal/Shell und Workspace-Schreiben sind **nicht** bei °_Agent.
+
+**^_Code Freigabe:** `r+w` = Workspace beschreibbar, nicht Auto-Write. Dialog **Einmal** · **Für Auftrag** · **Für Task** — kein „immer“, kein „Für diese Session“. Aktiver Task in der Arbeitsleiste, **Widerrufen** dort. Tool-Karte: *Warum erlaubt?*
 
 | Bereich | Beispiele | Profile |
 |---------|-----------|---------|
@@ -567,7 +571,7 @@ Aktives Profil wird beim Start aus `GLYPH_AGENT` übernommen (Default: `grok`).
 | Profil | Spawnt | Hinweis |
 |--------|--------|---------|
 | **grok** (Default) | `grok agent --always-approve --no-leader stdio` | `GROK_BIN`; volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
-| **^_Code** (id `_code`) | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | Workspace-Tools, Write/Shell mit Glyph-Freigabe; Modell aus Graph/Anbindung |
+| **^_Code** (id `_code`) | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | Workspace-Tools, Write/Shell mit Freigabe (Einmal / Auftrag / Task); Modell aus Graph/Anbindung |
 | **°_Agent** (id `glyph-agent`) | `node server/glyph-agent-acp.mjs` | Vault/Tools + Cloud-Antwort; dünne ACP-Brücke zum lokalen Dienst auf `127.0.0.1:18899` |
 
 ### °_Agent (Vault/Tools + Cloud-Antwort)

@@ -2,11 +2,16 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  *
- * Panel hinter dem Kalender-Icon: Tabs „Plan“ (wiederkehrende To-dos) und „Aktivität“.
+ * Panel hinter dem Kalender-Icon: Plan (Aufgaben + wiederkehrende To-dos) und Aktivität.
  * Fertig-Status: klickbares „Fertig“ löscht die durchgestrichene To-do.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { seatFetch } from "../utils/seat.js";
+import {
+  TASK_HEADS,
+  formatTaskMeta,
+  tasksEndpointError,
+} from "../utils/tasks.js";
 
 const WEEKDAYS = [
   { v: 0, l: "Mo" },
@@ -46,13 +51,14 @@ function scheduleLabel(s) {
  *   canSeeActivity?: boolean,
  * }} props
  */
-function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true }) {
+function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActivity = true }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [tab, setTab] = useState("plan");
   const [todos, setTodos] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [todosLoading, setTodosLoading] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -73,6 +79,32 @@ function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true 
       setTodosLoading(false);
     }
   }, []);
+  const loadTasks = useCallback(async () => {
+    const res = await fetch("/api/tasks");
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(tasksEndpointError(json, res.status, "Aufgaben laden fehlgeschlagen"));
+    setTasks(Array.isArray(json.items) ? json.items : []);
+  }, []);
+
+  async function assignTaskTarget(taskId, nextTarget) {
+    setBusyId(`task-${taskId}`);
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: nextTarget }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(tasksEndpointError(json, res.status, "Zielkopf speichern fehlgeschlagen"));
+      if (json.item) {
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? json.item : t)));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   useEffect(() => {
     if (!open) return undefined;
@@ -80,6 +112,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true 
     setError("");
     setTab("plan");
     void loadTodos();
+    void loadTasks().catch((err) => setError(err instanceof Error ? err.message : String(err)));
     if (!canSeeActivity) {
       setData(null);
       setLoading(false);
@@ -107,7 +140,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true 
     return () => {
       cancelled = true;
     };
-  }, [open, canSeeActivity, loadTodos]);
+  }, [open, canSeeActivity, loadTodos, loadTasks]);
 
   if (!open) return null;
 
@@ -224,7 +257,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true 
             <h2>Plan &amp; Aktivität</h2>
             <p className="overview-meta">
               {tab === "plan"
-                ? `${todos.length} wiederkehrende To-do${todos.length === 1 ? "" : "s"}`
+                ? `${tasks.length} Aufgabe${tasks.length === 1 ? "" : "n"} · ${todos.length} wiederkehrende To-do${todos.length === 1 ? "" : "s"}`
                 : data
                   ? `${data.activeDays} aktive Tage · ${data.totalEvents} Events · Peak ${data.peakDate || "—"}`
                   : "Wann du gearbeitet hast — und woran"}
@@ -246,9 +279,9 @@ function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true 
             onClick={() => setTab("plan")}
           >
             Plan
-            {todos.length ? (
+            {tasks.length + todos.length ? (
               <span className="cal-tab-badge" aria-hidden="true">
-                {todos.length}
+                {tasks.length + todos.length}
               </span>
             ) : null}
           </button>
@@ -272,7 +305,44 @@ function ActivityCalendar({ open, onClose, onOpenSession, canSeeActivity = true 
         {error ? <div className="banner">{error}</div> : null}
 
         {tab === "plan" ? (
-          <div className="cal-plan" role="tabpanel" aria-label="Wiederkehrende To-dos">
+          <div className="cal-plan" role="tabpanel" aria-label="Aufgaben und wiederkehrende To-dos">
+            <section className="cal-task-section" aria-label="Übergebene Aufgaben">
+              <h3>Aufgaben</h3>
+              {tasks.length === 0 ? <p className="cal-detail-empty">Noch keine übergebenen Aufgaben.</p> : (
+                <ul className="cal-todo-list">
+                  {tasks.map((task) => <li key={task.id} className="cal-todo-item">
+                    <div className="cal-todo-main">
+                      <span className="cal-todo-title">{task.title}</span>
+                      <span className="cal-todo-meta">{formatTaskMeta(task)}</span>
+                      {task.summary ? <span className="cal-todo-preview">{task.summary}</span> : null}
+                    </div>
+                    <div className="cal-todo-actions">
+                      <label className="cal-task-assign">
+                        <span className="sr-only">Zielkopf</span>
+                        <select
+                          value={task.target || ""}
+                          disabled={busyId === `task-${task.id}`}
+                          onChange={(e) => assignTaskTarget(task.id, e.target.value)}
+                        >
+                          {TASK_HEADS.map(([id, label]) => (
+                            <option key={id || "none"} value={id}>{label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button type="button" className="ghost cal-todo-btn" onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}/prompt`);
+                          const json = await res.json().catch(() => ({}));
+                          if (!res.ok) throw new Error(tasksEndpointError(json, res.status, "Übergabe laden fehlgeschlagen"));
+                          onUseTask?.(json.prompt || "", task);
+                          onClose();
+                        } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
+                      }}>Übernehmen</button>
+                    </div>
+                  </li>)}
+                </ul>
+              )}
+            </section>
             <div className="cal-plan-toolbar">
               <p className="overview-hint" style={{ margin: 0, flex: 1 }}>
                 Täglich/wöchentlich · Pause · Einmal jetzt · Löschen. Nach erfolgreichem

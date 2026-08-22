@@ -10,11 +10,14 @@ import {
   bindsOf,
   clusterOf,
   displayBind,
+  filterBindItems,
   FRAME_PAD,
   graphFrame,
   layoutLage,
   LAGE_H,
   LAGE_W,
+  PHONE_PAD,
+  profileHeadId,
   reaches,
   ringOf,
   wallStickDeg,
@@ -284,6 +287,75 @@ describe("cablePath scale", () => {
     const d = cablePath(0, 0, 200, 0, { maxSag: 80, minSag: 20 });
     const cy = Number(d.split("Q ")[1].split(" ")[1]);
     assert.ok(cy >= 20, cy);
+  });
+});
+
+describe("profileHeadId", () => {
+  it("maps UI profile ids to graph heads", () => {
+    assert.equal(profileHeadId("grok"), "grok");
+    assert.equal(profileHeadId("glyph-agent"), "agent");
+    assert.equal(profileHeadId("agent"), "agent");
+    assert.equal(profileHeadId("_code"), "code");
+    assert.equal(profileHeadId("code"), "code");
+    assert.equal(profileHeadId(""), "");
+  });
+});
+
+describe("filterBindItems", () => {
+  const items = [
+    {
+      id: "a",
+      name: "HSEQ Sync",
+      path: "/Users/x/HSEQ Sync",
+      heads: { agent: "r", grok: "unbound", code: "unbound" },
+    },
+    {
+      id: "b",
+      name: "Peniel",
+      path: "/Users/x/Peniel",
+      heads: { agent: "unbound", grok: "unbound", code: "unbound" },
+    },
+    {
+      id: "c",
+      name: "ASI, BS. UWS, QM, EM",
+      path: "/Users/x/ASI",
+      enabled: false,
+      heads: { agent: "r", grok: "unbound", code: "unbound" },
+    },
+  ];
+
+  it("hides unbound and disabled when connectedOnly", () => {
+    const out = filterBindItems(items, { connectedOnly: true, kind: "vault" });
+    assert.deepEqual(
+      out.map((i) => i.id),
+      ["a"],
+    );
+  });
+
+  it("matches name and path", () => {
+    const out = filterBindItems(items, { query: "hseq", kind: "vault" });
+    assert.equal(out.length, 1);
+    assert.equal(out[0].id, "a");
+  });
+
+  it("keeps 8 of 24 connected vaults inside the phone frame", () => {
+    const vaults = Array.from({ length: 24 }, (_, i) => ({
+      id: `v${i}`,
+      name: `Vault ${i}`,
+      heads: {
+        agent: i % 3 === 0 ? "r" : "unbound",
+        grok: "unbound",
+        code: "unbound",
+      },
+    }));
+    const shown = filterBindItems(vaults, { connectedOnly: true, kind: "vault" });
+    assert.equal(shown.length, 8);
+    const { nodes } = layoutLage({ vaults: shown, compact: true });
+    const frame = graphFrame(nodes, PHONE_PAD);
+    for (const n of nodes.filter((n) => n.kind === "vault")) {
+      assert.ok(n.x >= frame.x && n.x <= frame.x + frame.w, n.id);
+      assert.ok(n.y >= frame.y && n.y <= frame.y + frame.h, n.id);
+    }
   });
 });
 

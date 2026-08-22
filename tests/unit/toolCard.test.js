@@ -76,6 +76,14 @@ describe("summarizeTool", () => {
     assert.equal(s.target, "ACP tool_call");
   });
 
+  it("surfaces Warum erlaubt from allowedBy", () => {
+    const s = summarizeTool({
+      kind: "edit",
+      rawInput: { path: "a.js", _allowedBy: "Task Dark Mode" },
+    });
+    assert.equal(s.allowedBy, "Task Dark Mode");
+  });
+
   it("falls back to title when kind/input empty", () => {
     const s = summarizeTool({ title: "read_file", status: "completed" });
     assert.equal(s.verb, "read_file");

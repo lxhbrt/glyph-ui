@@ -44,6 +44,47 @@ export function applyLiveStatus(apply) {
   };
 }
 
+/** °_Agent / ^_Code store models in bindings; Grok is CLI. */
+export function isCloudModelProfile(profileId) {
+  return profileId === "_code" || profileId === "glyph-agent";
+}
+
+/**
+ * Model pill from GET /api/bindings. Polling is read-only;
+ * POST /api/models/apply is connect / save / explicit click.
+ *
+ * @param {object} data
+ * @param {string} profileId
+ */
+export function modelHudFromBindings(data = {}, profileId = "") {
+  const active = data.modelsActive?.active || data.modelsActive?.shared;
+  const desired = data.models?.shared;
+  const code = data.modelsActive?.code || data.models?.code;
+  const useCode = profileId === "_code" && Boolean(code?.primary);
+  const primary = useCode
+    ? code.primary
+    : active?.primary ||
+      desired?.primary ||
+      data.modelsActive?.shared?.primary ||
+      "";
+  const fb = useCode
+    ? (code.fallback ?? "")
+    : (active?.fallback ??
+      desired?.fallback ??
+      data.modelsActive?.shared?.fallback ??
+      "");
+  const label = primary && fb ? `${primary} → ${fb}` : primary || "—";
+  const liveLabel = String(data.modelsActive?.active?.label || "").trim();
+  return {
+    kind: "openrouter",
+    label,
+    primary,
+    fallback: fb || "",
+    liveLabel,
+    mismatch: Boolean(data.modelsMismatch),
+  };
+}
+
 export function buildModelsPatch({ absorb, primary, fallback } = {}) {
   const p = String(primary || "").trim();
   const fb = String(fallback || "").trim();

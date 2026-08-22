@@ -219,8 +219,7 @@ app.onRequest(acp.methods.agent.logout, async () => ({}));
 
 app.onRequest(acp.methods.agent.session.new, async () => {
   const sessionId = newSessionId();
-  // allowWriteTools: nach „Für diese Session erlauben“ keine Popups mehr
-  // für WriteFile/SearchReplace/RunCommand in dieser ACP-Session.
+  // Grants leben in glyph-agent (code_grants), nicht als Session-Always.
   sessions.set(sessionId, { messages: [], allowWriteTools: false });
   return { sessionId };
 });
@@ -406,10 +405,35 @@ async function streamChat(body, client, sessionId, signal, onActivity) {
   return { answerText, stepBlocks, trace, final };
 }
 
+function parseGrantOptionId(optionId) {
+  const id = String(optionId || "");
+  if (id === "allow-auftrag" || id === "allow_auftrag") {
+    return { allowed: true, scope: "auftrag", spec: null };
+  }
+  if (id === "allow-once" || id === "allow_once") {
+    return { allowed: true, scope: "once", spec: null };
+  }
+  if (id === "allow-always" || id === "allow_always") {
+    return { allowed: true, scope: "auftrag", spec: null };
+  }
+  if (id === "allow-task" || id === "allow_task") {
+    return { allowed: true, scope: "task", spec: null };
+  }
+  if (id.startsWith("allow-task:")) {
+    try {
+      const spec = JSON.parse(id.slice("allow-task:".length));
+      return { allowed: true, scope: "task", spec };
+    } catch {
+      return { allowed: true, scope: "task", spec: null };
+    }
+  }
+  return { allowed: false, scope: null, spec: null };
+}
+
 /**
  * Ask Glyph (ACP client) for permission.
- * Returns { allowed: boolean, always?: boolean }.
- * Elevated (push/compound/service): nur Einmal/Ablehnen — kein Session-Always.
+ * Returns { allowed, scope, spec }.
+ * Elevated: nur Einmal/Ablehnen. Sonst Einmal / Auftrag / Task — kein Session-Always.
  */
 async function askPermission(client, sessionId, pending) {
   const tool = pending?.tool || "tool";
@@ -420,18 +444,23 @@ async function askPermission(client, sessionId, pending) {
   const title = elevated && risk ? `${tool} · ${risk}` : tool;
   const options = elevated
     ? [
-        { optionId: "allow-once", name: "Einmal erlauben", kind: "allow_once" },
+        { optionId: "allow-once", name: "Einmal", kind: "allow_once" },
         { optionId: "reject-once", name: "Ablehnen", kind: "reject_once" },
       ]
     : [
-        { optionId: "allow-once", name: "Einmal erlauben", kind: "allow_once" },
-        {
-          optionId: "allow-always",
-          name: "Für diese Session erlauben",
-          kind: "allow_always",
-        },
+        { optionId: "allow-once", name: "Einmal", kind: "allow_once" },
+        { optionId: "allow-auftrag", name: "Für Auftrag", kind: "allow_always" },
+        { optionId: "allow-task", name: "Für Task", kind: "allow_always" },
         { optionId: "reject-once", name: "Ablehnen", kind: "reject_once" },
       ];
+  const grantMeta = {
+    requires_grant: Boolean(pending?.requires_grant) || !elevated,
+    outside_task: Boolean(pending?.outside_task),
+    hint: pending?.hint || "",
+    suggested: pending?.suggested || {},
+    grant_scopes: pending?.grant_scopes || ["once", "auftrag", "task"],
+    staged_count: pending?.staged_count || 0,
+  };
   try {
     const res = await client.request(acp.methods.client.session.requestPermission, {
       sessionId,
@@ -440,7 +469,7 @@ async function askPermission(client, sessionId, pending) {
         title,
         kind: tool === "RunCommand" ? "execute" : "edit",
         status: "pending",
-        rawInput: pending?.args || {},
+        rawInput: { ...(pending?.args || {}), _grant: grantMeta },
         content: preview
           ? [{ type: "content", content: { type: "text", text: preview } }]
           : undefined,
@@ -451,13 +480,15 @@ async function askPermission(client, sessionId, pending) {
     if (!outcome) return { allowed: false };
     if (outcome.outcome === "cancelled") return { allowed: false };
     if (outcome.outcome === "selected") {
-      const id = String(outcome.optionId || "");
-      // Elevated: Session-Always ignorieren (Ernsthaftigkeit)
-      const always =
-        !elevated && (id === "allow-always" || id === "allow_always");
-      const once =
-        id === "allow-once" || id === "allow_once" || always;
-      return { allowed: once, always };
+      const parsed = parseGrantOptionId(outcome.optionId);
+      if (elevated) {
+        return {
+          allowed: parsed.allowed && parsed.scope === "once",
+          scope: "once",
+          spec: null,
+        };
+      }
+      return parsed;
     }
     return { allowed: false };
   } catch {
@@ -527,8 +558,7 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
       () => idle.arm(),
     );
 
-    // CODE: Genehmigungsschleife — primär Elevated Shell (Write unter r+w ohne Popup).
-    // guard 24: mehrere Elevated nacheinander möglich.
+    // CODE: Genehmigungsschleife — Write/Shell brauchen Grant (kein Session-Always).
     let guard = 0;
     while (
       IS_CODE &&
@@ -544,47 +574,47 @@ app.onRequest(acp.methods.agent.session.prompt, async (ctx) => {
         elevated: false,
         risk: "",
       };
-      // pending from stream final may only have resume fields — merge elevated/risk
       if (final.pending) {
         pending.elevated = Boolean(final.pending.elevated);
         pending.risk = final.pending.risk || "";
         pending.preview = final.pending.preview || pending.preview;
         pending.tool = final.pending.tool || pending.tool;
         pending.args = final.pending.args || pending.args;
+        pending.requires_grant = Boolean(final.pending.requires_grant);
+        pending.outside_task = Boolean(final.pending.outside_task);
+        pending.hint = final.pending.hint || "";
+        pending.suggested = final.pending.suggested || {};
+        pending.grant_scopes = final.pending.grant_scopes;
+        pending.staged_count = final.pending.staged_count;
       }
-      const isElevated = Boolean(pending.elevated);
-      let allowed = false;
-      // Session-Always gilt nicht für Elevated (Ernsthaftigkeit)
-      if (store.allowWriteTools && !isElevated) {
-        allowed = true;
-        await streamStepChunk(
-          `⏹STEP⏹Permission · ${pending.tool} freigegeben (Session)`,
-          client,
-          sessionId,
-        );
-      } else {
-        idle.pause();
-        const decision = await askPermission(client, sessionId, pending);
-        idle.arm();
-        allowed = Boolean(decision?.allowed);
-        if (decision?.always && !isElevated) {
-          store.allowWriteTools = true;
-        }
-        await streamStepChunk(
-          allowed
-            ? `⏹STEP⏹Permission · ${pending.tool} freigegeben` +
-                (decision?.always && !isElevated ? " (Session ab jetzt)" : "")
-            : `⏹STEP⏹Permission · ${pending.tool} abgelehnt`,
-          client,
-          sessionId,
-        );
-      }
+      idle.pause();
+      const decision = await askPermission(client, sessionId, pending);
+      idle.arm();
+      const allowed = Boolean(decision?.allowed);
+      const why =
+        decision?.scope === "task"
+          ? "Task"
+          : decision?.scope === "auftrag"
+            ? "Auftrag"
+            : decision?.scope === "once"
+              ? "einmal"
+              : "";
+      await streamStepChunk(
+        allowed
+          ? `⏹STEP⏹Permission · ${pending.tool} freigegeben` +
+              (why ? ` (${why})` : "")
+          : `⏹STEP⏹Permission · ${pending.tool} abgelehnt`,
+        client,
+        sessionId,
+      );
       const resume = await streamChat(
         {
           message: "",
           mode: "code",
           resume_token: final.resume_token,
           allow_pending: allowed,
+          grant_scope: allowed ? decision.scope || "once" : undefined,
+          grant_spec: allowed ? decision.spec || undefined : undefined,
         },
         client,
         sessionId,

@@ -96,8 +96,6 @@ export function BindPanel({
     setPendingDetach(null);
   }, [items, selectedId]);
 
-  const selected = items.find((item) => item.id === selectedId) || null;
-
   async function onAttach(e) {
     e?.preventDefault?.();
     const raw = input.trim();

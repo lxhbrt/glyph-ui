@@ -36,7 +36,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Glyph · Plan & Aktivität",
         need: "optional",
-        desc: "Kalender-Icon: Tab Plan = wiederkehrende To-dos (täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte). Neue To-do erst 1× mit Plan-Freigabe (Skill einmal-job), dann hier. Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
+        desc: "Kalender-Icon: Tab Plan = übergebene Aufgaben (Zielkopf, Übernehmen) plus wiederkehrende To-dos (täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte). Neue To-do erst 1× mit Plan-Freigabe (Skill einmal-job), dann hier. Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
       },
       {
         cmd: "Wiki (i)",
@@ -287,7 +287,7 @@ const SHORT_HANDBOOK = [
       "**Grok Build:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
       "**^_Code / °_Agent:** Header-Pille oder Graph-Kopf → Host-URL, Direct-Key, OpenRouter-Key, Modell. Ohne Slash = Direct (`deepseek-v4-flash-vision-exp`), mit Slash = OpenRouter (`deepseek/deepseek-v4-flash-0731`).",
       "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒 · Kabel an/ab. SoT: `~/.glyph/vaults.json`.",
-      "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒 gesperrt. SoT: `~/.glyph/workspaces.json`.",
+      "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒. `r+w` = beschreibbar, nicht Auto-Write. SoT: `~/.glyph/workspaces.json`.",
       "**An/Ab** = Kabel durchtrennen, Eintrag bleibt.",
       "**Voice:** optional `XAI_API_KEY` (console.x.ai).",
       "Gespeichert lokal: `~/.glyph-ui/bindings.json` (nie committen).",
@@ -300,7 +300,7 @@ const SHORT_HANDBOOK = [
       "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, Refresh, **Buch** (Handbuch · UI-Legende).",
       "Header links: Glyph #N · Term · ACP. cwd nicht in der Zeile (Tooltip / Workspace-Button). Rechts: Profil · Modell-Pille (eingesetztes Modell, nicht Primary→Reserve) · Kette · **Zusammenfassen** (aktive Session).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
-      "Unten: **Arbeitsleiste** (Plan · Ordner · Zusammenfassen) über der LVL-Leiste · Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
+      "Unten: **Arbeitsleiste** (Plan · Ordner · Zusammenfassen · Aktiver Task) über der LVL-Leiste · Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
     ],
   },
   {
@@ -311,7 +311,7 @@ const SHORT_HANDBOOK = [
       ["Graph", "Direkt unter der Lupe · Köpfe um Glyph · Punkt → Legende"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
       ["Buch", "Handbuch · UI-Legende"],
-      ["Kalender", "Aktivitäts-Heatmap — Klick → Sessions des Tages"],
+      ["Kalender", "Plan: Aufgaben + To-dos · Aktivität: Heatmap (Grok)"],
       ["Wiki", "Wiki-Index (.md) in Obsidian / Standard-App"],
       ["Ordner", "Aktuellen Workspace (cwd) im Finder öffnen"],
       ["Theme", "Hell / Dunkel"],
@@ -353,7 +353,7 @@ const SHORT_HANDBOOK = [
       ["Überfressen", "Snack dick + X-Augen + Banner — Hänger, manuell neu starten"],
       ["Text + Enter", "Follow-up → Warteschlange (WARTE)"],
       ["Leer / Snack", "Soft-Stop (ACP-Cancel) im Kreis-Button"],
-      ["Arbeitsleiste", "Plan, Ordner-Suche, Zusammenfassen: Gold-Rand, Label, × — über der LVL-Leiste, nicht Bildmitte"],
+      ["Arbeitsleiste", "Plan, Ordner-Suche, Zusammenfassen, Aktiver Task: Gold-Rand, Label, × — über der LVL-Leiste, nicht Bildmitte. Freigabe bleibt eigenes Modal."],
       ["× / Leeren", "Queue-Eintrag bzw. ganze Queue löschen"],
       ["Neue Ausgabe ↓", "Wieder ans aktuelle Chat-Ende springen"],
     ],
@@ -389,6 +389,26 @@ const SHORT_HANDBOOK = [
       "**Aufräumen:** Lupe → Schließen → Ja + Wiki, oder **Löschen** (/delete).",
       "**Aktivität:** Kalender → Tag → Sessions.",
       "**Neues Thema:** Stift (/new, Disk bleibt) oder Fork (Abzweig mit Verlauf).",
+      "**Aufgabe übergeben:** Kette an der Antwort → Plan. **Übernehmen** in den Composer, kein Auto-Kopfwechsel.",
+    ],
+  },
+  {
+    id: "grant",
+    title: "Freigabe (^_Code)",
+    body: [
+      "`r+w` heißt Workspace beschreibbar — nicht dauerhaft schreiben ohne Nachfrage.",
+      "Dialog: **Einmal** · **Für Auftrag** · **Für Task**. Kein „immer“, kein „Für diese Session“. Elevated Shell nur Einmal/Ablehnen.",
+      "**Aktiver Task** in der Arbeitsleiste: Name, Pfade, Restzeit, **Widerrufen**. Preview: `?grant=demo` · `?task=demo`.",
+      "Tool-Karte: *Warum erlaubt?* — einmal, Auftrag oder Task-Name.",
+    ],
+  },
+  {
+    id: "aufgaben",
+    title: "Aufgaben (Übergabe)",
+    body: [
+      "Kette an einer Antwort: Titel, optionales Ziel, Notiz. Nur diese Belege — nie die ganze Session.",
+      "Liegt unter **Plan**. Zielkopf Default leer, später zuweisen. **Übernehmen** → Composer.",
+      "Aufgabe ≠ Task-Freigabe, ≠ wiederkehrendes To-do.",
     ],
   },
   {

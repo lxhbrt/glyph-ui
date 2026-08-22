@@ -13,27 +13,27 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | Node | Tut | Quellen (Einstieg) | Hängt an |
 |------|-----|--------------------|----------|
 | **Bridge** | Browser ↔ WebSocket ↔ ACP stdio (`grok agent` / glyph-agent-acp). Zwei Sitze: `desk` · `phone`. | `server/index.js`, `server/seats.js`, `server/glyph-agent-acp.mjs`, `server/acpIdle.mjs` | Sessions, Agents |
-| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel. Header-Unterzeile: Term · ACP (Handy nur am Sitz phone). cwd nicht in der Zeile — Tooltip auf Glyph #N + Workspace-Button. | `client/src/App.jsx`, `client/src/main.jsx` | Bridge-Events |
+| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel. Header-Unterzeile: Term · ACP (Handy nur am Sitz phone). cwd nicht in der Zeile — Tooltip auf Glyph #N + Workspace-Button. Verlauf: letzte 40 Nachrichten im DOM, ältere per Button. Graph / Buch / Kalender lazy. | `client/src/App.jsx`, `client/src/main.jsx`, `client/src/utils/messages.js` (`transcriptWindow`) | Bridge-Events |
 | **Palette / Type** | Eine Gold-Hex, eine Danger-Hex, Neutrals via `color-mix`; IBM Plex; Type-Scale fest | `client/src/styles.css` (`:root`) | Client-Shell |
 | **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende. Über Soft-Cap (Grok): **Zusammenpressen** → `/compact`. | `ContextLvlBar.jsx` | Client-Shell |
-| **Arbeitsleiste** | Angedockte Fläche über der LVL-Leiste: Plan, Ordner-Suche, Zusammenfassen. Gleiches Chrome (Label · Zähler · ×). Kein Mitte-Modal. | `ComposerSheet.jsx`, `PlanBar.jsx`, `VaultSearchHits.jsx`, `SummarizeDialog.jsx` | Client-Shell |
-| **Tool-Karte** | Aufklappbare ACP-Toolzeile (Verb + Ziel, Diff/Ausgabe nach Klick) | `client/src/components/ToolCard.jsx`, `client/src/utils/toolCard.js`, `server/toolTitle.mjs` | Bridge `type: tool` |
+| **Arbeitsleiste** | Angedockte Fläche über der LVL-Leiste: Plan, Ordner-Suche, Zusammenfassen, **Aktiver Task**. Gleiches Chrome (Label · Zähler · ×). Kein Mitte-Modal. | `ComposerSheet.jsx`, `PlanBar.jsx`, `VaultSearchHits.jsx`, `SummarizeDialog.jsx` | Client-Shell |
+| **Tool-Karte** | Aufklappbare ACP-Toolzeile (Verb + Ziel, Diff/Ausgabe nach Klick). ^_Code: *Warum erlaubt?* | `client/src/components/ToolCard.jsx`, `client/src/utils/toolCard.js`, `server/toolTitle.mjs` | Bridge `type: tool` |
 | **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen. Modus **Chat · Deep Search · Fork · Swarm**: Fork = `x.ai/session/fork` dann ACP `session/fork`; Deep Search = Grok `/deep-research` (andere Köpfe ausgegraut); Swarm = °_Agent/^_Code `POST /chat` `swarm: true`. | `client/src/App.jsx`, `shared/composerActions.mjs`, `server/glyph-agent-acp.mjs` | Bridge |
 | **Ordner-Suche** | °_Agent: Pixel-Apfel über ↵ (rot, ohne extra Höhe). Aus = keine Vault-Suche. An → `/api/vault/find`, Treffer in der Arbeitsleiste, Default aus, nur aktivierte in den Kontext. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
 | **Sessions** | Session-Liste, Überblick, Summaries, **Name** (`/rename`) | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
 | **Rewind** | Nutzer-Turn und alles danach aus dem Verlauf. Esc Esc, `/rewind`, ↺ an der Nachricht. Dateien bleiben. | `shared/rewind.mjs`, `RewindPicker.jsx`, Bridge `type: rewind` | Sessions, Bridge |
 | **Prompt-History** | ↑ auf leerem Composer: letzte Prompts (lokal, pro Profil) | `utils/promptHistory.js`, `PromptHistoryPopup.jsx` | Composer |
-| **Bindings** | API-Keys / OAuth-Status + Kabelplan (hängende Kabel) | `server/bindings.js`, `BindingsPanel.jsx`, `utils/cables.js` | `~/.glyph-ui/bindings.json` |
-| **Graph** | Vollfenster pechschwarz. Grok/Agent/Code = Snake-Köpfe um Glyph; Vaults/Roots = Punkte. Klick → Legende. | `CableLage.jsx`, `GraphLegend.jsx`, `utils/lageLayout.js`, `utils/bindingsModels.js` | Bindings, Vaults, Workspaces |
+| **Bindings** | Keys/Host/Modell: zweites Blatt **Anbindung** in der Graph-Legende (nicht die erste Fläche). Polling der Pille: GET `/api/bindings`; POST `/api/models/apply` nur bei Verbindung, Speichern oder mismatch-Klick. | `server/bindings.js`, `GraphLegend.jsx` (`CloudBind`), `utils/bindingsModels.js` | `~/.glyph-ui/bindings.json` |
+| **Graph** | Vollfenster pechschwarz. Modal: Fokusfalle, Rail/Chat `inert`. Aktiver Kopf hervorgehoben. Vaults/Workspaces erst beim Öffnen. Ab 8 Ordnern Suche + „Nur verbunden“. Klick → kompakte Legende (Status, Rechte, Nachbarn); Keys hinter Anbindung. | `CableLage.jsx`, `GraphLegend.jsx`, `utils/lageLayout.js`, `utils/focusTrap.js` | Bindings, Vaults, Workspaces |
 | **BindPanel** | Kompakt-Liste im Buch (Fallback) | `BindPanel.jsx`, `useBindResource.js` | Vaults-UI, Workspaces-UI |
 | **Vaults-UI** | Kabelsalat °_Agent | `VaultsPanel.jsx` → Proxy `/api/…` | **glyph-agent** `/vaults` |
 | **Workspaces-UI** | Kabelsalat ^_Code | `WorkspacesPanel.jsx` → `/api/workspaces` | **glyph-agent** `/workspaces` |
-| **Plan / Recurring** | Kalender-Tab Plan | `server/plan.js`, `PlanBar.jsx` | glyph-agent `/recurring`; Skill `einmal-job` |
+| **Plan / Recurring** | Kalender-Tab Plan: **Aufgaben** (Übergabe) + wiederkehrende To-dos. Panel lazy. | `ActivityCalendar.jsx`, `TaskHandoffDialog.jsx`, `server/index.js` (`/api/tasks`) | glyph-agent `/tasks`, `/recurring`; Skill `einmal-job` |
 | **Domain-SoT** | Begriffe + settled decisions | **diese** `CONTEXT.md`, `docs/adr/` | `~/.glyph/AGENTS.md` |
 
 **Nicht hier:** Vault-Inhalte, HSEQ-Jobs, Embedding — das ist `glyph-agent`.
 
-**Crux (häufige Bugs):** Write/Shell-Genehmigung und Workspace-Modi leben in **glyph-agent** (`code_loop` / `code_tools`), nicht in der UI. UI zeigt nur Popup/Banner. ACP-Bridge ≠ HTTP-API der Engine.
+**Crux (häufige Bugs):** Workspace-Recht und Freigaben leben in **glyph-agent** (`code_loop` / `code_tools`). UI zeigt Dialog, Aktiven Task und Banner — sie entscheidet nicht. `r+w` ist Capability, nicht Auto-Write. ACP-Bridge ≠ HTTP-API der Engine.
 
 **Session zusammenfassen → Skill:** Button **Zusammenfassen** im Header (rechts neben der Kette), sobald Agent verbunden + Session da; Grok zusätzlich in der Lupe. Vorschau in der **Arbeitsleiste** über der LVL-Leiste (kein Mitte-Modal). Beim Speichern (≥3 Nutzer-Turns) Workflow-Skill unter `~/.glyph/skills/<slug>/` (`source: session-summary`). Hand-Skills ohne Flag: nur `references/`. Opt-out in der Leiste. Titel = letzte substanzielle Nutzerzeile, nicht Test-Pings („TEST TEST TEST“). Code: `server/summaries.js` (`buildDraftFromTurns`) + `SummarizeDialog.jsx`.
 
@@ -76,8 +76,8 @@ Tastatur- und Maus-Navigation in einer listenbasierten UI: Filter, Hervorheben e
 _Avoid_: Focus (nur DOM-Fokus), Selection (Textauswahl)
 
 **Tool-Karte**:
-Eine aufklappbare Zeile im Chat für einen ACP-Tool-Aufruf: Verb + Ziel in der Zusammenfassung, Input/Diff/Ausgabe erst nach Klick. Fehlgeschlagene Tools öffnen sich selbst. Preview: `?toolcard=demo`.
-_Avoid_: Tool-Card (EN), Paper-Card, grok-build-web Disclosure
+Eine aufklappbare Zeile im Chat für einen ACP-Tool-Aufruf: Verb + Ziel in der Zusammenfassung, Input/Diff/Ausgabe erst nach Klick. Fehlgeschlagene Tools öffnen sich selbst. Bei ^_Code immer *Warum erlaubt?* — **einmal**, **Auftrag** oder **Task**-Name. Preview: `?toolcard=demo`.
+_Avoid_: Tool-Card (EN), Paper-Card, grok-build-web Disclosure; erlaubtes Tool ohne Scope-Hinweis
 
 **Ordner-Suche**:
 Manueller Vault-Zugriff im Profil **°_Agent**. Pixel-Apfel **über dem Senden-Button** (nicht zwischen + und Chat), ohne die Composer-Höhe zu erhöhen. Minecraft: roter Körper, brauner Stiel, grünes Blatt; inaktiv abgedunkelt; an = Gold-Outline + Puls. Standard aus — Agent antwortet ohne VaultFind/ListVaultDir. An: nächste Sendung sucht, Treffer in der **Arbeitsleiste** über der LVL-Leiste (nicht als Overlay über der Eingabe), nie im Chat-Verlauf, jedes Ergebnis startet aus; nur explizit an = in den Agent-Kontext. Zustand pro Session (`sessionStorage`). Jobs/Engine ohne Flag bleiben beim B+-Precheck. ACP sendet `vault_search` nur wenn mindestens ein Treffer aktiv ist. Vault leer → **KomNet** (`komnet.nrw.de`) einmal via Exa+TinyFish; ohne Treffer **DGUV** (`dguv.de`) ebenso. Kein HTML-Scrape, kein offenes Web.
@@ -96,8 +96,8 @@ Manueller Name einer Grok-Disk-Session (`title_is_manual`). Lupe: Button **Name*
 _Avoid_: Auto-Titel überschreiben ohne Flag
 
 **Arbeitsleiste**:
-Angedockte Fläche über der LVL-Leiste für laufende Arbeit am Composer: **Plan**, **Ordner-Suche**, **Zusammenfassen**. Ein Chrome (Gold-Rand, Label, Zähler, ×, optionale Primäraktion). Nicht Bildschirmmitte, nicht zweites Overlay-System. Freigabe-Modal (^_Code Write/Shell) bleibt eigenes Blocking-Modal.
-_Avoid_: Zusammenfassen als Vollbild-Dialog; Ordner-Suche als schwebendes Overlay; zweite Bildsprache für diese drei Flächen
+Angedockte Fläche über der LVL-Leiste für laufende Arbeit am Composer: **Plan**, **Ordner-Suche**, **Zusammenfassen**, **Aktiver Task**. Ein Chrome (Gold-Rand, Label, Zähler, ×, optionale Primäraktion). Nicht Bildschirmmitte, nicht zweites Overlay-System. Freigabe-Dialog (^_Code) bleibt eigenes Blocking-Modal.
+_Avoid_: Zusammenfassen als Vollbild-Dialog; Ordner-Suche als schwebendes Overlay; Freigabe als Leisten-Fläche; zweite Bildsprache für diese Flächen
 
 **Plan-Freigabe**:
 Aktionen an der Plan-Leiste (Arbeitsleiste), solange jeder Eintrag `pending` ist: **Umsetzen** sendet den Auftrag, **Ändern** fokussiert den Composer. Kein TUI-Plan-Modus (`plan.md` / Approve-Preview).
@@ -136,24 +136,60 @@ UI-Label des grok-Profils (id bleibt **`grok`**). Die Grok-Build-CLI, nicht Grok
 _Avoid_: Dropdown-/Pille-/Graph-Label „Grok“ (ergibt „Grok Grok“)
 
 **Anbindung**:
-Keys, Host-URL und Modelle unter `~/.glyph-ui/bindings.json`. Header-Pille öffnet den **Graph** auf dem aktiven Kopf. Pille zeigt nur das **eingesetzte** Modell (Kürzel) — Primary→Reserve bleibt Graph/Tooltip. °_Agent / ^_Code-Legende setzt Direct-Key, OpenRouter-Key, Host (`DIRECT_API_URL`) und Modell (ohne Slash = Direct-ID, mit Slash = OpenRouter-Slug). **Schreiben gilt sofort** am laufenden Agent — kein Kickstart, kein zweites Terminal. Schlägt der Live-Push fehl, steht das als Fehler, nicht als „Gespeichert“. Ein Direct-Key für beide Köpfe. Grok-OAuth bleibt Terminal (`grok login`).
+Keys, Host-URL und Modelle unter `~/.glyph-ui/bindings.json`. Header-Pille öffnet den **Graph** auf dem aktiven Kopf und das Blatt **Anbindung**. Pille zeigt nur das **eingesetzte** Modell (Kürzel) — Primary→Reserve bleibt Graph/Tooltip. °_Agent / ^_Code: Direct-Key, OpenRouter-Key, Host (`DIRECT_API_URL`) und Modell (ohne Slash = Direct-ID, mit Slash = OpenRouter-Slug) hinter **Anbindung**, nicht auf der ersten Graph-Fläche. **Schreiben gilt sofort** am laufenden Agent — kein Kickstart, kein zweites Terminal. Schlägt der Live-Push fehl, steht das als Fehler, nicht als „Gespeichert“. Ein Direct-Key für beide Köpfe. Grok-OAuth bleibt Terminal (`grok login`).
 _Avoid_: Settings (zu generisch), Login-Dialog (impliziert eingebettetes OAuth), Kalender (nur Grok-Aktivität, oft disabled)
 
 **Graph**:
-Vollfenster, pechschwarz, kein Bild — auch im hellen App-Theme. Mitte = Glyph-Symbol. Köpfe = Snake-Pixel Grok Build / °_Agent / ^_Code, radial (Grok Build oben, Agent links, Code rechts). Klick Kopf → rutscht in die Mitte, zeigt Abhängigkeiten. Ordner (Vaults, Roots) = Kreise; Favorit und aktuell gewählter Ordner = Goldstern (*). Rechte am Knoten: ungebunden = eine Stufe dunkler, keine Linie; lesen = Standardkreis + vier kurze Striche; privat = eine Stufe dunkler + Punkte. Jeder Ordner darf an jeden Kopf, jede Kante eigene Rechte (`heads`: lesen / schreiben / privat / ungebunden). Grok Build startet offen (schreiben), außer Privat — einschränken, nicht erst freigeben. Kanten: Glyph↔Köpfe = Achse (dünn, ~40 % Opacity). Rechte: schreiben solid, lesen gestrichelt, privat gepunktet — pro Kopf. Auswahl eines Ordners: nur dessen Rechte-Kanten voll, Rest stark gedimmt. Klick Knoten: Name + Nachbarn; Legende setzt Rechte pro Kopf. Labels nur Hover/Selektion. `?graph=`.
-_Avoid_: Lage, Gefäß, Tunnel-Foto, Tafel-Chips, hängende Kabel; ein Kopf pro Ordner; Kreis für den Favoriten
+Vollfenster, pechschwarz, kein Bild — auch im hellen App-Theme. Modal: Tab bleibt im Graph; Rail und Chat `inert`. Mitte = Glyph-Symbol. Köpfe = Snake-Pixel Grok Build / °_Agent / ^_Code, radial (Grok Build oben, Agent links, Code rechts). Der aktive UI-Kopf ist hervorgehoben (`aria-current`). Klick Kopf → rutscht in die Mitte, zeigt Abhängigkeiten. Erste Legende: Status, Nachbarn, Rechte, An-/Abbindung. Keys/Host/Modell = Blatt **Anbindung**. Ordner (Vaults, Roots) = Kreise; Favorit und aktuell gewählter Ordner = Goldstern (*). Rechte am Knoten: ungebunden = eine Stufe dunkler, keine Linie; lesen = Standardkreis + vier kurze Striche; privat = eine Stufe dunkler + Punkte. Jeder Ordner darf an jeden Kopf, jede Kante eigene Rechte (`heads`: lesen / schreiben / privat / ungebunden). Grok Build startet offen (schreiben), außer Privat — einschränken, nicht erst freigeben. Kanten: Glyph↔Köpfe = Achse (dünn, ~40 % Opacity). Rechte: schreiben solid, lesen gestrichelt, privat gepunktet — pro Kopf; Kanten-Legende sichtbar im Feld. Auswahl eines Ordners: nur dessen Rechte-Kanten voll, Rest stark gedimmt. Labels nur Hover/Selektion; voller Name in der Legende und als `title`. Ab 8 Ordnern: Suche + Filter „Nur verbunden“. Vaults/Workspaces laden erst beim Öffnen. `?graph=`.
+_Avoid_: Lage, Gefäß, Tunnel-Foto, Tafel-Chips, hängende Kabel; ein Kopf pro Ordner; Kreis für den Favoriten; Keys/Modelle als erste Graph-Fläche
 
 **Plan & Aktivität (Tafel-Symbol)**:
-Kalender-Icon, Tabs Plan / Aktivität. In der Leiste: nur die Zeichen (und die Tafel-Linie) in `currentColor` — Dunkel grau/weiß, Hell schwarz/grau, wie Lupe und Buch. Keine gefüllte Platte.
-_Avoid_: gelbe/schwarze Tafel-Füllung in der Leiste
+Kalender-Icon, Tabs Plan / Aktivität. Plan: übergebene **Aufgaben** (Zielkopf optional, Übernehmen in den Composer) plus wiederkehrende To-dos. In der Leiste: nur die Zeichen (und die Tafel-Linie) in `currentColor` — Dunkel grau/weiß, Hell schwarz/grau, wie Lupe und Buch. Keine gefüllte Platte.
+_Avoid_: gelbe/schwarze Tafel-Füllung in der Leiste; Aufgabe = Recurring-To-do; Aufgabe = Task-Freigabe
 
 **Workspaces (Kabelsalat)**:
-Tab im **Buch**-Panel: Code-Roots anbinden/lösen, Rechte r · r+w · 🔒, Primär★. SoT `~/.glyph/workspaces.json` via glyph-agent `/workspaces` und UI-Proxy `/api/workspaces`. Analog **Vaults**. Mehrfach-Anbindung (`heads` je Kopf) lebt im **Graph**; Buch-Tab setzt weiter das Heim-Recht (Code bzw. Agent).
-_Avoid_: Vaults-Tab (Obsidian/°_Agent), Finder-„Workspace“-Leistenbutton (nur cwd öffnen)
+Tab im **Buch**-Panel: Code-Roots anbinden/lösen, **Workspace-Recht** r · r+w · 🔒, Primär★. SoT `~/.glyph/workspaces.json` via glyph-agent `/workspaces` und UI-Proxy `/api/workspaces`. Analog **Vaults**. Mehrfach-Anbindung (`heads` je Kopf) lebt im **Graph**; Buch-Tab setzt weiter das Heim-Recht (Code bzw. Agent). `r+w` heißt beschreibbar, nicht auto-schreiben.
+_Avoid_: Vaults-Tab (Obsidian/°_Agent), Finder-„Workspace“-Leistenbutton (nur cwd öffnen); r+w = Dauerberechtigung
+
+**Workspace-Recht**:
+Stehende Capability eines angebundenen Roots für einen Kopf: **ungebunden**, **r**, **r+w**, **privat**. Formel: Recht + zeitlich begrenzte **Freigabe** = Aktion. `r` = lesen/Grep/Liste/Diff. `r+w` = lesen und Apply grundsätzlich möglich, Apply trotzdem nur mit Freigabe. `privat` = für ^_Code unsichtbar. Ungebunden = kein Zugriff. Kein allgemeines `w` im Kabelsalat; Schreiben-ohne-Lesen höchstens später als Spezialrecht für Ausgabeordner.
+_Avoid_: r+w = Write ohne Dialog; Session-Always; `w` als Klickzyklus; Recht als Berechtigung für git/Netzwerk/Install
+
+**Freigabe**:
+Zeitlich begrenzte Erlaubnis, eine konkrete Aktion oder einen **Änderungssatz** anzuwenden. Drei Stufen: **Einmal**, **Auftrag**, **Task**. Nie „immer“. Dialog bleibt Blocking-Modal (Diff, Pfad, Umfang, Kommando). Task-Freigabe: Scope im Dialog editierbar (Pfade, Aktionsklassen). Widerruf jederzeit am **Aktiven Task**. Preview: `?grant=demo`.
+_Avoid_: Grant in UI-Text; Genehmigung (außer Altcode); „Für diese Session erlauben“; Session-Always; Immer-erlauben
+
+**Einmal**:
+Freigabe-Stufe für genau diese eine Dateiänderung, diesen einen Befehl oder diesen einen vorgelegten **Änderungssatz**. Danach tot.
+_Avoid_: Allow-once als versteckte Session-Freigabe
+
+**Auftrag**:
+Eine Nutzeranweisung bzw. ein Änderungssatz („Ersetze die alte Toolkarte“). Freigabe gilt nur solange dieser Auftrag läuft: Workspace, erlaubte Pfade, Aktionsklassen, Testbefehle. Endet bei Abschluss, Abbruch, Fehler oder Zeitlimit.
+_Avoid_: Job (SoT-Jobs = Recurring/To-do); Turn; Session; Chat als Scope
+
+**Task**:
+Explizit benannte Arbeit („Baue die Codex-Bridge ein“), nicht die Chat-Session. Freigabe hängt an Name, Workspace, Pfaden und Aktionsklassen. Sichtbar als **Aktiver Task**, jederzeit widerrufbar. Nur **explizit** schließen (oder Workspace-Wechsel, Widerruf, 2h Inaktivität). Ein neuer Prompt startet keinen neuen Task. Aktion außerhalb des Scopes → Grant greift nicht; Hinweis, neuen Task zu starten oder den aktuellen abzuschließen.
+_Avoid_: Session-Freigabe; Chat-weit; Immer; Recurring-To-do; Prompt-Themenklassifikation; mit **Aufgabe** (Übergabe) verwechseln
+
+**Aufgabe**:
+Manuell übergebene Arbeit zwischen Köpfen. Kette an einer Antwort → Titel, optionales Ziel, Notiz. Glyph speichert nur die gewählten Belege (Meldung, Antwort, kompakter Trace, Anhang-Pfade) in `~/.glyph/tasks.json` — nie die ganze Session, nie Vault-Inhalt. Zielkopf Default leer; später im Plan zuweisen. **Übernehmen** legt den Startkontext in den Composer. Kein automatischer Kopfwechsel.
+_Avoid_: Analyse als Kopf; ganze Session übertragen; Recurring-To-do; Task-Freigabe; Auto-Switch des Profils
+
+**Aktiver Task**:
+Feld in der Arbeitsleiste: Name, Workspace, Restzeit, erlaubte Pfade/Aktionen, **Widerrufen**. Zeigt den stehenden Scope; ersetzt nicht den Freigabe-Dialog. Preview: `?task=demo`.
+_Avoid_: Freigabe-Modal als einzige Anzeige; Session-Badge; × ohne Widerruf-Label (Grant würde still enden)
+
+**Änderungssatz**:
+Mehrere Dateiänderungen, gesammelt, als ein Gesamt-Diff gezeigt, nach Freigabe atomar angewendet. Einmal auf einen Satz = den ganzen Satz einmal, nicht Datei für Datei. Live-Diff pro Task, nicht nur Einzeldatei.
+_Avoid_: Apply ohne Gesamt-Diff; Teil-Apply nach Sammel-Freigabe
+
+**Aktionsklasse**:
+Art einer Aktion, die eine Freigabe decken darf: Dateiänderung, Test, git_commit, Netzwerk, Paketinstall, Deploy. Nicht in `r+w` enthalten. `git commit` immer mit Diff + expliziter Freigabe; `git push`/Deploy/Remote immer einzeln; `npm install`/`npx` immer explizit; Netzwerk eigenes Popup mit Zielhost.
+_Avoid_: Shell-Whitelist als Berechtigung; git commit unter r+w ohne Dialog
 
 **^_Code**:
-Code-Profil (id `_code`): Workspace-Tools, Genehmigung in Glyph. Direct `deepseek-v4-flash-vision-exp` für Text und Screenshots, Reserve OpenRouter `deepseek/deepseek-v4-flash-0731`. Dieselbe ACP-Brücke wie `°_Agent` mit `GLYPH_AGENT_MODE=code`.
-_Avoid_: Claude-Profil, Anthropic-OAuth; Gemini als ^_Code-Default; Bild-Hop auf ein zweites Modell
+Code-Profil (id `_code`): Workspace-Tools, Freigabe in Glyph. Direct `deepseek-v4-flash-vision-exp` für Text und Screenshots, Reserve OpenRouter `deepseek/deepseek-v4-flash-0731`. Dieselbe ACP-Brücke wie `°_Agent` mit `GLYPH_AGENT_MODE=code`.
+_Avoid_: Claude-Profil, Anthropic-OAuth; Gemini als ^_Code-Default; Bild-Hop auf ein zweites Modell; r+w als Schreib-Dauerrecht
 
 **°_Agent**:
 UI-Label des Vault/Tools-Profils (id bleibt **`glyph-agent`**). Bindet die lokale Engine `~/glyph-agent` an (Vault/Tools + Cloud-Antwort). Engine-Vokabular lebt in `glyph-agent/CONTEXT.md`.
@@ -226,3 +262,28 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - Zusammenfassen: kein Mitte-Modal. Header (aktive Session) und Lupe (andere Grok-Sessions) docken dieselbe Leiste; Lupe schließt vorher.
 - Freigabe Write/Shell bleibt Blocking-Modal (unterbricht). Slash-Popup / Rewind / Lupe selbst bleiben eigene Flächen.
 - Kein ADR — CONTEXT reicht.
+
+### ^_Code Freigabe (2026-08-22)
+
+- Formel: **Workspace-Recht + konkrete, zeitlich begrenzte Freigabe = Aktion.**
+- `r+w` = Workspace beschreibbar. Nicht: ^_Code schreibt dauerhaft ohne Nachfrage.
+- Kein `w` im Kabelsalat. Schreiben-ohne-Lesen nur später als Ausgabeordner-Spezialrecht.
+- Freigabe-Dialog: **Einmal** · **Für Auftrag** · **Für Task**. Kein „immer“, kein „Für diese Session“.
+- Task nur explizit schließen. Prompt außerhalb Scope → kein Grant, Hinweis statt Themenklassifikation.
+- Einmal = gesamter vorgelegter Änderungssatz (ein Diff, eine Freigabe, transaktional). Nächste Agentenidee = neuer Satz.
+- Task-Freigabe: Scope im Dialog editierbar (Pfade, Aktionsklassen, Testbefehle; ohne Netzwerk/Install/Commit außer explizit).
+- Arbeitsleiste: **Aktiver Task** (Name, Workspace, Restzeit, Pfade/Aktionen, Widerrufen).
+- Tool-Karte: *Warum erlaubt?*
+- Änderungssatz: Gesamt-Diff, atomarer Apply, danach Tests, kein Auto-Commit.
+- Engine-Policy: `glyph-agent` CONTEXT + ADR `docs/adr/0001-task-scoped-grants.md`. UI: ADR `docs/adr/0003-task-scoped-grants.md`.
+- Reihenfolge danach (nicht dieser Schnitt): Plan vor Änderungen → Task-Freigaben → Gesamt-Diff/Test-Gate → Git (Branch/Worktree, Commit nur explizit) → optionale isolierte Worktrees → Audit pro Task.
+- Hebt auf: Phase-1 „Write flüssig unter r+w“ und ACP-Option „Für diese Session erlauben“.
+
+### Aufgabe / Übergabe (2026-08-22)
+
+- Aufgabe ≠ Task-Freigabe, ≠ Recurring-To-do.
+- SoT `~/.glyph/tasks.json` (glyph-agent `/tasks`, UI-Proxy `/api/tasks`).
+- Zielkopf optional; Default leer. Köpfe: Grok Build, ^_Code, °_Agent, Codex Build. **Kein** Kopf Analyse — Analyse bleibt Status.
+- Ketten-Button an der Antwort: speichern, dann Übernehmen in den Composer oder später im Plan zuweisen.
+- MVP: kein automatischer Kopfwechsel, kein autonomes Weiterarbeiten.
+- Belege ohne Blobs/Preview-URLs. Stale Engine (404 `/tasks`) → Hinweis, glyph-agent neu zu starten.

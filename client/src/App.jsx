@@ -3,14 +3,12 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AssistantText } from "./components/AssistantText.jsx";
 import { AssistantMeta } from "./components/AssistantMeta.jsx";
 import { PlanBar } from "./components/PlanBar.jsx";
 import { ContextLvlBar } from "./components/ContextLvlBar.jsx";
 import { SnackBoard } from "./components/Snack.jsx";
-import { CommandLegend } from "./components/CommandLegend.jsx";
-import { CableLage, GraphGuard } from "./components/CableLage.jsx";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
 import { SlashPopup } from "./components/SlashPopup.jsx";
@@ -20,7 +18,7 @@ import { SlashHighlightedText } from "./components/SlashHighlightedText.jsx";
 import { VaultSearchToggle } from "./components/VaultSearchToggle.jsx";
 import { VaultSearchHits } from "./components/VaultSearchHits.jsx";
 import { SummarizeDialog } from "./components/SummarizeDialog.jsx";
-import { ActivityCalendar } from "./components/ActivityCalendar.jsx";
+import { TaskHandoffDialog } from "./components/TaskHandoffDialog.jsx";
 import {
   insertSlashCommand,
   rankCatalog,
@@ -79,7 +77,19 @@ import {
   scrollMetrics,
 } from "./utils/contextMeter.js";
 import { ToolCard } from "./components/ToolCard.jsx";
-import { formatToolText, upsertToolMessage } from "./utils/messages.js";
+import { PermissionDialog } from "./components/PermissionDialog.jsx";
+import { ActiveTaskBar } from "./components/ActiveTaskBar.jsx";
+import { GRANT_DEMO_REQ, TASK_DEMO } from "./utils/codeGrants.js";
+import {
+  TRANSCRIPT_WINDOW,
+  formatToolText,
+  transcriptWindow,
+  upsertToolMessage,
+} from "./utils/messages.js";
+import {
+  isCloudModelProfile,
+  modelHudFromBindings,
+} from "./utils/bindingsModels.js";
 import {
   isToolRunning,
   isToolTerminal,
@@ -109,6 +119,23 @@ import {
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
 import { GLYPH_BUILD, GLYPH_VERSION } from "./version.js";
 
+const CableLage = lazy(() =>
+  import("./components/CableLage.jsx").then((m) => ({ default: m.CableLage })),
+);
+const GraphGuard = lazy(() =>
+  import("./components/CableLage.jsx").then((m) => ({ default: m.GraphGuard })),
+);
+const CommandLegend = lazy(() =>
+  import("./components/CommandLegend.jsx").then((m) => ({
+    default: m.CommandLegend,
+  })),
+);
+const ActivityCalendar = lazy(() =>
+  import("./components/ActivityCalendar.jsx").then((m) => ({
+    default: m.ActivityCalendar,
+  })),
+);
+
 /** Busy + no thought/answer/tool for this long → snack “overate” (X_X). */
 const SNACK_STALE_MS = 120_000;
 /** Grok context poll while a turn is running (signals.json lag). */
@@ -135,6 +162,8 @@ export default function App() {
   const [seat, setSeat] = useState(() => resolveSeat());
   /** Arbeitsleiste: Session zusammenfassen ({ id, title } oder null). */
   const [summarizeTarget, setSummarizeTarget] = useState(null);
+  /** Ausgewählter Beleg für eine gemeinsame Kopf-zu-Kopf-Aufgabe. */
+  const [taskHandoff, setTaskHandoff] = useState(null);
   const [cwd, setCwd] = useState("");
   /**
    * Active ACP agent + the catalog to switch between. Capabilities decide
@@ -145,9 +174,35 @@ export default function App() {
   const [agentSwitching, setAgentSwitching] = useState(false);
   /** Model badge (Code/Agent): profile primary, overridden by this session's last trace. */
   const [modelHud, setModelHud] = useState(null);
-  /** ^_Code: Write/Shell-Genehmigung aus dem Bridge-Server */
-  const [permissionReq, setPermissionReq] = useState(null);
+  /** ^_Code: Write/Shell-Freigabe aus dem Bridge-Server (`?grant=demo`). */
+  const [permissionReq, setPermissionReq] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return new URLSearchParams(window.location.search).get("grant") === "demo"
+        ? GRANT_DEMO_REQ
+        : null;
+    } catch {
+      return null;
+    }
+  });
+  /** ^_Code: aktiver Task-Grant (Arbeitsleiste). `?task=demo`. */
+  const [activeTask, setActiveTask] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return new URLSearchParams(window.location.search).get("task") === "demo"
+        ? TASK_DEMO
+        : null;
+    } catch {
+      return null;
+    }
+  });
+  const refreshActiveTaskRef = useRef(() => {});
   const [messages, setMessages] = useState([]);
+  /** Extra older transcript rows mounted beyond TRANSCRIPT_WINDOW. */
+  const [transcriptRevealed, setTranscriptRevealed] = useState(0);
+  useEffect(() => {
+    setTranscriptRevealed(0);
+  }, [sessionId]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   /** Ready attachments for the next send (after POST /api/attachments). */
@@ -278,7 +333,15 @@ export default function App() {
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
   const composerRef = useRef(null);
-  const [showCalendar, setShowCalendar] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const q = new URLSearchParams(window.location.search);
+      return q.has("plan") || q.has("cal");
+    } catch {
+      return false;
+    }
+  });
   const [cancelling, setCancelling] = useState(false);
   /**
    * Hang signal: busy but no thought/answer/tool chunks for a while.
@@ -317,13 +380,6 @@ export default function App() {
       return "eve";
     }
   });
-  const [voiceList, setVoiceList] = useState([
-    { voice_id: "eve", name: "Eve" },
-    { voice_id: "ara", name: "Ara" },
-    { voice_id: "rex", name: "Rex" },
-    { voice_id: "sal", name: "Sal" },
-    { voice_id: "leo", name: "Leo" },
-  ]);
   const [sttLanguage] = useState(() => {
     try {
       return localStorage.getItem("gbt-stt-lang") || "de";
@@ -423,7 +479,6 @@ export default function App() {
             const vr = await fetch("/api/tts/voices");
             const vj = await vr.json();
             if (!cancelled && Array.isArray(vj.voices) && vj.voices.length) {
-              setVoiceList(vj.voices);
               const ids = new Set(vj.voices.map((v) => v.voice_id));
               setVoiceId((cur) => {
                 if (ids.has(cur)) return cur;
@@ -747,6 +802,7 @@ export default function App() {
 
   const wsRef = useRef(null);
   const listRef = useRef(null);
+  const pendingOlderScrollRef = useRef(null);
   /** Inner content wrapper — ResizeObserver keeps stick-to-bottom while streaming grows. */
   const messagesContentRef = useRef(null);
   const assistantBuf = useRef("");
@@ -1355,6 +1411,7 @@ export default function App() {
           setCancelling(false);
           lastActivityRef.current = Date.now();
           setSnackStuffed(false);
+          void refreshActiveTaskRef.current();
           // Auto-send next parked follow-up only after the turn truly ended
           scheduleDrainQueue();
           return;
@@ -1367,6 +1424,7 @@ export default function App() {
             kind: msg.kind || "other",
             preview: msg.preview || "",
             options: Array.isArray(msg.options) ? msg.options : [],
+            grant: msg.grant || null,
           });
           return;
         }
@@ -1662,6 +1720,83 @@ export default function App() {
     if (text && att) return `${text}\n${att}`;
     return text || att || "";
   }, []);
+
+  const refreshActiveTask = useCallback(async () => {
+    if (typeof window !== "undefined") {
+      try {
+        if (new URLSearchParams(window.location.search).get("task") === "demo") {
+          setActiveTask(TASK_DEMO);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    const id = agent?.id;
+    if (id !== "_code" && id !== "code") {
+      setActiveTask(null);
+      return;
+    }
+    try {
+      const r = await fetch("/api/code/grants");
+      const json = await r.json().catch(() => ({}));
+      setActiveTask(json?.active_task || null);
+    } catch {
+      /* Grant-Leiste ist Best effort */
+    }
+  }, [agent?.id]);
+  refreshActiveTaskRef.current = refreshActiveTask;
+
+  useEffect(() => {
+    void refreshActiveTask();
+  }, [refreshActiveTask]);
+
+  const revokeActiveTask = useCallback(async () => {
+    const gid = activeTask?.grant_id;
+    if (gid === "demo") {
+      setActiveTask(null);
+      return;
+    }
+    try {
+      if (gid) {
+        await fetch(`/api/code/grants/${encodeURIComponent(gid)}/revoke`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+      } else {
+        await fetch("/api/code/grants/close-task", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+    setActiveTask(null);
+    void refreshActiveTask();
+  }, [activeTask?.grant_id, refreshActiveTask]);
+
+  const respondPermission = useCallback((optionId) => {
+    const req = permissionReq;
+    if (!req) return;
+    if (req.id === "grant-demo") {
+      setPermissionReq(null);
+      return;
+    }
+    const ws = wsRef.current;
+    if (ws?.readyState === 1) {
+      ws.send(
+        JSON.stringify({
+          type: "permission_response",
+          id: req.id,
+          optionId,
+        }),
+      );
+    }
+    setPermissionReq(null);
+  }, [permissionReq]);
 
   const abortVaultSearch = useCallback(() => {
     vaultSearchAbortRef.current?.abort();
@@ -2298,6 +2433,29 @@ export default function App() {
   }, []);
 
   const visibleMessages = toolCardDemo ? TOOLCARD_DEMO_MESSAGES : messages;
+  const transcript = useMemo(
+    () => transcriptWindow(visibleMessages, transcriptRevealed),
+    [visibleMessages, transcriptRevealed],
+  );
+
+  const revealOlderMessages = useCallback(() => {
+    const el = listRef.current;
+    pendingOlderScrollRef.current = el ? el.scrollHeight : null;
+    setTranscriptRevealed((n) => n + TRANSCRIPT_WINDOW);
+  }, []);
+
+  useLayoutEffect(() => {
+    const prev = pendingOlderScrollRef.current;
+    if (prev == null) return;
+    pendingOlderScrollRef.current = null;
+    const el = listRef.current;
+    if (!el) return;
+    programmaticScrollRef.current = true;
+    el.scrollTop += el.scrollHeight - prev;
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
+  }, [transcriptRevealed]);
 
   /**
    * Grok-only: Deep Search, Sessions, calendar. Other heads keep the control
@@ -2672,11 +2830,29 @@ export default function App() {
     return lines.length ? lines.join("\n") : undefined;
   }, [seat, sessionId, cwd, bridgeMeta, modelHud]);
 
-  /** Poll bindings/health for OpenRouter model badge + mismatch auto-sync. */
-  useEffect(() => {
+  const refreshModelHud = useCallback(async () => {
     const profileId = agent?.id || "";
-    const isOr = profileId === "_code" || profileId === "glyph-agent";
-    if (!isOr) {
+    if (!isCloudModelProfile(profileId)) {
+      setModelHud({
+        kind: "grok",
+        label: "Grok Build (CLI)",
+        mismatch: false,
+      });
+      return;
+    }
+    try {
+      const res = await fetch("/api/bindings", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      setModelHud(modelHudFromBindings(data, profileId));
+    } catch {
+      /* ignore */
+    }
+  }, [agent?.id]);
+
+  /** Read-only poll for the model pill. Writes: connect, Graph-save, mismatch-Klick. */
+  useEffect(() => {
+    if (!isCloudModelProfile(agent?.id || "")) {
       setModelHud({
         kind: "grok",
         label: "Grok Build (CLI)",
@@ -2684,48 +2860,23 @@ export default function App() {
       });
       return undefined;
     }
+    void refreshModelHud();
+    const id = window.setInterval(() => void refreshModelHud(), 15000);
+    return () => window.clearInterval(id);
+  }, [agent?.id, refreshModelHud]);
+
+  /** Apply saved models when the agent connects — not every poll. */
+  useEffect(() => {
+    if (!connected || !isCloudModelProfile(agent?.id || "")) return undefined;
     let cancelled = false;
-    const tick = async () => {
-      try {
-        // Mismatch → try apply once per poll cycle (server no-ops if in sync)
-        await fetch("/api/models/apply", { method: "POST" }).catch(() => {});
-        const res = await fetch("/api/bindings", { cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || cancelled) return;
-        const active = data.modelsActive?.active || data.modelsActive?.shared;
-        const desired = data.models?.shared;
-        const code = data.modelsActive?.code || data.models?.code;
-        const useCode = agent?.id === "_code" && Boolean(code?.primary);
-        const primary = useCode
-          ? code.primary
-          : active?.primary || desired?.primary || data.modelsActive?.shared?.primary || "";
-        const fb = useCode
-          ? code.fallback ?? ""
-          : active?.fallback ??
-            desired?.fallback ??
-            data.modelsActive?.shared?.fallback ??
-            "";
-        const label = primary && fb ? `${primary} → ${fb}` : primary || "—";
-        const liveLabel = String(data.modelsActive?.active?.label || "").trim();
-        setModelHud({
-          kind: "openrouter",
-          label,
-          primary,
-          fallback: fb || "",
-          liveLabel,
-          mismatch: Boolean(data.modelsMismatch),
-        });
-      } catch {
-        /* ignore */
-      }
-    };
-    void tick();
-    const id = window.setInterval(tick, 15000);
+    (async () => {
+      await fetch("/api/models/apply", { method: "POST" }).catch(() => {});
+      if (!cancelled) void refreshModelHud();
+    })();
     return () => {
       cancelled = true;
-      window.clearInterval(id);
     };
-  }, [agent?.id, connected]);
+  }, [agent?.id, connected, refreshModelHud]);
 
   /** Stale UI vs running bridge — only then surface a banner. */
   const buildMismatch = Boolean(
@@ -2986,7 +3137,12 @@ export default function App() {
 
   return (
     <div className="app">
-      <aside className="side-rail" aria-label="Hauptaktionen">
+      <aside
+        className="side-rail"
+        aria-label="Hauptaktionen"
+        inert={showLage ? true : undefined}
+        aria-hidden={showLage || undefined}
+      >
         <button
           type="button"
           className="side-rail-btn"
@@ -3103,7 +3259,11 @@ export default function App() {
         </button>
       </aside>
 
-      <div className="app-main">
+      <div
+        className="app-main"
+        inert={showLage ? true : undefined}
+        aria-hidden={showLage || undefined}
+      >
         <header className="top">
           <div>
             <h1>
@@ -3155,6 +3315,14 @@ export default function App() {
                       : `${modelHud.label} — Graph`
                 }
                 onClick={() => {
+                  if (
+                    modelHud.mismatch &&
+                    isCloudModelProfile(agent?.id || "")
+                  ) {
+                    void fetch("/api/models/apply", { method: "POST" })
+                      .then(() => refreshModelHud())
+                      .catch(() => {});
+                  }
                   setLageFocus(
                     modelHud.kind === "grok"
                       ? "grok"
@@ -3319,7 +3487,18 @@ export default function App() {
                   </span>
                 </div>
               ) : (
-                visibleMessages.map((m) => {
+                <>
+                  {transcript.hiddenCount > 0 ? (
+                    <button
+                      type="button"
+                      className="transcript-older"
+                      onClick={revealOlderMessages}
+                      aria-label={`${transcript.hiddenCount} ältere Nachrichten laden`}
+                    >
+                      {transcript.hiddenCount} ältere Nachrichten
+                    </button>
+                  ) : null}
+                  {transcript.visible.map((m, messageIndex) => {
                   if (m.role === "tool") {
                     return (
                       <article
@@ -3398,6 +3577,23 @@ export default function App() {
                           }}
                         >
                           <IconRewind size={18} />
+                        </button>
+                      ) : null}
+                      {m.role === "assistant" ? (
+                        <button
+                          type="button"
+                          className="msg-action-btn msg-bottom-btn"
+                          title="Antwort als Aufgabe übergeben"
+                          aria-label="Als Aufgabe übergeben"
+                          onClick={() => {
+                            const prior = transcript.visible
+                              .slice(0, messageIndex)
+                              .reverse()
+                              .find((row) => row.role === "user");
+                            setTaskHandoff({ message: m, userMessage: prior || null });
+                          }}
+                        >
+                          <IconLink size={18} />
                         </button>
                       ) : null}
                       {m.role === "assistant" ? (
@@ -3517,7 +3713,8 @@ export default function App() {
                       )}
                     </article>
                   );
-                })
+                  })}
+                </>
               )}
             </div>
             {dropActive ? (
@@ -3540,6 +3737,14 @@ export default function App() {
         </div>
 
         <footer className="composer composer--grok">
+          {activeTask &&
+          (agent?.id === "_code" || agent?.id === "code" || activeTask.grant_id === "demo") ? (
+            <ActiveTaskBar
+              task={activeTask}
+              busy={busy}
+              onRevoke={revokeActiveTask}
+            />
+          ) : null}
           {!planBarHidden ? (
             <PlanBar
               entries={planEntries}
@@ -3564,6 +3769,19 @@ export default function App() {
               sessionTitle={summarizeTarget.title}
               profile={agent?.id || "glyph-agent"}
               onClose={() => setSummarizeTarget(null)}
+            />
+          ) : null}
+          {taskHandoff ? (
+            <TaskHandoffDialog
+              source={agent?.id || "glyph-agent"}
+              message={taskHandoff.message}
+              userMessage={taskHandoff.userMessage}
+              onClose={() => setTaskHandoff(null)}
+              onUsePrompt={(prompt) => {
+                setInput(prompt);
+                setTaskHandoff(null);
+                composerRef.current?.focus();
+              }}
             />
           ) : null}
           {isAgentProfile && (vaultSearchBusy || vaultHits || vaultSearchError) ? (
@@ -4123,90 +4341,9 @@ export default function App() {
         </footer>
       </div>
 
-      {permissionReq && (
-        <div
-          className="permission-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="permission-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              // Backdrop: reject once (safe default)
-              const ws = wsRef.current;
-              if (ws?.readyState === 1) {
-                ws.send(
-                  JSON.stringify({
-                    type: "permission_response",
-                    id: permissionReq.id,
-                    optionId: "reject-once",
-                  }),
-                );
-              }
-              setPermissionReq(null);
-            }
-          }}
-        >
-          <div className="permission-modal">
-            <h2 id="permission-modal-title">
-              Freigabe · {permissionReq.title}
-            </h2>
-            <p className="permission-modal-kind">
-              {permissionReq.kind === "execute"
-                ? String(permissionReq.title || "").includes("·")
-                  ? "Elevated Shell — nur diese Aktion"
-                  : "Shell-Befehl"
-                : permissionReq.kind === "edit"
-                  ? "Datei schreiben"
-                  : "Aktion"}
-              {" · "}Profil ^_Code
-            </p>
-            {permissionReq.preview ? (
-              <pre className="permission-modal-preview">
-                {permissionReq.preview}
-              </pre>
-            ) : null}
-            <div className="permission-modal-actions">
-              {(permissionReq.options?.length
-                ? permissionReq.options
-                : [
-                    { optionId: "allow-once", name: "Einmal erlauben" },
-                    { optionId: "reject-once", name: "Ablehnen" },
-                  ]
-              ).map((opt) => {
-                const isAllow = String(opt.kind || opt.optionId || "").includes(
-                  "allow",
-                );
-                return (
-                  <button
-                    key={opt.optionId}
-                    type="button"
-                    className={
-                      isAllow
-                        ? "permission-btn permission-btn--allow"
-                        : "permission-btn permission-btn--reject"
-                    }
-                    onClick={() => {
-                      const ws = wsRef.current;
-                      if (ws?.readyState === 1) {
-                        ws.send(
-                          JSON.stringify({
-                            type: "permission_response",
-                            id: permissionReq.id,
-                            optionId: opt.optionId,
-                          }),
-                        );
-                      }
-                      setPermissionReq(null);
-                    }}
-                  >
-                    {opt.name || opt.optionId}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      {permissionReq ? (
+        <PermissionDialog req={permissionReq} onRespond={respondPermission} />
+      ) : null}
 
       <RewindPicker
         open={rewindOpen}
@@ -4216,27 +4353,35 @@ export default function App() {
         onPick={(p) => requestRewind(p.index, p.text)}
       />
 
-      <GraphGuard>
-        <CableLage
-          open={showLage}
-          onClose={() => setShowLage(false)}
-          focus={lageFocus}
-          activeProfile={agent?.id || ""}
-          working={isWorking}
-        />
-      </GraphGuard>
-      <CommandLegend
-        open={showLegend}
-        onClose={() => setShowLegend(false)}
-        initialTab={legendTab}
-        agentCommands={agentCommands}
-        agentProfileId={agent?.id || ""}
-        onOpenLage={(which) => {
-          setShowLegend(false);
-          setLageFocus(which || "");
-          setShowLage(true);
-        }}
-      />
+      {showLage ? (
+        <Suspense fallback={<div className="lage-stage" aria-busy="true" />}>
+          <GraphGuard onClose={() => setShowLage(false)}>
+            <CableLage
+              open={showLage}
+              onClose={() => setShowLage(false)}
+              focus={lageFocus}
+              activeProfile={agent?.id || ""}
+              working={isWorking}
+            />
+          </GraphGuard>
+        </Suspense>
+      ) : null}
+      {showLegend ? (
+        <Suspense fallback={<div className="overview-scrim" aria-busy="true" />}>
+          <CommandLegend
+            open={showLegend}
+            onClose={() => setShowLegend(false)}
+            initialTab={legendTab}
+            agentCommands={agentCommands}
+            agentProfileId={agent?.id || ""}
+            onOpenLage={(which) => {
+              setShowLegend(false);
+              setLageFocus(which || "");
+              setShowLage(true);
+            }}
+          />
+        </Suspense>
+      ) : null}
       <ExtensionsModal
         open={showExtensions}
         onClose={() => setShowExtensions(false)}
@@ -4285,12 +4430,20 @@ export default function App() {
           setSummarizeTarget(target);
         }}
       />
-      <ActivityCalendar
-        open={showCalendar}
-        onClose={() => setShowCalendar(false)}
-        onOpenSession={handleOpenSession}
-        canSeeActivity={canSeeActivity}
-      />
+      {showCalendar ? (
+        <Suspense fallback={<div className="overview-scrim" aria-busy="true" />}>
+          <ActivityCalendar
+            open={showCalendar}
+            onClose={() => setShowCalendar(false)}
+            onOpenSession={handleOpenSession}
+            onUseTask={(prompt) => {
+              setInput(prompt);
+              composerRef.current?.focus();
+            }}
+            canSeeActivity={canSeeActivity}
+          />
+        </Suspense>
+      ) : null}
 
 
     </div>

@@ -115,8 +115,14 @@ export function escapeName(name) {
     .split(/[\\/]/)
     .pop()
     .slice(0, MAX_NAME);
-  // Nicht-Druckbare/Steuerzeichen herausfiltern, Leerraum bündeln.
-  return base.replace(/[\u0000-\u001f\u007f]/g, "").trim() || "datei";
+  // C0 + DEL — charCode, not a control-char regex (eslint no-control-regex).
+  let cleaned = "";
+  for (let i = 0; i < base.length; i++) {
+    const c = base.charCodeAt(i);
+    if (c <= 0x1f || c === 0x7f) continue;
+    cleaned += base[i];
+  }
+  return cleaned.trim() || "datei";
 }
 
 /**

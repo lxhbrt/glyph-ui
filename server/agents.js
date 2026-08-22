@@ -132,12 +132,12 @@ export function buildAgentProfiles(env = process.env) {
       bin: process.execPath,
       args: [GLYPH_AGENT_ACP_FILE],
       via: "bin",
-      // CODE-Modus: DeepSeek V4 Flash 0731, Workspace-Tools, Genehmigung in Glyph.
+      // CODE-Modus: DeepSeek V4 Flash 0731, Workspace-Tools, Freigabe in Glyph.
       env: {
         GLYPH_AGENT_MODE: "code",
         GLYPH_AGENT_ACP_NAME: "^_Code",
       },
-      hint: "DeepSeek V4 Flash · Grep/SearchReplace/Read/Write/Shell (Whitelist) · Roots: glyph-ui/agent/openclaw · Genehmigung in Glyph",
+      hint: "DeepSeek V4 Flash · Grep/SearchReplace/Read/Write/Shell (Whitelist) · Roots: glyph-ui/agent/openclaw · Freigabe in Glyph",
       capabilities: { deepSearch: false, swarm: true, activity: false, sessionList: false, sessionHistory: true, summarize: true },
     },
     {
