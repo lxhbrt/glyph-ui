@@ -382,9 +382,9 @@ Symbol: **4 Kästchen** in der linken Leiste. Zwei Tabs: **Plan** und **Aktivit�
 
 ### Tab Plan (Aufgaben + wiederkehrende To-dos)
 
-**Aufgaben:** Kette an einer Antwort → Titel, optionales Ziel, Notiz. Nur diese Belege, nicht die Session. Zielkopf Default leer, später hier zuweisen. **Übernehmen** legt den Startkontext in den Composer — kein automatischer Kopfwechsel. Aufgabe ≠ Task-Freigabe.
+**Aufgaben:** Kette an einer Antwort → Titel, **Fertig wenn**, optionales Ziel, optionales Artefakt, Notiz. Nur diese Belege, nicht die Session. Zielkopf Default leer, später hier zuweisen. **Übernehmen** legt den Startkontext in den Composer — kein automatischer Kopfwechsel. **Fertig** nur mit Artefakt. Aufgabe ≠ Task-Freigabe.
 
-Täglich/wöchentlich · Pause · Einmal jetzt · Löschen. Nach erfolgreichem Lauf: **Fertig** löscht die To-do.
+Täglich/wöchentlich · **Fertig wenn** · Pause · Einmal jetzt · Löschen. Nach erfolgreichem Lauf: **Fertig** löscht die To-do. Leerlauf (`LEER`) ist nicht Erfolg.
 
 Neue wiederkehrende Arbeit nicht jeden Morgen im Chat erklären. Skill **`einmal-job`**: erst 1× mit Plan→Ja in der Session, dann hier **Neu**. Irreversibles (löschen, senden, buchen, kündigen) wartet auf Ja. Leben-Admin nicht in den Vault.
 

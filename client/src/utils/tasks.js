@@ -39,6 +39,19 @@ export function formatTaskMeta(task) {
   return `${status} · ${head}`;
 }
 
+export function cleanPass(value) {
+  return String(value || "").trim().slice(0, 400);
+}
+
+export function cleanArtifact(value) {
+  return String(value || "").trim().slice(0, 1000);
+}
+
+/** Fertig nur mit Artefakt. Chat-Belege zählen nicht. */
+export function canMarkDone(task) {
+  return Boolean(cleanArtifact(task?.artifact));
+}
+
 export function compactTrace(trace) {
   if (!trace || typeof trace !== "object") return {};
   const out = {};

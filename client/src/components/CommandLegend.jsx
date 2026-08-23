@@ -36,7 +36,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Glyph · Plan & Aktivität",
         need: "optional",
-        desc: "Kalender-Icon: Tab Plan = übergebene Aufgaben (Zielkopf, Übernehmen) plus wiederkehrende To-dos (täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte). Neue To-do erst 1× mit Plan-Freigabe (Skill einmal-job), dann hier. Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
+        desc: "Kalender-Icon: Tab Plan = übergebene Aufgaben (Fertig wenn, Artefakt, Zielkopf, Übernehmen) plus wiederkehrende To-dos (Fertig wenn, täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte; LEER ≠ Erfolg). Neue To-do erst 1× mit Plan-Freigabe (Skill einmal-job), dann hier. Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
       },
       {
         cmd: "Wiki (i)",
@@ -406,8 +406,8 @@ const SHORT_HANDBOOK = [
     id: "aufgaben",
     title: "Aufgaben (Übergabe)",
     body: [
-      "Kette an einer Antwort: Titel, optionales Ziel, Notiz. Nur diese Belege — nie die ganze Session.",
-      "Liegt unter **Plan**. Zielkopf Default leer, später zuweisen. **Übernehmen** → Composer.",
+      "Kette an einer Antwort: Titel, **Fertig wenn**, optionales Ziel, optionales Artefakt, Notiz. Nur diese Belege — nie die ganze Session.",
+      "Liegt unter **Plan**. Zielkopf Default leer, später zuweisen. **Übernehmen** → Composer. **Fertig** nur mit Artefakt.",
       "Aufgabe ≠ Task-Freigabe, ≠ wiederkehrendes To-do.",
     ],
   },

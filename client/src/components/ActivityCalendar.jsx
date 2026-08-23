@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { seatFetch } from "../utils/seat.js";
 import {
   TASK_HEADS,
+  cleanArtifact,
   formatTaskMeta,
   tasksEndpointError,
 } from "../utils/tasks.js";
@@ -27,11 +28,19 @@ function emptyForm() {
   return {
     title: "",
     prompt: "",
+    pass: "",
     kind: "daily",
     time: "09:00",
     weekday: 0,
     allow_write: false,
   };
+}
+
+function todoStatusLabel(t) {
+  if (t?.paused) return "Pause";
+  if (t?.last_status === "error") return "Fehler";
+  if (t?.last_status === "empty") return "leer";
+  return "offen";
 }
 
 function scheduleLabel(s) {
@@ -98,6 +107,34 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
       if (!res.ok) throw new Error(tasksEndpointError(json, res.status, "Zielkopf speichern fehlgeschlagen"));
       if (json.item) {
         setTasks((prev) => prev.map((t) => (t.id === taskId ? json.item : t)));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function markTaskDone(task) {
+    let artifact = cleanArtifact(task?.artifact);
+    if (!artifact) {
+      artifact = cleanArtifact(window.prompt("Artefakt — Pfad oder Ort des Ergebnisses") || "");
+    }
+    if (!artifact) {
+      setError("Fertig braucht ein Artefakt — Pfad oder Ort des Ergebnisses");
+      return;
+    }
+    setBusyId(`task-${task.id}`);
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done", artifact }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(tasksEndpointError(json, res.status, "Fertig speichern fehlgeschlagen"));
+      if (json.item) {
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? json.item : t)));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -186,6 +223,10 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
       form.kind === "weekly"
         ? { kind: "weekly", time: form.time, weekday: Number(form.weekday) }
         : { kind: "daily", time: form.time };
+    if (!editId && !form.pass.trim()) {
+      setError("Fertig-Kriterium fehlt — ohne prüfbares Ergebnis kein Job.");
+      return;
+    }
     if (!editId && form.allow_write) {
       const ok = window.confirm(
         "Auto-Schreiben erlauben?\n\nNur unter HSEQ Sync: 00 Arbeitsfluss/, Vorlagen/, Themen/.\nOhne Bestätigung: nur Lesen.",
@@ -198,6 +239,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
         body: {
           title: form.title.trim(),
           prompt: form.prompt.trim(),
+          pass: form.pass.trim(),
           schedule,
           allow_write: form.allow_write,
         },
@@ -209,6 +251,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
         body: {
           title: form.title.trim(),
           prompt: form.prompt.trim(),
+          pass: form.pass.trim(),
           schedule,
           allow_write: form.allow_write,
           paused: false,
@@ -226,6 +269,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
     setForm({
       title: t.title || "",
       prompt: t.prompt || "",
+      pass: t.pass || "",
       kind: t.schedule?.kind || "daily",
       time: t.schedule?.time || "09:00",
       weekday: t.schedule?.weekday ?? 0,
@@ -314,6 +358,8 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
                     <div className="cal-todo-main">
                       <span className="cal-todo-title">{task.title}</span>
                       <span className="cal-todo-meta">{formatTaskMeta(task)}</span>
+                      {task.pass ? <span className="cal-todo-preview">Fertig wenn: {task.pass}</span> : null}
+                      {task.artifact ? <span className="cal-todo-preview">{task.artifact}</span> : null}
                       {task.summary ? <span className="cal-todo-preview">{task.summary}</span> : null}
                     </div>
                     <div className="cal-todo-actions">
@@ -321,7 +367,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
                         <span className="sr-only">Zielkopf</span>
                         <select
                           value={task.target || ""}
-                          disabled={busyId === `task-${task.id}`}
+                          disabled={busyId === `task-${task.id}` || task.status === "done"}
                           onChange={(e) => assignTaskTarget(task.id, e.target.value)}
                         >
                           {TASK_HEADS.map(([id, label]) => (
@@ -329,6 +375,16 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
                           ))}
                         </select>
                       </label>
+                      {task.status === "done" ? null : (
+                        <button
+                          type="button"
+                          className="cal-todo-fertig"
+                          disabled={busyId === `task-${task.id}`}
+                          onClick={() => void markTaskDone(task)}
+                        >
+                          Fertig
+                        </button>
+                      )}
                       <button type="button" className="ghost cal-todo-btn" onClick={async () => {
                         try {
                           const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}/prompt`);
@@ -345,8 +401,9 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
             </section>
             <div className="cal-plan-toolbar">
               <p className="overview-hint" style={{ margin: 0, flex: 1 }}>
-                Täglich/wöchentlich · Pause · Einmal jetzt · Löschen. Nach erfolgreichem
-                Lauf: <strong>Fertig</strong> klicken löscht die To-do.
+                Täglich/wöchentlich · Fertig wenn · Pause · Einmal jetzt · Löschen.
+                Nach erfolgreichem Lauf: <strong>Fertig</strong> löscht die To-do.
+                Leerlauf (LEER) ist nicht Erfolg.
               </p>
               <button
                 type="button"
@@ -380,6 +437,16 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
                     value={form.prompt}
                     onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
                     placeholder="Was der Agent ausführen soll…"
+                  />
+                </label>
+                <label className="cal-todo-field">
+                  <span>Fertig wenn</span>
+                  <input
+                    required={!editId}
+                    maxLength={400}
+                    value={form.pass}
+                    onChange={(e) => setForm((f) => ({ ...f, pass: e.target.value }))}
+                    placeholder="Prüfbares Ergebnis, sonst kein Job"
                   />
                 </label>
                 <div className="cal-todo-row">
@@ -476,6 +543,9 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
                             ? ` · zuletzt ${String(t.last_run_at).slice(0, 16)}`
                             : ""}
                         </span>
+                        {t.pass ? (
+                          <span className="cal-todo-preview">Fertig wenn: {t.pass}</span>
+                        ) : null}
                         {t.last_answer_preview ? (
                           <span className="cal-todo-preview" title={t.last_answer_preview}>
                             {t.last_answer_preview}
@@ -507,7 +577,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
                           </button>
                         ) : (
                           <span className="cal-todo-status" aria-hidden="true">
-                            {paused ? "Pause" : t.last_status === "error" ? "Fehler" : "offen"}
+                            {todoStatusLabel(t)}
                           </span>
                         )}
                         <button

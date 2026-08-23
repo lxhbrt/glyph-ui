@@ -5,6 +5,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canMarkDone,
+  cleanArtifact,
   compactTrace,
   formatTaskMeta,
   headLabel,
@@ -28,6 +30,15 @@ describe("headLabel / statusLabel", () => {
       formatTaskMeta({ status: "analysis", target: "grok" }),
       "Analyse · Grok Build",
     );
+  });
+});
+
+describe("canMarkDone", () => {
+  it("requires an artifact path, not chat evidence", () => {
+    assert.equal(canMarkDone({ evidence: { prompt: "x", answer: "done" } }), false);
+    assert.equal(canMarkDone({ artifact: "  " }), false);
+    assert.equal(canMarkDone({ artifact: "client/src/App.jsx" }), true);
+    assert.equal(cleanArtifact("  a.md  "), "a.md");
   });
 });
 

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { handleDialogTab } from "../utils/focusTrap.js";
 import {
   TASK_HEADS,
+  cleanArtifact,
+  cleanPass,
   headLabel,
   sanitizeEvidence,
   tasksEndpointError,
@@ -12,6 +14,8 @@ export function TaskHandoffDialog({ source, message, userMessage, onClose, onUse
   const dialogRef = useRef(null);
   const [title, setTitle] = useState(() => (message?.text || userMessage?.text || "Aufgabe").slice(0, 120));
   const [summary, setSummary] = useState("");
+  const [pass, setPass] = useState("");
+  const [artifact, setArtifact] = useState("");
   const [target, setTarget] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +41,8 @@ export function TaskHandoffDialog({ source, message, userMessage, onClose, onUse
         body: JSON.stringify({
           title, target, source,
           summary,
+          pass: cleanPass(pass),
+          artifact: cleanArtifact(artifact),
           evidence: sanitizeEvidence({
             prompt: userMessage?.text || "",
             answer: message?.text || "",
@@ -74,10 +80,12 @@ export function TaskHandoffDialog({ source, message, userMessage, onClose, onUse
         </> : <>
           <label>Titel<input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} /></label>
           <label>Zielkopf<select value={target} onChange={(e) => setTarget(e.target.value)}>{TASK_HEADS.map(([id, label]) => <option key={id || "none"} value={id}>{label}</option>)}</select></label>
+          <label>Fertig wenn<input value={pass} maxLength={400} placeholder="Woran der nächste Kopf das Ergebnis prüft" onChange={(e) => setPass(e.target.value)} /></label>
+          <label>Artefakt<input value={artifact} maxLength={1000} placeholder="Pfad oder Ort — sonst beim Schließen" onChange={(e) => setArtifact(e.target.value)} /></label>
           <label>Übergabe-Notiz<textarea value={summary} placeholder="Was soll der nächste Kopf klären oder umsetzen?" onChange={(e) => setSummary(e.target.value)} /></label>
-          <p className="composer-sheet-note">Nur diese Nachricht, die Meldung, Trace und Anhang-Pfade — nie die ganze Session. Zielkopf kann später im Plan gesetzt werden.</p>
+          <p className="composer-sheet-note">Nur diese Nachricht, die Meldung, Trace und Anhang-Pfade — nie die ganze Session. Fertig nur mit Artefakt. Zielkopf kann später im Plan gesetzt werden.</p>
           {error ? <p className="composer-sheet-note composer-sheet-note--err">{error}</p> : null}
-          <button type="button" className="composer-sheet-go" disabled={saving || !title.trim()} onClick={save}>{saving ? "Speichere…" : "Aufgabe speichern"}</button>
+          <button type="button" className="composer-sheet-go" disabled={saving || !title.trim() || !pass.trim()} onClick={save}>{saving ? "Speichere…" : "Aufgabe speichern"}</button>
         </>}
       </div>
     </div>

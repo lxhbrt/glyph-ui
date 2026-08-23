@@ -104,8 +104,8 @@ Aktionen an der Plan-Leiste (Arbeitsleiste), solange jeder Eintrag `pending` ist
 _Avoid_: Plan-Mode, plan.md-Editor, automatisches Senden
 
 **Einmal-Job**:
-Skill `einmal-job`: wiederkehrende Arbeit erst 1× mit Plan-Freigabe, dann Recurring im Kalender-Tab Plan. Irreversibles wartet auf Ja. Leben-Admin nicht in den Vault.
-_Avoid_: Grok Bot; Cloud-VM; Chat-Cron; `recurring.json` per Hand patchen
+Skill `einmal-job`: wiederkehrende Arbeit erst 1× mit Plan-Freigabe, dann Recurring im Kalender-Tab Plan. Pflichtfeld **Fertig wenn** (`pass`) — ohne prüfbares Ergebnis kein Job. Leerlauf: erste Zeile `LEER` (nicht Erfolg, Stamp trotzdem). Irreversibles wartet auf Ja. Leben-Admin nicht in den Vault.
+_Avoid_: Grok Bot; Cloud-VM; Chat-Cron; `recurring.json` per Hand patchen; Timeout/Retry/Manager-Bot; Fertig-Kriterium als Gefühl
 
 **Zusammenpressen**:
 `/compact` aus der LVL-Legende, sobald die Füllung den Soft-Cap erreicht (nur Grok, idle).
@@ -172,8 +172,8 @@ Explizit benannte Arbeit („Baue die Codex-Bridge ein“), nicht die Chat-Sessi
 _Avoid_: Session-Freigabe; Chat-weit; Immer; Recurring-To-do; Prompt-Themenklassifikation; mit **Aufgabe** (Übergabe) verwechseln
 
 **Aufgabe**:
-Manuell übergebene Arbeit zwischen Köpfen. Kette an einer Antwort → Titel, optionales Ziel, Notiz. Glyph speichert nur die gewählten Belege (Meldung, Antwort, kompakter Trace, Anhang-Pfade) in `~/.glyph/tasks.json` — nie die ganze Session, nie Vault-Inhalt. Zielkopf Default leer; später im Plan zuweisen. **Übernehmen** legt den Startkontext in den Composer. Kein automatischer Kopfwechsel.
-_Avoid_: Analyse als Kopf; ganze Session übertragen; Recurring-To-do; Task-Freigabe; Auto-Switch des Profils
+Manuell übergebene Arbeit zwischen Köpfen. Kette an einer Antwort → Titel, **Fertig wenn** (`pass`, Pflicht), optionales Ziel, optionales Artefakt, Notiz. Glyph speichert nur die gewählten Belege (Meldung, Antwort, kompakter Trace, Anhang-Pfade) in `~/.glyph/tasks.json` — nie die ganze Session, nie Vault-Inhalt. Zielkopf Default leer; später im Plan zuweisen. **Übernehmen** legt den Startkontext in den Composer. **Fertig** nur mit Artefakt (Pfad oder Ort) — Chat-Belege sind Kontext, kein Ergebnis. Kein automatischer Kopfwechsel.
+_Avoid_: Analyse als Kopf; ganze Session übertragen; Recurring-To-do; Task-Freigabe; Auto-Switch des Profils; Fertig ohne Artefakt; „done“ im Chat als Abschluss
 
 **Aktiver Task**:
 Feld in der Arbeitsleiste: Name, Workspace, Restzeit, erlaubte Pfade/Aktionen, **Widerrufen**. Zeigt den stehenden Scope; ersetzt nicht den Freigabe-Dialog. Preview: `?task=demo`.
@@ -284,6 +284,7 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - Aufgabe ≠ Task-Freigabe, ≠ Recurring-To-do.
 - SoT `~/.glyph/tasks.json` (glyph-agent `/tasks`, UI-Proxy `/api/tasks`).
 - Zielkopf optional; Default leer. Köpfe: Grok Build, ^_Code, °_Agent, Codex Build. **Kein** Kopf Analyse — Analyse bleibt Status.
+- Neu: **Fertig wenn** Pflicht; **Fertig** nur mit Artefakt. Chat-Belege bleiben Kontext.
 - Ketten-Button an der Antwort: speichern, dann Übernehmen in den Composer oder später im Plan zuweisen.
 - MVP: kein automatischer Kopfwechsel, kein autonomes Weiterarbeiten.
 - Belege ohne Blobs/Preview-URLs. Stale Engine (404 `/tasks`) → Hinweis, glyph-agent neu zu starten.
