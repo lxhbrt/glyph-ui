@@ -30,21 +30,6 @@ fi
 
 PATH_VALUE="${HOME_DIR}/.local/bin:${HOME_DIR}/.grok/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin"
 
-# Tailscale-Serve-Erkennung: Wenn Glyph über Serve (:${SERVE_PORT}) exponiert wird,
-# muss die MagicDNS-Origin für WS/API freigegeben sein, sonst blockiert der Server
-# das Handy (WebSocket 403). Ohne explizite Vorgabe: automatisch ermitteln.
-SERVE_PORT="${GLYPH_TAILSCALE_SERVE_PORTS:-8443}"
-SERVE_PORT="${SERVE_PORT%%,*}"
-if [[ -z "${GLYPH_ALLOW_TAILSCALE_ORIGIN:-}" ]] && command -v tailscale >/dev/null 2>&1; then
-  if tailscale serve status 2>/dev/null | grep -qE ":${SERVE_PORT}\>|:${SERVE_PORT} "; then
-    echo "Tailscale Serve aktiv auf :${SERVE_PORT} → GLYPH_ALLOW_TAILSCALE_ORIGIN=1"
-    export GLYPH_ALLOW_TAILSCALE_ORIGIN=1
-  else
-    export GLYPH_ALLOW_TAILSCALE_ORIGIN=0
-  fi
-fi
-GLYPH_ALLOW_TAILSCALE_ORIGIN="${GLYPH_ALLOW_TAILSCALE_ORIGIN:-0}"
-
 # Always rebuild so UI changes are not served from a stale client/dist.
 echo "Building production client…"
 (cd "$ROOT" && npm run build)
@@ -125,12 +110,6 @@ cat > "$PLIST_DST" <<EOF
       <string>${GLYPH_UI_STATE_DIR}</string>
       <key>NODE_ENV</key>
       <string>production</string>
-      <key>GLYPH_ALLOW_TAILSCALE_ORIGIN</key>
-      <string>${GLYPH_ALLOW_TAILSCALE_ORIGIN:-0}</string>
-      <key>GLYPH_TAILSCALE_SERVE_PORTS</key>
-      <string>${GLYPH_TAILSCALE_SERVE_PORTS:-8443}</string>
-      <key>GLYPH_TAILSCALE_HOST</key>
-      <string>${GLYPH_TAILSCALE_HOST:-}</string>
     </dict>
 
     <key>StandardOutPath</key>

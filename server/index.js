@@ -33,7 +33,7 @@
 
 import express from "express";
 import { createServer } from "node:http";
-import { spawn, execFile, execFileSync } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -46,6 +46,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { parseSeat, SeatHub } from "./seats.js";
+import {
+  WEB_AGENT_ID,
+  WEB_COOKIE,
+  WEB_SEAT,
+  agentAllowedOnSeat,
+  defaultAgentIdForSeat,
+  isWebAdminApi,
+  isWebGateExempt,
+  isWebOrigin,
+  isWebRequest,
+  parseCookie,
+  validateNewWebPassword,
+} from "./webSurface.mjs";
+import {
+  VAULT_FIND_TIMEOUT_MS,
+  vaultFindProxyCatch,
+} from "./vaultFindProxy.mjs";
 import * as acp from "@agentclientprotocol/sdk";
 import {
   DEFAULT_AGENT_ID,
@@ -151,7 +168,7 @@ const DEV_UI_PORT = 5173;
  */
 const WS_TOKEN =
   process.env.GLYPH_WS_TOKEN || crypto.randomBytes(32).toString("hex");
-
+	
 /**
  * Bind host: loopback only unless GLYPH_ALLOW_REMOTE=1.
  * The bridge is unauthenticated and can delete sessions + drive the agent.
@@ -192,8 +209,8 @@ function isLoopbackAddress(addr) {
 }
 
 /**
- * Extra Origins (comma-separated), e.g. Tailscale Serve:
- *   GLYPH_WS_ORIGINS=https://mac.tailnet.ts.net:8443
+ * Extra Origins (comma-separated), besides loopback and the Web-Fläche.
+ *   GLYPH_WS_ORIGINS=https://other.example:5174
  */
 function originsFromEnvList() {
   const raw = process.env.GLYPH_WS_ORIGINS || "";
@@ -201,45 +218,6 @@ function originsFromEnvList() {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-}
-
-/**
- * When GLYPH_ALLOW_TAILSCALE_ORIGIN=1, allow HTTPS Origins for this node's
- * MagicDNS name (Tailscale Serve proxies to loopback; Origin is the ts.net host).
- * Optional GLYPH_TAILSCALE_HOST overrides discovery; GLYPH_TAILSCALE_SERVE_PORTS
- * defaults to 8443 (443 omits the port in the Origin header).
- */
-function originsFromTailscale() {
-  if (process.env.GLYPH_ALLOW_TAILSCALE_ORIGIN !== "1") return [];
-  let host = String(process.env.GLYPH_TAILSCALE_HOST || "")
-    .trim()
-    .replace(/\.$/, "");
-  if (!host) {
-    try {
-      const out = execFileSync("tailscale", ["status", "--json"], {
-        encoding: "utf8",
-        timeout: 4000,
-        stdio: ["ignore", "pipe", "ignore"],
-      });
-      const j = JSON.parse(out);
-      host = String(j?.Self?.DNSName || "")
-        .trim()
-        .replace(/\.$/, "");
-    } catch {
-      return [];
-    }
-  }
-  if (!host || host.includes("/") || host.includes(" ")) return [];
-  const ports = String(process.env.GLYPH_TAILSCALE_SERVE_PORTS || "8443")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const origins = [];
-  for (const p of ports) {
-    if (p === "443") origins.push(`https://${host}`);
-    else origins.push(`https://${host}:${p}`);
-  }
-  return origins;
 }
 
 /** Allowed browser Origins for WebSocket upgrades (prod UI + Vite dev UI). */
@@ -251,13 +229,13 @@ function allowedWsOrigins() {
     `http://127.0.0.1:${DEV_UI_PORT}`,
   ]);
   for (const o of originsFromEnvList()) origins.add(o);
-  for (const o of originsFromTailscale()) origins.add(o);
   return origins;
 }
 
 function isAllowedWsOrigin(origin) {
   if (!origin) return false;
-  return allowedWsOrigins().has(String(origin));
+  if (allowedWsOrigins().has(String(origin))) return true;
+  return isWebOrigin(origin);
 }
 
 /**
@@ -265,14 +243,95 @@ function isAllowedWsOrigin(origin) {
  * Origin alone is not enough on localhost (any local process can omit/forge it);
  * the shared token from the served UI raises the bar for drive-by WS clients.
  */
+const webSessions = new Set();
+let webPassword = "";
+/** Env password cannot be changed from the Web-Fläche (would revert on restart). */
+const webPasswordFromEnv = Boolean(
+  String(process.env.GLYPH_WEB_PASSWORD || "").trim(),
+);
+const WEB_PASSWORD_FILE = path.join(STATE_DIR, "web-password");
+
+async function loadWebPassword() {
+  const fromEnv = String(process.env.GLYPH_WEB_PASSWORD || "").trim();
+  if (fromEnv) {
+    webPassword = fromEnv;
+    return;
+  }
+  try {
+    const existing = String(await fs.readFile(WEB_PASSWORD_FILE, "utf8")).trim();
+    if (existing) {
+      webPassword = existing;
+      return;
+    }
+  } catch {
+    /* create below */
+  }
+  const generated = crypto.randomBytes(16).toString("hex");
+  await fs.mkdir(STATE_DIR, { recursive: true });
+  await fs.writeFile(WEB_PASSWORD_FILE, `${generated}\n`, { mode: 0o600 });
+  webPassword = generated;
+  console.warn(`[glyph] Web-Tor: Passwort in ${WEB_PASSWORD_FILE}`);
+}
+
+async function saveWebPassword(next) {
+  await fs.mkdir(STATE_DIR, { recursive: true });
+  await fs.writeFile(WEB_PASSWORD_FILE, `${next}\n`, { mode: 0o600 });
+  webPassword = next;
+}
+
+function webSessionToken(req) {
+  return parseCookie(req?.headers?.cookie, WEB_COOKIE);
+}
+
+function hasWebSession(req) {
+  const token = webSessionToken(req);
+  return Boolean(token) && webSessions.has(token);
+}
+
+function issueWebSession() {
+  const token = crypto.randomBytes(24).toString("hex");
+  webSessions.add(token);
+  return token;
+}
+
+function webCookieHeader(token) {
+  const parts = [
+    `${WEB_COOKIE}=${encodeURIComponent(token)}`,
+    "HttpOnly",
+    "Path=/",
+    "SameSite=Lax",
+    "Max-Age=2592000",
+  ];
+  // Tunnel is HTTPS; local preview of seat=web stays on http.
+  parts.push("Secure");
+  return parts.join("; ");
+}
+
+function passwordsMatch(got, expected) {
+  const a = Buffer.from(String(got || ""), "utf8");
+  const b = Buffer.from(String(expected || ""), "utf8");
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(a, b);
+}
+
+await loadWebPassword();
+
 function verifyWsClient(info) {
-  const ip = info.req?.socket?.remoteAddress || "";
-  if (!ALLOW_REMOTE && !isLoopbackAddress(ip)) {
+  const req = info.req;
+  const web = isWebRequest(req);
+  const ip = req?.socket?.remoteAddress || "";
+  if (!ALLOW_REMOTE && !web && !isLoopbackAddress(ip)) {
     console.warn(`[glyph] WS rejected: non-loopback ${ip || "(unknown)"}`);
     return false;
   }
+  if (web && !hasWebSession(req)) {
+    console.warn("[glyph] WS rejected: web gate");
+    return false;
+  }
 
-  const origin = info.origin || info.req?.headers?.origin || "";
+  const origin = info.origin || req?.headers?.origin || "";
   if (!isAllowedWsOrigin(origin)) {
     console.warn(`[glyph] WS rejected: origin ${origin || "(none)"}`);
     return false;
@@ -308,11 +367,12 @@ function injectWsToken(html) {
   return `${inject}\n${html}`;
 }
 
-async function sendIndexHtml(res) {
+async function sendIndexHtml(req, res) {
   const filePath = path.join(ROOT, "client/dist", "index.html");
   const raw = await fs.readFile(filePath, "utf8");
   res.setHeader("Cache-Control", "no-store");
-  res.type("html").send(injectWsToken(raw));
+  const gated = isWebRequest(req) && !hasWebSession(req);
+  res.type("html").send(gated ? raw : injectWsToken(raw));
 }
 
 /** Safe single-segment filename for uploads. */
@@ -457,6 +517,7 @@ const httpServer = createServer(app);
 /** Filled after GrokBridge is defined. */
 let seats;
 function seatFromReq(req) {
+  if (isWebRequest(req)) return WEB_SEAT;
   return parseSeat(req.get("x-glyph-seat") || req.query?.seat);
 }
 function live(req) {
@@ -472,6 +533,23 @@ const wss = new WebSocketServer({
 app.use((req, res, next) => {
   if (req.path === "/api/stt" || req.path === "/api/attachments") return next();
   return express.json({ limit: "1mb" })(req, res, next);
+});
+
+/**
+ * glyph-ui.com: require the Web-Tor cookie. HTML/assets stay reachable so
+ * the login surface can load. Tunnel source IP is loopback — Host decides.
+ */
+app.use((req, res, next) => {
+  if (!isWebRequest(req)) return next();
+  if (isWebGateExempt(req)) return next();
+  if (hasWebSession(req)) return next();
+  res.status(401).json({ error: "Web-Tor", gate: true });
+});
+
+app.use((req, res, next) => {
+  if (!isWebRequest(req)) return next();
+  if (!isWebAdminApi(req.path)) return next();
+  res.status(403).json({ error: "Nur Admin-Fläche (Mac)" });
 });
 
 /**
@@ -611,34 +689,120 @@ async function saveAttachmentFile({ name, mimeType, dataBase64 }) {
 // API routes are registered below BEFORE static — do not move static above them.
 app.get("/api/health", (req, res) => {
   const b = seats ? live(req) : null;
-  res.json({
+  const web = Boolean(b?.seat === WEB_SEAT || isWebRequest(req));
+  const agent = publicAgent(b?.agentProfile?.() || null);
+  const allAgents = publicAgents(AGENT_PROFILES);
+  const agents = web
+    ? allAgents.filter((a) => agentAllowedOnSeat(WEB_SEAT, a.id))
+    : allAgents;
+  const payload = {
     ok: true,
     version: GLYPH_VERSION,
     build: GLYPH_BUILD,
     host: HOST,
     port: PORT,
-    root: ROOT,
     connected: Boolean(b?.connected),
     reconnecting: Boolean(b?.starting),
     sessionId: b?.sessionId || null,
-    seat: b?.seat || "desk",
-    seats: seats
+    seat: b?.seat || (web ? WEB_SEAT : "desk"),
+    surface: web ? "web" : "admin",
+    cwd: web ? "" : WORK_CWD,
+    agent: web && agent && !agentAllowedOnSeat(WEB_SEAT, agent.id)
+      ? publicAgent(
+          AGENT_PROFILES.find((p) => p.id === WEB_AGENT_ID) || null,
+        )
+      : agent,
+    agents,
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
+    maxAttachmentsPerMsg: MAX_ATTACHMENTS_PER_MSG,
+  };
+  if (!web) {
+    payload.root = ROOT;
+    payload.seats = seats
       ? seats.all().map((x) => ({
           seat: x.seat,
           connected: Boolean(x.connected),
           sessionId: x.sessionId || null,
           agent: publicAgent(x.agentProfile?.() || null)?.id || null,
         }))
-      : [],
-    cwd: WORK_CWD,
-    agent: publicAgent(b?.agentProfile?.() || null),
-    agents: publicAgents(AGENT_PROFILES),
-    wikiRoot: getWikiRoot(),
-    wikiArchive: path.join(getWikiRoot(), "sources/grok-sessions"),
-    uploads: UPLOAD_DIR,
-    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
-    maxAttachmentsPerMsg: MAX_ATTACHMENTS_PER_MSG,
+      : [];
+    payload.wikiRoot = getWikiRoot();
+    payload.wikiArchive = path.join(getWikiRoot(), "sources/grok-sessions");
+    payload.uploads = UPLOAD_DIR;
+  }
+  res.json(payload);
+});
+
+app.get("/api/web-gate", (req, res) => {
+  const web = isWebRequest(req);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    required: web,
+    ok: web ? hasWebSession(req) : true,
+    seat: web ? WEB_SEAT : parseSeat(req.get("x-glyph-seat") || req.query?.seat),
   });
+});
+
+app.post("/api/web-gate", (req, res) => {
+  if (!isWebRequest(req)) {
+    res.json({ ok: true, required: false });
+    return;
+  }
+  const origin = req.get("origin") || "";
+  if (origin && !isAllowedWsOrigin(origin)) {
+    res.status(403).json({ error: "Forbidden", gate: true });
+    return;
+  }
+  if (!passwordsMatch(req.body?.password, webPassword)) {
+    res.status(401).json({ error: "Passwort falsch", gate: true });
+    return;
+  }
+  const token = issueWebSession();
+  res.setHeader("Set-Cookie", webCookieHeader(token));
+  res.json({ ok: true, required: true });
+});
+
+app.post("/api/web-gate/password", async (req, res) => {
+  if (!isWebRequest(req)) {
+    res.status(403).json({ error: "Nur auf der Web-Fläche" });
+    return;
+  }
+  if (!hasWebSession(req)) {
+    res.status(401).json({ error: "Web-Tor", gate: true });
+    return;
+  }
+  if (webPasswordFromEnv) {
+    res.status(409).json({
+      error: "Passwort kommt aus GLYPH_WEB_PASSWORD — Env auf dem Mac entfernen, dann in der Web-UI ändern",
+    });
+    return;
+  }
+  const origin = req.get("origin") || "";
+  if (origin && !isAllowedWsOrigin(origin)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (!passwordsMatch(req.body?.current, webPassword)) {
+    res.status(401).json({ error: "Aktuelles Passwort falsch" });
+    return;
+  }
+  const check = validateNewWebPassword(req.body?.next, webPassword);
+  if (!check.ok) {
+    res.status(400).json({ error: check.error });
+    return;
+  }
+  try {
+    await saveWebPassword(check.password);
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  webSessions.clear();
+  const token = issueWebSession();
+  res.setHeader("Set-Cookie", webCookieHeader(token));
+  res.json({ ok: true });
 });
 
 /**
@@ -717,7 +881,12 @@ app.post(
  * Loopback + allowed Origin only — same bar as the WebSocket handshake itself.
  */
 app.get("/api/ws-token", (req, res) => {
-  if (!ALLOW_REMOTE && !isLoopbackAddress(req.socket?.remoteAddress || "")) {
+  if (isWebRequest(req)) {
+    if (!hasWebSession(req)) {
+      res.status(401).json({ error: "Web-Tor", gate: true });
+      return;
+    }
+  } else if (!ALLOW_REMOTE && !isLoopbackAddress(req.socket?.remoteAddress || "")) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -1140,7 +1309,7 @@ app.post("/api/vault/find", async (req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body || {}),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(VAULT_FIND_TIMEOUT_MS),
     });
     const json = await r.json().catch(() => ({}));
     if (r.ok) {
@@ -1159,11 +1328,8 @@ app.post("/api/vault/find", async (req, res) => {
           : `Suche fehlgeschlagen (HTTP ${r.status})`),
     });
   } catch (err) {
-    res.status(502).json({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-      hits: [],
-    });
+    const fail = vaultFindProxyCatch(err);
+    res.status(fail.status).json(fail.body);
   }
 });
 
@@ -2115,8 +2281,12 @@ class GrokBridge {
     /**
      * Active ACP agent profile id. Switching spawns a different binary —
      * Glyph never talks to a model API, so this is the only "provider" knob.
+     * Web-Sitz is locked to °_Agent.
      */
-    this.agentId = resolveAgent(AGENT_PROFILES, process.env.GLYPH_AGENT).id;
+    this.agentId = resolveAgent(
+      AGENT_PROFILES,
+      defaultAgentIdForSeat(this.seat, process.env.GLYPH_AGENT),
+    ).id;
     this.process = null;
     this.connection = null;
     this.busy = false;
@@ -2510,6 +2680,9 @@ class GrokBridge {
     const next = resolveAgent(AGENT_PROFILES, id);
     if (!next || next.id !== String(id)) {
       throw new Error(`Unbekannter Agent: ${id}`);
+    }
+    if (!agentAllowedOnSeat(this.seat, next.id)) {
+      throw new Error("Web-Fläche: nur °_Agent");
     }
     if (this.starting) {
       throw new Error("Verbindung wird gerade aufgebaut — bitte warten");
@@ -3373,16 +3546,25 @@ seats = new SeatHub((seat) => new GrokBridge({ seat }));
 wss.on("connection", (ws, req) => {
   let seat = "desk";
   try {
-    const host = req?.headers?.host || `127.0.0.1:${PORT}`;
-    const url = new URL(req.url || "/ws", `http://${host}`);
-    seat = parseSeat(url.searchParams.get("seat"));
+    if (isWebRequest(req)) {
+      seat = WEB_SEAT;
+    } else {
+      const host = req?.headers?.host || `127.0.0.1:${PORT}`;
+      const url = new URL(req.url || "/ws", `http://${host}`);
+      seat = parseSeat(url.searchParams.get("seat"));
+    }
   } catch {
-    seat = "desk";
+    seat = isWebRequest(req) ? WEB_SEAT : "desk";
   }
   const b = seats.get(seat);
-  if (seat === "phone" && !b.connected && !b.starting && !b.process) {
+  if (
+    (seat === "phone" || seat === WEB_SEAT) &&
+    !b.connected &&
+    !b.starting &&
+    !b.process
+  ) {
     b.start().catch((err) => {
-      console.error("Failed to start phone seat:", err);
+      console.error(`Failed to start ${seat} seat:`, err);
     });
   }
   b.addClient(ws);
@@ -3462,7 +3644,7 @@ app.use("/docs", express.static(path.join(ROOT, "docs"), { index: false }));
 // SPA fallback for client-side routes (GET only)
 app.get(/.*/, (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/ws")) return next();
-  sendIndexHtml(res).catch((err) => next(err));
+  sendIndexHtml(req, res).catch((err) => next(err));
 });
 
 // Listen first so Dock / health checks work even while the agent is connecting.

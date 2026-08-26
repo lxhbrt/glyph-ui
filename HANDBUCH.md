@@ -117,47 +117,25 @@ npm run build
 npm start                 # UI + Bridge auf Port 5174
 ```
 
-### Remote (Tailscale)
+### Remote
 
-Ziel: Glyph vom iPhone bedienen, **ohne** die Bridge ins öffentliche Netz zu hängen.
+Nach draußen nur **glyph-ui.com**. Bridge bleibt `127.0.0.1:5174`. Kein Tailscale Serve.
+
+#### glyph-ui.com (Arbeits-PC) — Web-Fläche
+
+Öffentliche Domain über Cloudflare-Tunnel. **Sitz `web`**, nur **°_Agent**, maximierter Chat. Spiegelt nicht den Schreibtisch. Grok Build und ^_Code nur auf dem Mac.
 
 | Schicht | Rolle |
 |---------|--------|
-| Glyph | bleibt `127.0.0.1:5174` |
-| Tailscale Serve | HTTPS im **eigenen** Tailnet, Standard-Port **8443** |
-| OpenClaw | falls vorhanden: Serve auf **:443** — wird nicht überschrieben |
+| Glyph | `127.0.0.1:5174` |
+| Cloudflare Tunnel | `https://glyph-ui.com` → Loopback |
+| Web-Tor | Passwort vor der Fläche (`~/.glyph-ui/web-password` oder `GLYPH_WEB_PASSWORD`) |
 
-```bash
-# Einmal / nach Reboot prüfen:
-npm run service:remote
-# oder: bash scripts/enable-tailscale-remote.sh
-```
+Nach dem ersten Start: einmal das generierte Passwort aus `~/.glyph-ui/web-password` (Mac). Danach in der Web-UI **Schloss → Passwort ändern**. Andere Geräte müssen sich neu anmelden. Optional zusätzlich [Cloudflare Access](https://one.dash.cloudflare.com/) (E-Mail-PIN) vor den Tunnel.
 
-Das Script:
+Stift = neuer Chat (eigene ACP-Session auf dem Web-Sitz). Verlauf des Macs bleibt unberührt.
 
-1. startet Tailscale falls nötig  
-2. setzt Serve `https://<MagicDNS>:8443` → `http://127.0.0.1:5174`  
-3. schreibt LaunchAgent-Env (`GLYPH_ALLOW_TAILSCALE_ORIGIN=1`, Host, Port) und lädt den Service neu  
-
-**Mac am Dock (Strom):** Systemschlaf am Netzstrom aus (`sleep 0`), Wake-on-LAN an — Host bleibt erreichbar, wenn der Rechner an ist.
-
-**iPhone / iPad (Checkliste):**
-
-1. Tailscale-App installieren, **gleiches Konto**, Status „Connected“  
-2. Safari: `https://<dein-mac>.ts.net:8443/` (oder `?seat=phone`)  
-3. Profil **°_Agent** (oder grok) wählen — eigener Sitz, stiehlt nicht den PC-Chat  
-4. Optional: Teilen → **Zum Home-Bildschirm** (PWA-ähnlich)  
-5. ACL in [login.tailscale.com/admin/acls](https://login.tailscale.com/admin/acls): nur Mac + iPhone (strenge Device-Tags/Quellen)
-
-**Smoke (Mac):**
-
-```bash
-curl -fsS http://127.0.0.1:5174/api/health
-curl -fsS "https://$(tailscale status --json | python3 -c 'import sys,json;print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))'):8443/api/health"
-tailscale serve status
-```
-
-**Nicht v1:** öffentliches Funnel, native iOS-App, WhatsApp-Anbindung an Glyph.
+**Nicht v1:** native iOS-App, WhatsApp-Anbindung an Glyph.
 
 ---
 
@@ -489,7 +467,9 @@ In der App: Symbol **Befehle** (filterbare Legende).
 | `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für °_Agent-Antwort |
 | `WIKI_PATH` | `~/.glyph-ui/wiki` | Wiki-Archiv (optional Obsidian-Vault o. Ä.) |
 | `OPENCLAW_WIKI_PATH` | — | Alias für `WIKI_PATH` |
-| `GLYPH_UI_STATE_DIR` | `~/.glyph-ui` | UI-State (z. B. Closed-Log) |
+| `GLYPH_UI_STATE_DIR` | `~/.glyph-ui` | UI-State (z. B. Closed-Log, Web-Passwort) |
+| `GLYPH_WEB_PASSWORD` | Datei `~/.glyph-ui/web-password` | Web-Tor für glyph-ui.com |
+| `GLYPH_WEB_HOSTS` | `glyph-ui.com,www.glyph-ui.com` | Extra-Hostnames für die Web-Fläche |
 
 Beispiel:
 

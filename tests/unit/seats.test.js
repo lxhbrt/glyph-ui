@@ -6,16 +6,17 @@ import assert from "node:assert/strict";
 import { parseSeat, SeatHub, SEAT_IDS } from "../../server/seats.js";
 
 describe("parseSeat", () => {
-  it("accepts desk and phone", () => {
+  it("accepts desk, phone and web", () => {
     assert.equal(parseSeat("desk"), "desk");
     assert.equal(parseSeat("PHONE"), "phone");
+    assert.equal(parseSeat("web"), "web");
   });
   it("falls back to desk", () => {
     assert.equal(parseSeat(""), "desk");
     assert.equal(parseSeat("tablet"), "desk");
   });
-  it("lists the two seats", () => {
-    assert.deepEqual(SEAT_IDS, ["desk", "phone"]);
+  it("lists the three seats", () => {
+    assert.deepEqual(SEAT_IDS, ["desk", "phone", "web"]);
   });
 });
 

@@ -12,8 +12,8 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 
 | Node | Tut | Quellen (Einstieg) | Hängt an |
 |------|-----|--------------------|----------|
-| **Bridge** | Browser ↔ WebSocket ↔ ACP stdio (`grok agent` / glyph-agent-acp). Zwei Sitze: `desk` · `phone`. | `server/index.js`, `server/seats.js`, `server/glyph-agent-acp.mjs`, `server/acpIdle.mjs` | Sessions, Agents |
-| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel. Header-Unterzeile: Term · ACP (Handy nur am Sitz phone). cwd nicht in der Zeile — Tooltip auf Glyph #N + Workspace-Button. Verlauf: letzte 40 Nachrichten im DOM, ältere per Button. Graph / Buch / Kalender lazy. | `client/src/App.jsx`, `client/src/main.jsx`, `client/src/utils/messages.js` (`transcriptWindow`) | Bridge-Events |
+| **Bridge** | Browser ↔ WebSocket ↔ ACP stdio (`grok agent` / glyph-agent-acp). Drei Sitze: `desk` · `phone` · `web`. | `server/index.js`, `server/seats.js`, `server/webSurface.mjs`, `server/glyph-agent-acp.mjs`, `server/acpIdle.mjs` | Sessions, Agents |
+| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel. Header-Unterzeile: Term · ACP (Handy nur am Sitz phone). cwd nicht in der Zeile — Tooltip auf Glyph #N + Workspace-Button. Verlauf: letzte 40 Nachrichten im DOM, ältere per Button. Graph / Buch / Kalender lazy. **Web-Fläche** auf glyph-ui.com: maximierter °_Agent-Chat, kein Admin-Chrome. | `client/src/App.jsx`, `client/src/main.jsx`, `client/src/utils/messages.js` (`transcriptWindow`), `client/src/utils/webSurface.js` | Bridge-Events |
 | **Palette / Type** | Eine Gold-Hex, eine Danger-Hex, Neutrals via `color-mix`; IBM Plex; Type-Scale fest | `client/src/styles.css` (`:root`) | Client-Shell |
 | **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende. Über Soft-Cap (Grok): **Zusammenpressen** → `/compact`. | `ContextLvlBar.jsx` | Client-Shell |
 | **Arbeitsleiste** | Angedockte Fläche über der LVL-Leiste: Plan, Ordner-Suche, Zusammenfassen, **Aktiver Task**. Gleiches Chrome (Label · Zähler · ×). Kein Mitte-Modal. | `ComposerSheet.jsx`, `PlanBar.jsx`, `VaultSearchHits.jsx`, `SummarizeDialog.jsx` | Client-Shell |
@@ -124,8 +124,24 @@ Ein entdeckbarer, benennbarer Prompt-/Workflow-Eintrag (z. B. aus `~/.grok/skill
 _Avoid_: Plugin, Hook, Agent-Command
 
 **Sitz**:
-Gerätessessel für dasselbe Agent-Profil: **`desk`** (Schreibtisch) und **`phone`** (Handy). Jeder Sitz hat eigenen ACP-Prozess und eigene Live-Session. SoT (Vaults, Roots, Vertrag) ist eins. Kein Crew: nicht dieselbe Aufgabe parallel. Query `?seat=phone` · Header `X-Glyph-Seat`. Dieselbe Session-ID nicht auf zwei Sitzen gleichzeitig offen.
-_Avoid_: Schwarm, mehrere Agenten an einer Aufgabe, Geräte = Profile
+Gerätessessel: **`desk`** (Schreibtisch), **`phone`** (Handy), **`web`** (glyph-ui.com). Jeder Sitz hat eigenen ACP-Prozess und eigene Live-Session. SoT (Vaults, Roots, Vertrag) ist eins. Kein Crew: nicht dieselbe Aufgabe parallel. Query `?seat=` · Header `X-Glyph-Seat`. Öffentliche Domain erzwingt `web` — Query kann nicht auf desk/phone eskalieren. Dieselbe Session-ID nicht auf zwei Sitzen gleichzeitig offen.
+_Avoid_: Schwarm, mehrere Agenten an einer Aufgabe, Geräte = Profile; glyph-ui.com = desk
+
+**Web-Sitz**:
+Sitz `web` für die Domain glyph-ui.com (Arbeits-PC). Eigener ACP-Prozess, fest °_Agent. Schreibt nicht in den Schreibtisch-Chat.
+_Avoid_: Funnel; geteilter Live-Chat mit dem Mac; Grok Build oder ^_Code auf der Domain
+
+**Web-Fläche**:
+Maximierte Chat-Oberfläche auf glyph-ui.com: eine Konversation = Verlauf + Composer. Kein Graph, kein Agent-Picker, kein Grok/^_Code.
+_Avoid_: volle Admin-UI hinter der Domain; Session-Lupe (Grok)
+
+**Admin-Fläche**:
+Volle Glyph-UI (Grok Build, ^_Code, °_Agent, Graph, Anbindung) auf Loopback. Nicht auf glyph-ui.com.
+_Avoid_: Admin über die öffentliche Domain; Admin über Tailscale
+
+**Web-Tor**:
+Passwort vor der Web-Fläche. Wer eingeloggt ist, ändert es in der Web-UI (Schloss). Cloudflare Access darf zusätzlich davor sitzen. Agent-only ersetzt das Tor nicht.
+_Avoid_: offene Domain; °_Agent öffentlich ohne Sperre; Passwort nur auf dem Mac ändern
 
 **Agent-Profil**:
 Eines der wählbaren ACP-Agenten in Glyph: **Grok Build** (`grok`), **`^_Code`** (`_code`), **`°_Agent`** (id `glyph-agent`). Glyph spawnt ein anderes Binary/Env, nicht „ein anderes Modell“.
@@ -278,6 +294,16 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - Engine-Policy: `glyph-agent` CONTEXT + ADR `docs/adr/0001-task-scoped-grants.md`. UI: ADR `docs/adr/0003-task-scoped-grants.md`.
 - Reihenfolge danach (nicht dieser Schnitt): Plan vor Änderungen → Task-Freigaben → Gesamt-Diff/Test-Gate → Git (Branch/Worktree, Commit nur explizit) → optionale isolierte Worktrees → Audit pro Task.
 - Hebt auf: Phase-1 „Write flüssig unter r+w“ und ACP-Option „Für diese Session erlauben“.
+
+### Web-Fläche / glyph-ui.com (2026-08-26)
+
+- glyph-ui.com ist Produktfläche (Cloudflare-Tunnel auf Loopback). Hebt auf: HANDBUCH „kein öffentliches Funnel“.
+- Sitz **`web`**: eigener ACP-Prozess, nicht desk/phone. Arbeits-PC spiegelt den Mac-Chat nicht.
+- Nur **°_Agent**. Grok Build und ^_Code bleiben Admin-Fläche (Mac / Loopback).
+- Kein Tailscale Serve. Handy-Remote über das Tailnet ist abgezogen.
+- UI: maximierter Chat (Verlauf + Composer). Eine Konversation = eine Fläche. Stift = neuer Chat.
+- Web-Tor Pflicht (Passwort). Eingeloggter Web-Nutzer ändert es in der Fläche (aktuell + neu). Origin exakt `https://glyph-ui.com`, kein Substring.
+- ADR `docs/adr/0004-web-surface.md`.
 
 ### Aufgabe / Übergabe (2026-08-22)
 

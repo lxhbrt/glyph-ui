@@ -16,6 +16,30 @@ describe("seatFromSignals", () => {
       seatFromSignals({ query: "desk", stored: "phone", narrow: true, coarse: true }),
       "desk",
     );
+    assert.equal(
+      seatFromSignals({ query: "web", stored: "desk", narrow: false, coarse: false }),
+      "web",
+    );
+  });
+
+  it("public host is always web — query cannot escalate to desk", () => {
+    assert.equal(
+      seatFromSignals({
+        query: "desk",
+        stored: "desk",
+        narrow: false,
+        coarse: false,
+        webHost: true,
+      }),
+      "web",
+    );
+  });
+
+  it("stored web on a desktop Mac is desk", () => {
+    assert.equal(
+      seatFromSignals({ query: "", stored: "web", narrow: false, coarse: false }),
+      "desk",
+    );
   });
 
   it("Mac standalone / Dock is desk (wide + fine pointer)", () => {

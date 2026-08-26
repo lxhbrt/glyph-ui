@@ -5313,7 +5313,7 @@ button.cal-cell {
 }
 
 /*
-  Mobile layout pass (≤640px / iPhone PWA via Tailscale):
+  Mobile layout pass (≤640px / standalone PWA):
   - Safe areas (notch / home indicator) for standalone
   - Compact chrome, larger touch targets
   - Type scale is NOT re-sized here — same tokens as desktop/all modes
@@ -7673,5 +7673,347 @@ button.cal-cell {
 
   .lage-gate {
     display: none;
+  }
+}
+
+/* Web-Fläche (glyph-ui.com): one maximized Agent chat, no Admin-Chrome */
+.app.app--web {
+  max-width: none;
+}
+
+.app--web .app-main {
+  max-width: min(44rem, 100%);
+  margin: 0 auto;
+  padding: 10px 16px 12px;
+  gap: 8px;
+}
+
+.app--web .top {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.app--web .top h1 {
+  font-size: 1.05rem;
+}
+
+.app--web .messages {
+  padding-top: 4px;
+}
+
+.app--web .empty {
+  max-width: 22rem;
+}
+
+.web-gate {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.web-gate-card {
+  width: min(22rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.web-gate-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.web-gate-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.web-gate-copy {
+  margin: 0 0 6px;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: var(--muted);
+}
+
+.web-gate-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.web-gate-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.web-gate-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--type-secondary);
+}
+
+.web-gate-submit {
+  min-height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--send-idle-border);
+  background: var(--gold);
+  color: var(--send-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.web-gate-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.web-gate-submit:not(:disabled):hover {
+  background: var(--gold-bright);
+}
+
+.web-password-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  background: color-mix(in srgb, var(--bg) 78%, #000);
+}
+
+.web-password-dialog {
+  width: min(22rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.web-password-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.web-password-copy {
+  margin: 0 0 4px;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: var(--muted);
+}
+
+.web-password-ok {
+  margin: 0;
+  color: var(--gold-bright);
+  font-size: var(--type-secondary);
+}
+
+.web-password-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.web-password-cancel {
+  min-height: 2.75rem;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.web-password-cancel:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.web-password-actions .web-gate-submit {
+  width: auto;
+  padding: 0 18px;
+}
+
+/*
+  Web-Fläche on a phone: desktop .app--web rules (44rem column, 1.05rem title)
+  beat the generic ≤640px pass, so chrome and type read like a shrunk desktop.
+  Bump this surface only — :root tokens stay for Admin / themes / profiles.
+  Last in file so it wins over .app--web and .web-gate bases.
+
+  iOS: 100dvh stops above the home indicator, so the pill floated in a black
+  band. Fill 100lvh / -webkit-fill-available; safe-area is inside the pill.
+*/
+html.web-surface,
+html.web-surface body,
+html.web-surface #root {
+  height: 100%;
+  min-height: 100%;
+  min-height: -webkit-fill-available;
+  min-height: 100lvh;
+}
+
+@media (max-width: 640px) {
+  html.web-surface,
+  html.web-surface body,
+  html.web-surface #root {
+    height: 100lvh;
+    max-height: 100lvh;
+    min-height: 100lvh;
+    min-height: -webkit-fill-available;
+  }
+
+  html.web-surface .app.app--web {
+    --type-chat: 0.95rem;
+    --type-chat-leading: 1.5;
+    --type-user: 0.95rem;
+    --type-user-leading: 1.45;
+    --type-secondary: 0.82rem;
+    --composer-font-size: 16px;
+    --composer-min-h: 2.75rem;
+    --composer-pad-y: 12px;
+    height: 100%;
+    max-height: none;
+    min-height: 100%;
+    padding-bottom: 0;
+  }
+
+  .app--web .app-main {
+    max-width: none;
+    width: 100%;
+    padding: 4px 10px 0;
+    /* Footer is fixed to the screen edge; keep transcript clear of it. */
+    padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px) * 0.5);
+    gap: 6px;
+  }
+
+  .app--web .top {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .app--web .top > div:first-child {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .app--web .top h1 {
+    font-size: 1.28rem;
+    justify-content: center;
+    gap: 0.35rem 0.45rem;
+  }
+
+  .app--web .sub.sub--inline {
+    font-size: 0.92rem;
+  }
+
+  .app--web .top-actions {
+    width: 100%;
+    max-width: 24rem;
+    margin-inline: auto;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .app--web button.pill-btn.pill-btn--icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .app--web .empty {
+    max-width: 19rem;
+  }
+
+  .app--web .empty-soft {
+    margin-top: 10px;
+  }
+
+  .app--web .composer-vault-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    right: 12px;
+    bottom: calc(100% + 6px);
+  }
+
+  .app--web .composer-plus-btn,
+  .app--web .voice-mic-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .app--web .composer.composer--grok .send {
+    width: 3rem;
+    height: 3rem;
+    min-height: 3rem;
+  }
+
+  .app--web .composer.composer--grok {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    /* Lift the rounded pill above the home indicator — not the full
+       34px inset (floats) and not 0 (clips the curve). */
+    padding: 0 10px max(14px, calc(env(safe-area-inset-bottom, 0px) * 0.5));
+    gap: 4px;
+    background: var(--bg);
+    z-index: 6;
+  }
+
+  .app--web .composer-box {
+    margin-bottom: 0;
+  }
+
+  .app--web .composer-row {
+    padding: 8px 10px 10px;
+  }
+
+  .app.app--web:has(.composer-box:focus-within) .composer.composer--grok,
+  .app.app--web:has(textarea:focus) .composer.composer--grok,
+  .app.app--web:has(input:focus) .composer.composer--grok {
+    padding-bottom: 10px;
+  }
+
+  .web-gate {
+    padding: 28px 18px;
+  }
+
+  .web-gate-title {
+    font-size: 1.5rem;
+  }
+
+  .web-gate-input,
+  .web-gate-submit,
+  .web-password-cancel {
+    min-height: 3rem;
   }
 }

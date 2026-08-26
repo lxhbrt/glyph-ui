@@ -49,6 +49,7 @@ import {
   IconCheck,
   IconRefresh,
   IconEnter,
+  IconLock,
   IconLink,
   IconLinkOff,
   IconSummarize,
@@ -80,6 +81,8 @@ import {
 } from "./utils/contextMeter.js";
 import { ToolCard } from "./components/ToolCard.jsx";
 import { PermissionDialog } from "./components/PermissionDialog.jsx";
+import { WebGate } from "./components/WebGate.jsx";
+import { WebPasswordDialog } from "./components/WebPasswordDialog.jsx";
 import { ActiveTaskBar } from "./components/ActiveTaskBar.jsx";
 import { GRANT_DEMO_REQ, TASK_DEMO } from "./utils/codeGrants.js";
 import {
@@ -116,6 +119,7 @@ import {
   selectedHits,
   normalizePreviewPayload,
   toWireSelected,
+  vaultFindHttpError,
   vaultSendIntent,
 } from "./utils/vaultSearch.js";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
@@ -162,6 +166,33 @@ export default function App() {
   const [reconnecting, setReconnecting] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [seat, setSeat] = useState(() => resolveSeat());
+  const webSurface = seat === "web";
+  const [webUnlocked, setWebUnlocked] = useState(() => seat !== "web");
+  const [webPasswordOpen, setWebPasswordOpen] = useState(false);
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("web-surface", webSurface);
+    return () => root.classList.remove("web-surface");
+  }, [webSurface]);
+  useEffect(() => {
+    if (seat !== "web") {
+      setWebUnlocked(true);
+      return undefined;
+    }
+    let cancelled = false;
+    fetch("/api/web-gate", { credentials: "same-origin", cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        setWebUnlocked(Boolean(j?.ok) || j?.required === false);
+      })
+      .catch(() => {
+        if (!cancelled) setWebUnlocked(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [seat]);
   /** Arbeitsleiste: Session zusammenfassen ({ id, title } oder null). */
   const [summarizeTarget, setSummarizeTarget] = useState(null);
   /** Ausgewählter Beleg für eine gemeinsame Kopf-zu-Kopf-Aufgabe. */
@@ -1215,7 +1246,9 @@ export default function App() {
           }
           setReconnecting(Boolean(msg.reconnecting));
           setSessionId(msg.sessionId || null);
-          if (msg.seat === "desk" || msg.seat === "phone") setSeat(msg.seat);
+          if (msg.seat === "desk" || msg.seat === "phone" || msg.seat === "web") {
+            setSeat(msg.seat);
+          }
           if (msg.agent) setAgent(msg.agent);
           if (msg.cwd) setCwd(msg.cwd);
           if (msg.connected) setError("");
@@ -1832,7 +1865,7 @@ export default function App() {
       const json = await res.json().catch(() => ({}));
       if (ac.signal.aborted) return;
       if (!res.ok || json.ok === false) {
-        throw new Error(json.error || `Suche fehlgeschlagen (HTTP ${res.status})`);
+        throw new Error(json.error || vaultFindHttpError(res.status));
       }
       const preview = normalizePreviewPayload(json, q);
       setVaultHits(preview);
@@ -2487,10 +2520,10 @@ export default function App() {
     }
     if (id === "glyph-agent" || id === "agent") {
       // User-facing short name; picker keeps °_Agent.
-      return "Chat Term for Agent";
+      return webSurface ? "°_Agent" : "Chat Term for Agent";
     }
     return "Build Term for Grok";
-  }, [agent?.id, agentLabel]);
+  }, [agent?.id, agentLabel, webSurface]);
   const unavailableFor = useCallback(
     (what) => `${what} ist nur im grok-Profil verfügbar (aktiv: ${agentLabel})`,
     [agentLabel],
@@ -2816,7 +2849,9 @@ export default function App() {
   /** Session, paths, and build — only in the subtitle tooltip (quiet by default). */
   const headerTooltip = useMemo(() => {
     const lines = [];
-    lines.push(seat === "phone" ? "Sitz: Handy" : "Sitz: Schreibtisch");
+    lines.push(
+      seat === "phone" ? "Sitz: Handy" : seat === "web" ? "Sitz: Web" : "Sitz: Schreibtisch",
+    );
     if (sessionId) lines.push(`Session ${sessionId}`);
     if (cwd) lines.push(cwd);
     // Build # is the product mark; semver stays secondary (package.json).
@@ -3133,8 +3168,13 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showWorking, snackAlive]);
 
+  if (webSurface && !webUnlocked) {
+    return <WebGate onUnlocked={() => setWebUnlocked(true)} />;
+  }
+
   return (
-    <div className="app">
+    <div className={`app${webSurface ? " app--web" : ""}`}>
+      {webSurface ? null : (
       <aside
         className="side-rail"
         aria-label="Hauptaktionen"
@@ -3256,6 +3296,7 @@ export default function App() {
           <IconBook />
         </button>
       </aside>
+      )}
 
       <div
         className="app-main"
@@ -3266,22 +3307,63 @@ export default function App() {
           <div>
             <h1>
               Glyph
-              {GLYPH_BUILD > 0 ? (
+              {webSurface || GLYPH_BUILD <= 0 ? null : (
                 <span
                   className={`app-build${buildMismatch ? " app-build--drift" : ""}`}
                   title={headerTooltip}
                 >
                   #{GLYPH_BUILD}
                 </span>
-              ) : null}
+              )}
               <span className="sub sub--inline" title={headerTooltip}>
-                {productTerm} · ACP
+                {webSurface ? productTerm : `${productTerm} · ACP`}
                 {seat === "phone" ? " · Handy" : ""}
               </span>
             </h1>
           </div>
           <div className="top-actions">
-            {agents.length > 1 ? (
+            {webSurface ? (
+              <>
+                <button
+                  type="button"
+                  className="pill pill-btn pill-btn--icon"
+                  onClick={reset}
+                  disabled={!connected || busy}
+                  title="Neuer Chat"
+                  aria-label="Neuer Chat"
+                >
+                  <IconCompose size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="pill pill-btn pill-btn--icon"
+                  onClick={() => setShowExtensions(true)}
+                  title="Befehle & Skills (⌘/Ctrl+K)"
+                  aria-label="Befehle und Skills"
+                >
+                  <IconCommands size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="pill pill-btn pill-btn--icon"
+                  onClick={toggleTheme}
+                  title={theme === "dark" ? "Theme: Hell" : "Theme: Dunkel"}
+                  aria-label="Theme umschalten"
+                >
+                  <IconTheme size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="pill pill-btn pill-btn--icon"
+                  onClick={() => setWebPasswordOpen(true)}
+                  title="Passwort ändern"
+                  aria-label="Passwort ändern"
+                >
+                  <IconLock size={18} />
+                </button>
+              </>
+            ) : null}
+            {!webSurface && agents.length > 1 ? (
               <label className="agent-pick" title={agentPickTitle}>
                 <span className="sr-only">Agent</span>
                 <select
@@ -3299,7 +3381,7 @@ export default function App() {
                 </select>
               </label>
             ) : null}
-            {modelHud?.label ? (
+            {!webSurface && modelHud?.label ? (
               <button
                 type="button"
                 className={`model-hud${modelHud.mismatch ? " model-hud--mismatch" : ""}${
@@ -3477,11 +3559,22 @@ export default function App() {
             <div className="messages-content" ref={messagesContentRef}>
               {visibleMessages.length === 0 ? (
                 <div className="empty">
-                  Schreib eine Nachricht — Glyph verbindet lokal per ACP mit {agentLabel}.
+                  {webSurface
+                    ? `Nachricht an ${agentLabel}. Eigener Chat — nicht der Mac.`
+                    : `Schreib eine Nachricht — Glyph verbindet lokal per ACP mit ${agentLabel}.`}
                   <br />
                   <span className="empty-soft">
-                    Screenshot <strong>einfügen</strong> · Datei hierher{" "}
-                    <strong>ziehen</strong> · Sessions: <strong>Lupe</strong>
+                    {webSurface ? (
+                      <>
+                        Screenshot <strong>einfügen</strong> · Datei{" "}
+                        <strong>ziehen</strong> · Stift = neuer Chat
+                      </>
+                    ) : (
+                      <>
+                        Screenshot <strong>einfügen</strong> · Datei hierher{" "}
+                        <strong>ziehen</strong> · Sessions: <strong>Lupe</strong>
+                      </>
+                    )}
                   </span>
                 </div>
               ) : (
@@ -4343,6 +4436,10 @@ export default function App() {
         </footer>
       </div>
 
+      {webSurface && webPasswordOpen ? (
+        <WebPasswordDialog onClose={() => setWebPasswordOpen(false)} />
+      ) : null}
+
       {permissionReq ? (
         <PermissionDialog req={permissionReq} onRespond={respondPermission} />
       ) : null}
@@ -4355,7 +4452,7 @@ export default function App() {
         onPick={(p) => requestRewind(p.index, p.text)}
       />
 
-      {showLage ? (
+      {showLage && !webSurface ? (
         <Suspense fallback={<div className="lage-stage" aria-busy="true" />}>
           <GraphGuard onClose={() => setShowLage(false)}>
             <CableLage

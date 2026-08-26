@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const SEAT_IDS = ["desk", "phone"];
+export const SEAT_IDS = ["desk", "phone", "web"];
 
 export function parseSeat(raw) {
   const s = String(raw || "")

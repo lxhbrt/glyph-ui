@@ -122,6 +122,13 @@ function toWireSelected(hits) {
  * Composer-↵ with apple on: search, send, or abort the in-flight find.
  * `abort-then-search` = new query while a find is running.
  */
+function vaultFindHttpError(status) {
+  const code = Number(status);
+  if (code === 504) return "Ordner-Suche hat zu lange gedauert.";
+  if (code === 502) return "Ordner-Suche fehlgeschlagen (HTTP 502).";
+  return `Suche fehlgeschlagen (HTTP ${status})`;
+}
+
 function vaultSendIntent({
   appleOn,
   searchBusy,
@@ -158,5 +165,6 @@ export {
   normalizeHit,
   normalizePreviewPayload,
   toWireSelected,
+  vaultFindHttpError,
   vaultSendIntent,
 };

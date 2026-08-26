@@ -16,6 +16,7 @@ import {
   toWireSelected,
   vaultSendIntent,
   hitKindLabel,
+  vaultFindHttpError,
 } from "../../client/src/utils/vaultSearch.js";
 
 function installSessionStorage() {
@@ -123,6 +124,17 @@ describe("vaultSearch hits", () => {
     const wire = toWireSelected(preview.hits);
     assert.equal(wire[0].kind, "web");
     assert.equal(wire[0].source, "komnet");
+  });
+});
+
+describe("vaultFindHttpError", () => {
+  it("maps tunnel/engine 502/504 without a JSON body", () => {
+    assert.equal(vaultFindHttpError(504), "Ordner-Suche hat zu lange gedauert.");
+    assert.equal(
+      vaultFindHttpError(502),
+      "Ordner-Suche fehlgeschlagen (HTTP 502).",
+    );
+    assert.equal(vaultFindHttpError(500), "Suche fehlgeschlagen (HTTP 500)");
   });
 });
 

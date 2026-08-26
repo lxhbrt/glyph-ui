@@ -299,6 +299,29 @@ function IconEnter({ size = 20 }) {
   );
 }
 
+/** Web-Tor password. */
+function IconLock({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect
+        x="6"
+        y="11"
+        width="12"
+        height="9"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M8.5 11V8.2a3.5 3.5 0 0 1 7 0V11"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** Agent connected — chain link (status color via parent). */
 function IconLink({ size = 18 }) {
   return (
@@ -420,6 +443,7 @@ export {
   IconRefresh,
   IconStop,
   IconEnter,
+  IconLock,
   IconLink,
   IconLinkOff,
   IconSummarize,
