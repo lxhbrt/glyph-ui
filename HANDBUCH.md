@@ -135,6 +135,8 @@ Nach dem ersten Start: einmal das generierte Passwort aus `~/.glyph-ui/web-passw
 
 Stift = neuer Chat (eigene ACP-Session auf dem Web-Sitz). Verlauf des Macs bleibt unberührt.
 
+Header (begrenzt): Stift · Befehle · Theme · Schloss · **UI neu laden**. Kein Ketten-Icon / **Beenden** — auf der Domain startet der Sitz von selbst; Tab zu = Browser, nicht Agent. Hängt die Fläche: **UI neu laden** (Anmeldung bleibt).
+
 **Nicht v1:** native iOS-App, WhatsApp-Anbindung an Glyph.
 
 ---
@@ -152,7 +154,7 @@ Stift = neuer Chat (eigene ACP-Session auf dem Web-Sitz). Verlauf des Macs bleib
 │ Ordn.│                    │ (Schlange / Apfel)    │
 │ ☀/🌙 │────────────────────────────────────────────│
 │ ↻    │  [WARTE-Warteschlange, falls gefüllt]      │
-│      │  Composer-Bubble · Aktionen · ↵ / Snack ○  │
+│      │  Composer-Bubble · Aktionen · Kopf / Snack ○│
 └──────┴────────────────────────────────────────────┘
 ```
 
@@ -167,7 +169,7 @@ Chat und Composer folgen der **Grok Chat App**-Ästhetik: schwarze Fläche, Prom
 | **Deine Prompts** | Rechte **Sprechblase** (Fill `--user`, abgerundet) |
 | **Thinking / Tool / System** | Transparent; System mit feinem Gold-Strich links |
 | **Composer** | Bubble-Shell (gleiche Fill-Familie wie Prompts), großer Radius, weicher Schatten |
-| **Senden ↵** | **Runder** Button |
+| **Senden (Kopf)** | **Runder** Button: Graph-Pixel Grok Build / °_Agent / ^_Code |
 | **Snack / Stopp** | Derselbe **Kreis** während der Arbeit; Stopp-Ziel = roter **Punkt** (nicht Rechteck); Arena 4×4, rund geclippt |
 | **Theme** | Hell/Dunkel; Light: hellere Bubble, Antworten weiter flach |
 
@@ -179,7 +181,7 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 
 | Symbol | Name | Funktion |
 |--------|------|----------|
-| **Lupe** | Sessions | Suche, öffnen; Schließen: Ja + Wiki · Löschen (`/delete`) |
+| **Lupe** | Sessions | Suche, öffnen; Schließen löscht den Disk-Ordner. Wissen: `/merken` |
 | **Graph** | Graph | Köpfe um Glyph; Vaults/Roots als Punkte. Direkt unter der Lupe |
 | **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
@@ -188,19 +190,21 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 | **Wiki (i)** | Wiki | Öffnet den Wiki-Index (`.md`) in Obsidian / Standard-App |
 | **Workspace** | Ordner | Öffnet den aktuellen Arbeitsordner (`cwd`) im Finder |
 | **Theme** | Hell/Dunkel | Darstellung umschalten |
-| **Refresh** | Neu laden | UI neu laden (Ersatz für ⌘⇧R) |
+| **UI neu laden** | Neu laden | Web-UI neu laden (Ersatz für ⌘⇧R; Session bleibt) |
 
 ---
 
 ## 4. Verbinden & Status
 
-Oben rechts:
+Oben rechts (Schreibtisch / Handy):
 
 | Anzeige | Bedeutung | Klick |
 |---------|-----------|--------|
-| **verbunden** (gold) | Agent läuft | Beenden (wie `/quit`) |
+| **verbunden** (gold) | Agent läuft | Beenden (Ketten-Icon) |
 | **offline** | kein Agent | Starten / neu verbinden |
 | **verbindet… / trennt…** | gerade umschalten | warten |
+
+**glyph-ui.com:** keine Kette. Stattdessen **UI neu laden** im Header.
 
 Ohne **verbunden** ist das Eingabefeld deaktiviert.
 
@@ -213,7 +217,7 @@ Ohne **verbunden** ist das Eingabefeld deaktiviert.
 1. Status **verbunden** sicherstellen.
 2. Nachricht tippen (Pfad, Fehler, Ziel — je klarer, desto besser).
 3. **Desk:** Enter senden · Shift+Enter = neue Zeile. **Handy:** Tastatur-Enter = neue Zeile;
-   der runde **↵**-Button sendet (erster Tap). Während der Agent arbeitet oder die Ordner-Suche
+   der runde **Kopf** sendet (erster Tap). Während der Agent arbeitet oder die Ordner-Suche
    läuft: **Snack** (Klick = Stopp / Suche abbrechen).
 4. Antwort streamt live flach im Chat; dein Prompt erscheint als Bubble. Rollen: **Agent** (der
    aktive Name, z. B. Grok), **Thinking**, **Tool**, **System** (Prompts ohne „Du“-Label).
@@ -289,7 +293,7 @@ Markdown (Codeblöcke, Links, …) wird vor dem TTS grob bereinigt.
 
 | Zustand | Was passiert |
 |---------|----------------|
-| Idle | Button zeigt **↵** (Enter) → senden |
+| Idle | Button zeigt den **Kopf** (Grok Build / °_Agent / ^_Code) → senden |
 | Arbeitet | Snack-Animation (Schlange jagt Apfel) |
 | Ordner-Suche | Snack; Composer leer, Query in der Leiste. × oder Snack = Fetch abbrechen. Vault leer: KomNet einmal, sonst DGUV |
 | Text + Enter während Arbeit | Nachricht landet in der **Warteschlange** |
@@ -332,25 +336,30 @@ Aktive Chat-Session ist **geschützt** (nicht schließbar) — zuerst **Stift** 
 
 | Option | Wirkung | TUI-Äquivalent |
 |--------|---------|----------------|
-| **Ja + Wiki** | Transcript-Auszug → Wiki, dann Session-Ordner löschen | (UI-Erweiterung) |
-| **Löschen** | Session-Historie endgültig von Disk entfernen, ohne Wiki | **`/delete`** (bzw. `/resume` → `d` → `y`) |
+| **Schließen** | Session-Ordner von Disk entfernen. Kein Wiki-Dump. | **`/delete`** (bzw. `/resume` → `d` → `y`) |
 | **Abbrechen** | Nichts | — |
 
 **Wichtig:** Nur „archiviert“ markieren spart **keinen** Speicher. Erst das **Löschen des Session-Ordners** entlastet die Disk (Sessions können hunderte MB sein). **Stift** (`/new`) leert nur den Chat — die alte Session bleibt auf Disk, bis du sie in der Lupe schließt.
 
-### Zusammenfassen
+### Merken
 
-Header (aktive Session) oder Lupe (andere Grok-Sessions): Vorschau in der **Arbeitsleiste** über der LVL-Leiste — gleiches Chrome wie Plan. Kein Fenster in der Bildmitte. **Speichern** = Snapshot; **×** bricht ab.
+Kein Header-Button. Slash **`/merken`** (Befehle / Skills). Der Agent zeigt die Karte, du sagst **Ja**, dann wird geschrieben.
 
-### Wiki-Ziel
-
-Standard:
+Wiki nur nach Vorlage — sonst ablehnen:
 
 ```
-~/.glyph-ui/wiki/sources/grok-sessions/
+# <Aufgabe>
+- Aufgabe: …
+- Lösung: …          (gilt ohne den Chat)
+- Datei: `pfad` oder Beleg: `Wiki-Seite`
+- Suchbegriffe: wort1, wort2, wort3
 ```
 
-Mit `WIKI_PATH` (Alias `OPENCLAW_WIKI_PATH`) auf einen beliebigen Ordner umleiten (z. B. Obsidian-Vault). Seiten sind als Rohquellen markiert und haben einen eigenen Index in diesem Ordner (Wiki-Hauptindex bleibt unberührt).
+Gleiches Thema → bestehende Seite. Test-Pings und Nacherzählung: nichts schreiben. Regeln/Lektionen gehen nach MEMORY / CONTEXT / pending, nicht ins Wiki.
+
+### Session schließen
+
+Schließen löscht den Ordner unter `~/.grok/sessions`. Ins Wiki schreibt das nicht — Persistenz nur **`/merken`**.
 
 ---
 
@@ -417,6 +426,7 @@ Workspace steuert, wo der Agent Dateien liest/schreibt (Standard oft Home oder `
 | Medien | Bilder/Video oft als Freitext; TUI: `/imagine`, `/imagine-video` | **grok** |
 | Erweiterungen | Skills, Workflows, Subagents, MCPs (je nach Installation) | **grok** |
 | Vault & Notizen | Obsidian-Vault-Suche, Wiki-Aliase, PDF, Mail, Diff+Backup | **°_Agent** |
+| Merken | Slash `/merken`: Erkenntnis nach Vorlage, Chat-Ja; Ablehnen ohne Suchwert | alle |
 | Cloud-Modelle | viele Modelle zum Testen/Anbinden über eine API | **grok** |
 
 ---
@@ -444,7 +454,7 @@ Viele `/Befehle` sind **TUI-Builtins**. Im Browser reichen oft **Freitext** + di
 | `/remember` · `/memory` | Memory (teilw. experimentell) |
 | `/copy` · `/export` | Antwort / Gespräch exportieren |
 | `/doctor` · `/docs` · `/login` | Diagnose, Doku, Auth |
-| `/quit` · `/exit` | Agent beenden (UI: Status-Pill) |
+| **UI neu laden** | Web-UI neu laden, Anmeldung bleibt (Menü Befehle / Slash; auf glyph-ui.com die Header-Taste). Mac: Ketten-Icon = Beenden |
 
 Vollständige Liste im TUI: **`/docs`**  
 Datei: `~/.grok/docs/user-guide/04-slash-commands.md`
@@ -494,8 +504,8 @@ GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 
 ### C) Platz freimachen, Wissen behalten
 
-1. **Lupe** → Session **Schließen** → **Ja + Wiki**  
-2. Optional im Vault nachlesen  
+1. **Lupe** → Session **Schließen** (Disk-Ordner weg)  
+2. Was bleiben soll: **`/merken`**  
 
 ### D) Sehen, wann du gearbeitet hast
 
@@ -516,7 +526,7 @@ GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 | **offline** bleibt | Status klicken; `grok` im PATH? `grok login`? Bridge-Log / `npm run service:status` |
 | Eingabe grau | Erst verbinden |
 | Agent „hängt“ | Leerer Snack-Klick = Stop; sonst Refresh + neu verbinden |
-| Disk voll | Lupe → Schließen → Ja + Wiki oder Löschen (`/delete`); große Ordner unter `~/.grok/sessions` |
+| Disk voll | Lupe → Schließen; große Ordner unter `~/.grok/sessions`. Wissen: `/merken` |
 | UI wirkt veraltet | **Refresh** in der Leiste |
 | Slash tut „nichts“ | Viele Befehle sind TUI-only — Freitext formulieren oder Deep Search/Fork/Lupe nutzen |
 
@@ -533,7 +543,7 @@ Diagnose im TUI: **`/doctor`**.
 | `server/agents.js` | Agent-Profile (grok, ^_Code, °_Agent) + Auflösung |
 | `server/sessions.js` | Session-Liste, Close, Transcript |
 | `server/activity.js` | Heatmap aus `events.jsonl` |
-| `server/wiki-archive.js` | Wiki-Seiten beim Schließen |
+| `server/wiki-archive.js` | Wiki-Root (kein Session-Dump mehr) |
 
 Glyph ist ein **ACP-Client**, kein Modell-Client: Ein Profil zu wechseln bedeutet, ein anderes
 Binary/den anderen Adapter zu spawnen (nicht auf eine andere API zu zeigen). Alles, was über ACP
@@ -634,7 +644,7 @@ Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
 - [ ] °_Agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
 - [ ] °_Agent Cloud-Antwort: `OPENROUTER_API_KEY` in der glyph-agent-Umgebung (Technik)  
 - [ ] Workspace passt (Tooltip auf Glyph #N / Workspace-Button / `GLYPH_UI_CWD`)  
-- [ ] Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, ↵-Button = senden 
+- [ ] Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, Kopf = senden 
 - [ ] Während Arbeit: Text → Queue, leer → Stop  
 - [ ] Sessions: Lupe · Aktivität: Kalender · Wissen: Wiki  
 - [ ] Sprache (nur grok): `XAI_API_KEY` (falls nötig) · Mic diktieren · Lautsprecher vorlesen  

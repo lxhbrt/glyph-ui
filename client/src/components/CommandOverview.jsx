@@ -10,8 +10,6 @@ function CommandOverview({
   open,
   onClose,
   onOpenSession,
-  canSummarize = false,
-  onSummarizeSession,
 }) {
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -88,7 +86,7 @@ function CommandOverview({
   }, [selectedIndex, filtered]);
 
   const closeSession = useCallback(
-    async (id, { writeWiki = true, deleteDisk = true } = {}) => {
+    async (id, { writeWiki = false, deleteDisk = true } = {}) => {
       setClosingId(id);
       setError("");
       setLastResult(null);
@@ -266,12 +264,6 @@ function CommandOverview({
               {data
                 ? `${data.count} on record · ${data.totalLabel} lokal`
                 : "…"}
-              {data?.wikiRoot ? (
-                <>
-                  <br />
-                  <span className="muted-path">Wiki → sources/grok-sessions</span>
-                </>
-              ) : null}
             </p>
           </div>
           <div className="overview-head-actions">
@@ -287,7 +279,7 @@ function CommandOverview({
         <p className="overview-hint">
           <strong>Auswählen:</strong> Klick oder ↑↓ — Markierung (nicht „aktiv“).{" "}
           <strong>Laden:</strong> Enter oder Doppelklick (Verlauf öffnen).{" "}
-          <strong>Name:</strong> r · <strong>Schließen:</strong> Ja + Wiki · Löschen (/delete) · Abbrechen.
+          <strong>Name:</strong> r · <strong>Schließen:</strong> Session-Ordner löschen · Abbrechen. Wissen: <code>/merken</code>.
           Disk: <code>~/.grok/sessions</code>.
         </p>
 
@@ -309,11 +301,7 @@ function CommandOverview({
         ) : null}
         {lastResult ? (
           <div className="banner ok-banner">
-            {lastResult.wikiWritten
-              ? "Ja + Wiki: "
-              : lastResult.diskDeleted
-                ? "Gelöscht (/delete): "
-                : "Geschlossen: "}
+            Geschlossen:{" "}
             {lastResult.session?.title || lastResult.session?.id}
             {lastResult.freedLabel ? ` · freigegeben ${lastResult.freedLabel}` : ""}
             {lastResult.wikiPath ? (
@@ -410,23 +398,9 @@ function CommandOverview({
                       <>
                         <button
                           type="button"
-                          className="primary"
-                          disabled={closingId === s.id || isActive || opening}
-                          title="Zusammenfassen → Wiki → dann Session-Ordner löschen"
-                          onClick={() =>
-                            void closeSession(s.id, {
-                              writeWiki: true,
-                              deleteDisk: true,
-                            })
-                          }
-                        >
-                          {closingId === s.id ? "…" : "Ja + Wiki"}
-                        </button>
-                        <button
-                          type="button"
                           className="danger"
                           disabled={closingId === s.id || isActive || opening}
-                          title="TUI /delete — Session-Historie endgültig löschen (ohne Wiki)"
+                          title="Session-Ordner auf Disk löschen. Wissen: /merken"
                           onClick={() =>
                             void closeSession(s.id, {
                               writeWiki: false,
@@ -434,7 +408,7 @@ function CommandOverview({
                             })
                           }
                         >
-                          {closingId === s.id ? "…" : "Löschen"}
+                          {closingId === s.id ? "…" : "Schließen"}
                         </button>
                         <button
                           type="button"
@@ -495,33 +469,13 @@ function CommandOverview({
                         )}
                         {renamingId === s.id ? null : (
                           <>
-                        {canSummarize && (
-                          <button
-                            type="button"
-                            disabled={opening || isActive || s.empty || !s.chatMessages}
-                            title={
-                              s.empty || !s.chatMessages
-                                ? "Session ohne Nachrichten — Zusammenfassung nicht möglich"
-                                : isActive
-                                  ? "Aktive Session geschützt — erst Stift (Neuer Chat)"
-                                  : "Session zusammenfassen (Vorschau → Bestätigen)"
-                            }
-                            onClick={() => {
-                              if (typeof onSummarizeSession === "function") {
-                                onSummarizeSession({ id: s.id, title: s.title || "Session" });
-                              }
-                            }}
-                          >
-                            Zusammenfassen
-                          </button>
-                        )}
                         <button
                           type="button"
                           disabled={closingId === s.id || isActive || opening}
                           title={
                             isActive
                               ? "Aktive Chat-Session geschützt — zuerst Stift (Neuer Chat /new)"
-                              : "Ja + Wiki · Löschen (/delete) · Abbrechen"
+                              : "Session-Ordner löschen · Abbrechen. Wissen: /merken"
                           }
                           onClick={() => setConfirmId(s.id)}
                         >

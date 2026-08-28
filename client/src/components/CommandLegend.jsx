@@ -11,7 +11,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Lupe",
         need: "empfohlen",
-        desc: "Sessions suchen/öffnen; Schließen: Ja + Wiki oder Löschen (/delete).",
+        desc: "Sessions suchen/öffnen; Schließen löscht den Disk-Ordner. Wissen: /merken.",
       },
       {
         cmd: "Graph",
@@ -54,7 +54,7 @@ const COMMAND_LEGEND = [
         desc: "Hell / Dunkel umschalten.",
       },
       {
-        cmd: "Refresh",
+        cmd: "UI neu laden",
         need: "optional",
         desc: "UI neu laden (statt ⌘⇧R).",
       },
@@ -66,7 +66,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Enter",
         need: "normal",
-        desc: "Desk: Senden (ohne Shift), Shift+Enter = Zeile. Handy: Tastatur-Enter = Zeile, ↵-Button sendet beim ersten Tap. Slash-Popup: Enter = auswählen. Agent arbeitet → Warteschlange.",
+        desc: "Desk: Senden (ohne Shift), Shift+Enter = Zeile. Handy: Tastatur-Enter = Zeile, Kopf sendet beim ersten Tap. Slash-Popup: Enter = auswählen. Agent arbeitet → Warteschlange.",
       },
       {
         cmd: "/ · Slash-Popup",
@@ -89,9 +89,9 @@ const COMMAND_LEGEND = [
         desc: "Letzten Nutzer-Turn und alles danach aus dem Verlauf nehmen. Esc Esc, /rewind, oder ↺ an der Nachricht. Dateien bleiben.",
       },
       {
-        cmd: "↵ / Snack · Stopp",
+        cmd: "Kopf / Snack · Stopp",
         need: "auto",
-        desc: "Runder Button: idle = ↵ (Handy: erster Tap sendet). Während Arbeit oder Vault-Suche: Text = Queue/neue Suche; leerer Klick/Snack = Stopp (ACP bzw. Fetch-Abbruch). Kritische Tools laufen sicher zu Ende mit Hinweis.",
+        desc: "Runder Button: idle = Graph-Kopf (Grok Build · °_Agent · ^_Code; Handy: erster Tap sendet). Während Arbeit oder Vault-Suche: Text = Queue/neue Suche; leerer Klick/Snack = Stopp (ACP bzw. Fetch-Abbruch). Kritische Tools laufen sicher zu Ende mit Hinweis.",
       },
       {
         cmd: "Chat | Deep Search | Fork | Swarm",
@@ -104,9 +104,9 @@ const COMMAND_LEGEND = [
         desc: "Icon-Button: Agent starten/beenden. Gold-Kette = verbunden, rot = offline.",
       },
       {
-        cmd: "Zusammenfassen",
+        cmd: "/merken",
         need: "empfohlen",
-        desc: "Header neben der Kette: Snapshot in der Arbeitsleiste über LVL (wie Plan). Grok zusätzlich in der Lupe. Test-Pings werden nicht Titel.",
+        desc: "Skill (Befehle / Skills): eine Erkenntnis nach Chat-Ja. Wiki nur nach Vorlage (Aufgabe · Lösung · Datei/Beleg · Suchbegriffe). Ablehnen statt aufblähen.",
       },
       {
         cmd: "Name · /rename",
@@ -274,7 +274,7 @@ const SHORT_HANDBOOK = [
     title: "Schnellstart",
     body: [
       "Oben rechts **Ketten-Icon** (gold) = Agent läuft. Offline (durchgestrichen)? Icon klicken.",
-      "Nachricht tippen → Desk **Enter** senden · **Shift+Enter** = Zeile. Handy: Tastatur-Enter = Zeile, ↵-Button = senden.",
+      "Nachricht tippen → Desk **Enter** senden · **Shift+Enter** = Zeile. Handy: Tastatur-Enter = Zeile, Kopf = senden.",
       "Ohne Verbindung ist das Eingabefeld deaktiviert.",
       "Sicherheit: Bridge mit vollen Tool-Rechten — **nur localhost**.",
     ],
@@ -297,17 +297,18 @@ const SHORT_HANDBOOK = [
     id: "layout",
     title: "Oberfläche",
     body: [
-      "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, Refresh, **Buch** (Handbuch · UI-Legende).",
-      "Header links: Glyph #N · Term · ACP. cwd nicht in der Zeile (Tooltip / Workspace-Button). Rechts: Profil · Modell-Pille (eingesetztes Modell, nicht Primary→Reserve) · Kette · **Zusammenfassen** (aktive Session).",
+      "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, UI neu laden, **Buch** (Handbuch · UI-Legende).",
+      "Header links: Glyph #N · Term · ACP. cwd nicht in der Zeile (Tooltip / Workspace-Button). Rechts: Profil · Modell-Pille (eingesetztes Modell, nicht Primary→Reserve) · Kette.",
+      "glyph-ui.com: Header Stift · Befehle · Theme · Schloss · **UI neu laden**. Keine Kette (Beenden).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
-      "Unten: **Arbeitsleiste** (Plan · Ordner · Zusammenfassen · Aktiver Task) über der LVL-Leiste · Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **↵**. °_Agent: Pixel-Apfel über ↵ = Ordner-Suche.",
+      "Unten: **Arbeitsleiste** (Plan · Ordner · Aktiver Task) über der LVL-Leiste · Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **Kopf**. °_Agent: Pixel-Apfel über dem Kopf = Ordner-Suche.",
     ],
   },
   {
     id: "rail",
     title: "Linke Leiste",
     rows: [
-      ["Lupe", "Sessions suchen/öffnen; Ja + Wiki · Löschen (/delete)"],
+      ["Lupe", "Sessions suchen/öffnen; Schließen = Disk-Ordner weg. Wissen: /merken"],
       ["Graph", "Direkt unter der Lupe · Köpfe um Glyph · Punkt → Legende"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
       ["Buch", "Handbuch · UI-Legende"],
@@ -323,14 +324,14 @@ const SHORT_HANDBOOK = [
     title: "Schreiben & senden",
     rows: [
       ["Chat", "Normale Nachricht an den aktiven Agenten"],
-      ["Apfel", "°_Agent: über ↵. An = Suche beim Senden, Composer leer, Query in der Leiste. ×/Snack bricht die Suche ab. Vault leer → KomNet, sonst DGUV."],
+      ["Apfel", "°_Agent: über dem Kopf. An = Suche beim Senden, Composer leer, Query in der Leiste. ×/Snack bricht die Suche ab. Vault leer → KomNet, sonst DGUV."],
       ["Treffer", "Arbeitsleiste über LVL, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext. Web: KomNet/DGUV."],
       ["Deep Search", "Grok: strukturierte Multi-Quellen-Recherche. Andere Köpfe ausgegraut."],
       ["Fork", "Session branchen; Text = optionale Directive"],
       ["Swarm", "°_Agent / ^_Code: Planer, Suche, Synthese. Grok ausgegraut."],
       ["↑", "Leerer Composer: Prompt-History"],
       ["Rewind", "Esc Esc · /rewind · ↺ an der Nutzer-Nachricht. Dateien bleiben."],
-      ["Enter", "Desk: senden · Handy: Tastatur = Zeile, ↵-Button sendet (erster Tap)"],
+      ["Enter", "Desk: senden · Handy: Tastatur = Zeile, Kopf sendet (erster Tap)"],
       ["Shift+Enter", "Neue Zeile ohne Senden (Desk)"],
     ],
   },
@@ -348,12 +349,12 @@ const SHORT_HANDBOOK = [
     id: "working",
     title: "Während der Agent arbeitet",
     rows: [
-      ["Idle", "Button zeigt ↵ → senden"],
+      ["Idle", "Button zeigt den Kopf (Grok Build / °_Agent / ^_Code) → senden"],
       ["Arbeitet", "Runder Snack (Schlange jagt roten Stopp-Punkt)"],
       ["Überfressen", "Snack dick + X-Augen + Banner — Hänger, manuell neu starten"],
       ["Text + Enter", "Follow-up → Warteschlange (WARTE)"],
       ["Leer / Snack", "Soft-Stop (ACP-Cancel) im Kreis-Button"],
-      ["Arbeitsleiste", "Plan, Ordner-Suche, Zusammenfassen, Aktiver Task: Gold-Rand, Label, × — über der LVL-Leiste, nicht Bildmitte. Freigabe bleibt eigenes Modal."],
+      ["Arbeitsleiste", "Plan, Ordner-Suche, Aktiver Task: Gold-Rand, Label, × — über der LVL-Leiste, nicht Bildmitte. Freigabe bleibt eigenes Modal."],
       ["× / Leeren", "Queue-Eintrag bzw. ganze Queue löschen"],
       ["Neue Ausgabe ↓", "Wieder ans aktuelle Chat-Ende springen"],
     ],
@@ -363,10 +364,9 @@ const SHORT_HANDBOOK = [
     title: "Sessions & Wiki",
     body: [
       "Sessions liegen unter `~/.grok/sessions`. Lupe → suchen → Öffnen.",
-      "Schließen: **Ja + Wiki** (Archiv + löschen) · **Löschen** (TUI `/delete`) · Abbrechen.",
+      "Schließen: Session-Ordner auf Disk löschen · Abbrechen. Kein Wiki-Dump.",
       "Aktive Chat-Session ist geschützt (zuerst Stift = `/new`). Speicher freigeben = Ordner löschen.",
-      "**Zusammenfassen** (Header, neben der Kette): Snapshot in der Arbeitsleiste über LVL. Grok auch in der Lupe (Lupe schließt, Leiste dockt). Titel = letzte echte Aufgabe, nicht der erste Test-Ping.",
-      "Wiki-Ziel: `…/memory-wiki/sources/grok-sessions/`.",
+      "**Merken:** Slash `/merken` (Befehle / Skills). Wiki-Karte nach Vorlage, erst nach Chat-Ja. Ablehnen ohne Suchwert.",
     ],
   },
   {
@@ -378,6 +378,7 @@ const SHORT_HANDBOOK = [
       ["Recherche", "Web/Docs; Deep Search für tiefergehend"],
       ["Medien", "Bilder/Video oft als Freitext; TUI: /imagine"],
       ["Erweiterungen", "Skills, Workflows, Subagents, MCPs"],
+      ["Merken", "Slash /merken: Erkenntnis nach Vorlage, Chat-Ja. Kein Zusammenfassen-Button."],
     ],
   },
   {
@@ -386,7 +387,8 @@ const SHORT_HANDBOOK = [
     body: [
       "**Schnell:** verbunden → Aufgabe → Enter → optional Queue.",
       "**Fortsetzen:** Lupe → Session öffnen → weiterchatten.",
-      "**Aufräumen:** Lupe → Schließen → Ja + Wiki, oder **Löschen** (/delete).",
+      "**Aufräumen:** Lupe → Schließen (Disk). Wissen: `/merken`.",
+      "**Merken:** `/merken` → Karte zeigen → Ja. Ohne Suchwert ablehnen.",
       "**Aktivität:** Kalender → Tag → Sessions.",
       "**Neues Thema:** Stift (/new, Disk bleibt) oder Fork (Abzweig mit Verlauf).",
       "**Aufgabe übergeben:** Kette an der Antwort → Plan. **Übernehmen** in den Composer, kein Auto-Kopfwechsel.",
@@ -421,8 +423,8 @@ const SHORT_HANDBOOK = [
         "hängt",
         "Snack mit X_X = überfressen (2+ Min still) · tippen = Stop · UI neu laden · sonst npm run service:install",
       ],
-      ["Disk voll", "Lupe → Schließen → Ja + Wiki oder Löschen (/delete)"],
-      ["UI veraltet", "Refresh in der Leiste"],
+      ["Disk voll", "Lupe → Schließen (Session-Ordner). Wissen: /merken"],
+      ["UI veraltet", "UI neu laden in der Leiste"],
       ["Slash „tut nichts“", "Viele /Befehle sind TUI-only — Freitext oder Tabs"],
       ["Code/Agent rot", "Graph → Agent/Code · Direct-Key · glyph-agent :18899"],
     ],
@@ -433,7 +435,7 @@ const SHORT_HANDBOOK = [
     body: [
       "✓ Graph: Grok Build OAuth / Agent Direct · Status **verbunden**",
       "✓ Workspace passt (Header-Pfad)",
-      "✓ Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, ↵ = senden",
+      "✓ Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, Kopf = senden",
       "✓ Arbeit: Text → Queue, leer → Stop",
       "✓ Lupe · Kalender · Wiki · Mic / Lautsprecher",
     ],

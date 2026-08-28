@@ -57,7 +57,11 @@ import {
   isWebOrigin,
   isWebRequest,
   parseCookie,
+  parseStoredWebSessions,
+  serializeWebSessions,
   validateNewWebPassword,
+  WEB_SESSION_TTL_S,
+  WEB_SESSIONS_MAX,
 } from "./webSurface.mjs";
 import {
   VAULT_FIND_TIMEOUT_MS,
@@ -94,17 +98,7 @@ import {
 } from "./sessions.js";
 import { buildActivity } from "./activity.js";
 import { mergeToolFields, resolveToolDisplayTitle } from "./toolTitle.mjs";
-import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
-import {
-  buildDraftFromTurns,
-  buildFileName,
-  getWikiRoot as getSummaryWikiRoot,
-  proposeSkillFromDraft,
-  renderSummaryDocument,
-  resolveTargetPath,
-  writeSkillFromProposal,
-  writeSummaryAtomically,
-} from "./summaries.js";
+import { getWikiRoot } from "./wiki-archive.js";
 import {
   listVoices,
   speechToText,
@@ -243,8 +237,11 @@ function isAllowedWsOrigin(origin) {
  * Origin alone is not enough on localhost (any local process can omit/forge it);
  * the shared token from the served UI raises the bar for drive-by WS clients.
  */
-const webSessions = new Set();
+/** token → issuedAt (ms). RAM-Spiegel von web-sessions.json. */
+const webSessions = new Map();
 let webPassword = "";
+const WEB_SESSIONS_FILE = path.join(STATE_DIR, "web-sessions.json");
+const WEB_SESSION_TTL_MS = WEB_SESSION_TTL_S * 1000;
 /** Env password cannot be changed from the Web-Fläche (would revert on restart). */
 const webPasswordFromEnv = Boolean(
   String(process.env.GLYPH_WEB_PASSWORD || "").trim(),
@@ -279,18 +276,63 @@ async function saveWebPassword(next) {
   webPassword = next;
 }
 
+async function loadWebSessions() {
+  try {
+    const raw = JSON.parse(await fs.readFile(WEB_SESSIONS_FILE, "utf8"));
+    for (const row of parseStoredWebSessions(raw, Date.now())) {
+      webSessions.set(row.token, row.iat);
+    }
+  } catch {
+    /* missing or unreadable — start empty */
+  }
+}
+
+async function persistWebSessions() {
+  const entries = [...webSessions.entries()].map(([token, iat]) => ({
+    token,
+    iat,
+  }));
+  await fs.mkdir(STATE_DIR, { recursive: true });
+  await fs.writeFile(WEB_SESSIONS_FILE, serializeWebSessions(entries), {
+    mode: 0o600,
+  });
+}
+
+function trimWebSessions(now = Date.now()) {
+  for (const [token, iat] of webSessions) {
+    if (now - iat >= WEB_SESSION_TTL_MS) webSessions.delete(token);
+  }
+  if (webSessions.size <= WEB_SESSIONS_MAX) return;
+  const sorted = [...webSessions.entries()].sort((a, b) => a[1] - b[1]);
+  while (webSessions.size > WEB_SESSIONS_MAX) {
+    const oldest = sorted.shift();
+    if (!oldest) break;
+    webSessions.delete(oldest[0]);
+  }
+}
+
 function webSessionToken(req) {
   return parseCookie(req?.headers?.cookie, WEB_COOKIE);
 }
 
 function hasWebSession(req) {
   const token = webSessionToken(req);
-  return Boolean(token) && webSessions.has(token);
+  if (!token) return false;
+  const iat = webSessions.get(token);
+  if (iat == null) return false;
+  if (Date.now() - iat >= WEB_SESSION_TTL_MS) {
+    webSessions.delete(token);
+    void persistWebSessions();
+    return false;
+  }
+  return true;
 }
 
 function issueWebSession() {
   const token = crypto.randomBytes(24).toString("hex");
-  webSessions.add(token);
+  webSessions.set(token, Date.now());
+  trimWebSessions();
+  void persistWebSessions();
   return token;
 }
 
@@ -317,6 +359,7 @@ function passwordsMatch(got, expected) {
 }
 
 await loadWebPassword();
+await loadWebSessions();
 
 function verifyWsClient(info) {
   const req = info.req;
@@ -727,7 +770,6 @@ app.get("/api/health", (req, res) => {
         }))
       : [];
     payload.wikiRoot = getWikiRoot();
-    payload.wikiArchive = path.join(getWikiRoot(), "sources/grok-sessions");
     payload.uploads = UPLOAD_DIR;
   }
   res.json(payload);
@@ -800,6 +842,7 @@ app.post("/api/web-gate/password", async (req, res) => {
     return;
   }
   webSessions.clear();
+  await persistWebSessions();
   const token = issueWebSession();
   res.setHeader("Set-Cookie", webCookieHeader(token));
   res.json({ ok: true });
@@ -924,12 +967,9 @@ async function openInOs(targetPath, { reveal = false } = {}) {
 async function openWikiEntry() {
   const { promises: fs } = await import("node:fs");
   const wikiRoot = getWikiRoot();
-  const archive = path.join(wikiRoot, "sources/grok-sessions");
   const candidates = [
-    path.join(archive, "00 Index - Grok Sessions.md"),
     path.join(wikiRoot, "WIKI.md"),
     path.join(wikiRoot, "index.md"),
-    archive,
     wikiRoot,
   ];
   let target = wikiRoot;
@@ -963,7 +1003,6 @@ async function openWikiEntry() {
           via: "obsidian-uri",
           uri,
           wikiRoot,
-          archive,
         };
       }
     } catch (err) {
@@ -981,7 +1020,6 @@ async function openWikiEntry() {
         opened: target,
         via: "obsidian-app",
         wikiRoot,
-        archive,
       };
     } catch (err) {
       attempts.push(
@@ -999,7 +1037,6 @@ async function openWikiEntry() {
       opened: target,
       via: "open",
       wikiRoot,
-      archive,
     };
   } catch (err) {
     attempts.push(`open: ${err instanceof Error ? err.message : String(err)}`);
@@ -1015,7 +1052,6 @@ async function openWikiEntry() {
         opened: target,
         via: "reveal",
         wikiRoot,
-        archive,
         note: "In Finder gezeigt (keine App zum Öffnen gefunden)",
       };
     } catch (err) {
@@ -1902,10 +1938,7 @@ app.post("/api/sessions/:id/open", async (req, res) => {
 
 /**
  * Close session (UI: Lupe → Schließen).
- * Body:
- *   { deleteDisk?: boolean, writeWiki?: boolean }
- * Defaults: both true → Wiki-Archiv + Disk löschen (Ja + Wiki).
- * writeWiki:false + deleteDisk:true → TUI /delete (nur Disk).
+ * Body: { deleteDisk: true }. writeWiki ist tot (400) — Persistenz /merken.
  */
 app.post("/api/sessions/:id/close", async (req, res) => {
   try {
@@ -1916,23 +1949,22 @@ app.post("/api/sessions/:id/close", async (req, res) => {
     // Explicit flags only — empty/missing body must not default to disk wipe.
     const deleteDisk = req.body?.deleteDisk === true;
     const writeWiki = req.body?.writeWiki === true;
-    if (!deleteDisk && !writeWiki) {
+    if (writeWiki) {
       res.status(400).json({
-        error:
-          "Nichts zu tun: setze deleteDisk und/oder writeWiki explizit auf true",
+        error: "Wiki-Archiv tot — Persistenz nur /merken",
+      });
+      return;
+    }
+    if (!deleteDisk) {
+      res.status(400).json({
+        error: "Nichts zu tun: setze deleteDisk explizit auf true",
       });
       return;
     }
     const result = await closeSession(req.params.id, {
       deleteDisk,
-      writeWiki,
+      writeWiki: false,
       protectId: seats.all().map((x) => x.sessionId).filter(Boolean),
-      wikiWriter: writeWiki
-        ? async (doc, meta) => {
-            const written = await writeSessionArchive(doc, meta);
-            return written.relativePath;
-          }
-        : undefined,
     });
     res.json(result);
   } catch (err) {
@@ -1949,283 +1981,23 @@ app.post("/api/sessions/:id/close", async (req, res) => {
 });
 
 /**
- * Erweiterte Session-ID-Prüfung für Summarize/History: akzeptiert UUID (Grok/Disk)
- * ODER In-Memory-Adapter-IDs (openrouter-1, glyph-agent-1, claude-N) — nur sichere
- * Zeichen, keine Pfad-Tricks. isSessionId (sessions.js) bleibt für Disk-Endpunkte.
+ * Session-ID für In-Memory-Verlauf (ACP session/history): UUID oder Adapter-IDs.
+ * isSessionId (sessions.js) bleibt für Disk-Endpunkte.
  */
 const SAFE_SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
-function isSummarizeSessionId(id) {
+function isLiveSessionId(id) {
   if (typeof id !== "string" || !id.trim() || id.length > 64) return false;
   if (isSessionId(id)) return true;
-  // In-Memory-Adapter-IDs: „präfix-N“ (openrouter-1, glyph-agent-2, claude-3).
   return SAFE_SESSION_ID_RE.test(id);
 }
 
-function mapHistoryMessages(messages) {
-  return (messages || []).map((m) => ({
-    role: m.role,
-    text: Array.isArray(m.content)
-      ? m.content
-          .filter((b) => b?.type === "text" && typeof b.text === "string")
-          .map((b) => b.text)
-          .join("\n")
-      : String(m.content ?? ""),
-  }));
-}
-
 /**
- * Turns für Summarize: bei In-Memory-IDs (^_Code / °_Agent) immer der live
- * ACP-Verlauf — sonst klebt der Entwurf am ersten Test-Ping. Grok-UUIDs: Disk.
- */
-async function turnsForSummarize(sessionId) {
-  const session = await getSessionForOpen(sessionId);
-  const liveSeat = seats.findBySession(sessionId);
-  const preferLive = !isSessionId(sessionId) && liveSeat?.connected;
-  if (preferLive) {
-    try {
-      const hist = await liveSeat.getSessionHistory(sessionId);
-      const liveTurns = mapHistoryMessages(hist.messages);
-      if (liveTurns.some((t) => String(t.text || "").trim())) {
-        return { session, turns: liveTurns };
-      }
-    } catch {
-      /* Disk-/leer-Fallback */
-    }
-  }
-  let turns = session ? session.turns || session.transcriptPreview || [] : [];
-  if (
-    !turns.length &&
-    liveSeat?.connected &&
-    liveSeat.sessionId === sessionId
-  ) {
-    try {
-      const hist = await liveSeat.getSessionHistory(sessionId);
-      turns = mapHistoryMessages(hist.messages);
-    } catch {
-      turns = [];
-    }
-  }
-  return { session, turns };
-}
-
-/**
- * Erzeugt einen Zusammenfassungs-ENTWURF ohne zu schreiben (nicht-destruktiv).
- * Liefert Entwurf + geplanten Zielpfad/Dateiname + Datenschutz-Status.
- */
-app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
-  try {
-    if (!isSummarizeSessionId(req.params.id)) {
-      res.status(400).json({ error: "Ungültige Session-ID" });
-      return;
-    }
-    const { session, turns } = await turnsForSummarize(req.params.id);
-    if (!turns.length) {
-      res.status(404).json({ error: "Session nicht gefunden oder ohne Nachrichten" });
-      return;
-    }
-
-    const profile = (req.body?.profile) || "glyph-agent";
-    const external = profile === "openrouter"; // Cloud-Verarbeitung
-    const includeAttachments = req.body?.include_attachments === true;
-
-    const draft = buildDraftFromTurns(turns, {
-      // session kann bei In-Memory-Session (openrouter-1) null sein → title optional.
-      title: session?.title || session?.transcriptTitle || undefined,
-    });
-    const skill = proposeSkillFromDraft(draft);
-    draft.skill = {
-      eligible: skill.eligible,
-      name: skill.name,
-      description: skill.description,
-      reason: skill.reason,
-      // Default: speichern wenn eligible (Nutzer kann im Dialog abwählen)
-      save_default: skill.eligible,
-    };
-    const wikiRoot = getSummaryWikiRoot();
-    const fileName = buildFileName({
-      title: draft.title,
-      // sessionId: disk-UUID oder die aktive In-Memory-ID (req.params.id).
-      sessionId: session?.id || req.params.id,
-      profile,
-    });
-    const target = resolveTargetPath(fileName, wikiRoot);
-
-    // Vorschau (gespeicherter Inhalt) zur Anzeige in der UI.
-    const previewDocument = renderSummaryDocument({
-      ...draft,
-      skill: draft.skill,
-      meta: {
-        sessionId: session?.id || req.params.id,
-        profile,
-        model: session?.model || "",
-        external_processing: external,
-      },
-    });
-
-    res.json({
-      ok: true,
-      draft,
-      skill: draft.skill,
-      external_processing: external,
-      include_attachments: includeAttachments,
-      target: { absolutePath: target, fileName, wikiRoot },
-      preview: previewDocument,
-      requires_external_consent: external,
-      message: external
-        ? `Dieses Profil (${profile}) ist extern — Session-Inhalte verlassen den Rechner. Bestätigung nötig.`
-        : null,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-  }
-});
-
-/**
- * Speichert die Zusammenfassung NUR nach expliziter Bestätigung, atomar,
- * ohne Überschreiben. Bei openrouter (Cloud) muss external_consent=true sein.
- */
-app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
-  try {
-    if (!isSummarizeSessionId(req.params.id)) {
-      res.status(400).json({ error: "Ungültige Session-ID" });
-      return;
-    }
-    const { session, turns } = await turnsForSummarize(req.params.id);
-
-    const body = req.body || {};
-    const profile = body.profile || "glyph-agent";
-    const external = profile === "openrouter";
-    if (external && body.external_consent !== true) {
-      res.status(403).json({
-        error:
-          "Für das externe Profil openrouter ist eine ausdrückliche Bestätigung (external_consent: true) erforderlich, bevor Session-Inhalte verarbeitet werden.",
-      });
-      return;
-    }
-
-    // Live-Verlauf hat Vorrang — sonst steckt man auf dem Dialog-Entwurf von
-    // vor 10 Turns fest. Client-Draft nur bei explizitem Bearbeiten (use_client_draft).
-    const useClientDraft = body.use_client_draft === true && body.draft;
-    const base = useClientDraft
-      ? body.draft
-      : buildDraftFromTurns(turns, {
-          title: session?.title || body.draft?.title,
-        });
-
-    if (!useClientDraft && !turns.length) {
-      res.status(404).json({ error: "Session nicht gefunden oder ohne Nachrichten" });
-      return;
-    }
-
-    // Skill-Vorschlag aus Live-Draft (nicht aus evtl. abgespecktem Client-Edit).
-    const liveForSkill = useClientDraft
-      ? {
-          ...base,
-          turn_counts:
-            base.turn_counts ||
-            buildDraftFromTurns(turns, {}).turn_counts,
-          decisions: Array.isArray(base.decisions) ? base.decisions : [],
-          next_steps: Array.isArray(base.next_steps) ? base.next_steps : [],
-        }
-      : base;
-    const skillProposal = proposeSkillFromDraft(liveForSkill);
-    // Default: auto speichern wenn eligible; Client kann save_skill: false senden.
-    const wantSkill =
-      body.save_skill === false || body.save_skill === "false"
-        ? false
-        : skillProposal.eligible;
-
-    const data = {
-      title: base.title || "Unbenannte Session",
-      summary: base.summary || "",
-      decisions: Array.isArray(base.decisions) ? base.decisions : [],
-      open_items: Array.isArray(base.open_items) ? base.open_items : [],
-      next_steps: Array.isArray(base.next_steps) ? base.next_steps : [],
-      references: Array.isArray(base.references) ? base.references : [],
-      tags: Array.isArray(body.tags) ? body.tags : [],
-      skill: wantSkill
-        ? { name: skillProposal.name, reason: skillProposal.reason }
-        : skillProposal.eligible
-          ? { name: skillProposal.name, reason: "abgewählt", written: false }
-          : undefined,
-      meta: {
-        sessionId: session?.id || req.params.id,
-        profile,
-        model: session?.model || body.model || "",
-        external_processing: external,
-        turn_counts: base.turn_counts || liveForSkill.turn_counts || undefined,
-      },
-    };
-
-    // Jeder Commit = neuer Snapshot (Zeitstempel im Dateinamen). Alte Dateien bleiben.
-    // So kann man nach weiteren Turns erneut zusammenfassen (°_Agent / ^_Code).
-    const result = await writeSummaryAtomically(data, getSummaryWikiRoot());
-    let skillResult = null;
-    if (result.written && wantSkill) {
-      skillProposal._decisions = data.decisions;
-      try {
-        skillResult = await writeSkillFromProposal(skillProposal, {
-          sessionId: data.meta.sessionId,
-          summaryPath: result.path,
-          profile,
-        });
-        data.skill = {
-          name: skillResult.name,
-          written: skillResult.written,
-          action: skillResult.action,
-          path: skillResult.path,
-          reason: skillResult.reason || skillProposal.reason,
-        };
-        // Snapshot nachträglich mit Skill-Zeile anreichern (best effort, non-fatal)
-        try {
-          await fs.writeFile(result.path, renderSummaryDocument({ ...data }), "utf8");
-        } catch {
-          /* summary ohne Skill-Zeile bleibt ok */
-        }
-      } catch (skillErr) {
-        skillResult = {
-          written: false,
-          action: "error",
-          path: "",
-          name: skillProposal.name,
-          reason: skillErr instanceof Error ? skillErr.message : String(skillErr),
-        };
-      }
-    }
-
-    if (result.written) {
-      res.status(201).json({
-        ok: true,
-        written: true,
-        path: result.path,
-        fileName: result.fileName,
-        snapshot: true,
-        skill: skillResult,
-      });
-    } else {
-      // Sollte mit Zeitstempel-Stamps kaum noch vorkommen.
-      res.status(409).json({
-        ok: false,
-        written: false,
-        existed: true,
-        path: result.path,
-        error:
-          "Dateiname belegt — bitte erneut speichern (neuer Snapshot). Alte Zusammenfassungen werden nie überschrieben.",
-      });
-    }
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-  }
-});
-
-/**
- * Aktiven In-Memory-Verlauf einer Session abrufen (Option A: ACP session/history).
- * Kein serverseitiger Puffer; der Adapter liefert store.messages. Klare Antwort,
- * wenn die Session beendet/nicht vorhanden oder der Adapter kein history unterstützt.
+ * Aktiven In-Memory-Verlauf einer Session abrufen (ACP session/history).
+ * Kein serverseitiger Puffer; der Adapter liefert store.messages.
  */
 app.get("/api/sessions/:id/history", async (req, res) => {
   try {
-    if (!isSummarizeSessionId(req.params.id)) {
+    if (!isLiveSessionId(req.params.id)) {
       res.status(400).json({ error: "Ungültige Session-ID" });
       return;
     }

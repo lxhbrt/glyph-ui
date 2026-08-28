@@ -441,86 +441,6 @@ export async function extractTranscript(sessionDir, { maxTurns = 80, maxChars = 
   return { turns, truncated: false };
 }
 
-function buildSummaryMarkdown({ meta, turns, truncated, freedBytes }) {
-  const title = meta.title;
-  const date = (meta.updatedAt || meta.createdAt || new Date().toISOString()).slice(0, 10);
-  const userTurns = turns.filter((t) => t.role === "user");
-  const assistantTurns = turns.filter((t) => t.role === "assistant");
-
-  const highlights = [];
-  for (const t of userTurns.slice(0, 3)) {
-    const line = t.text.replace(/\s+/g, " ").slice(0, 220);
-    if (line) highlights.push(`- (User) ${line}`);
-  }
-  for (const t of assistantTurns.slice(-2)) {
-    const line = t.text.replace(/\s+/g, " ").slice(0, 220);
-    if (line) highlights.push(`- (Grok) ${line}`);
-  }
-
-  const excerpt = turns
-    .slice(0, 12)
-    .map((t) => {
-      const body = t.text.length > 600 ? `${t.text.slice(0, 600)}…` : t.text;
-      return `### ${t.role === "user" ? "User" : "Grok"}\n\n${body}`;
-    })
-    .join("\n\n");
-
-  return {
-    title: `Grok Session: ${title}`,
-    body: [
-      `<!-- openclaw:wiki:raw-source -->`,
-      `---`,
-      `pageType: source`,
-      `sourceType: grok-session-archive`,
-      `id: source.grok-session.${meta.id}`,
-      `title: ${JSON.stringify(`Grok Session: ${title}`)}`,
-      `sessionId: ${meta.id}`,
-      `cwd: ${JSON.stringify(meta.cwd || "")}`,
-      `model: ${JSON.stringify(meta.model || "")}`,
-      `agent: ${JSON.stringify(meta.agent || "")}`,
-      `createdAt: ${JSON.stringify(meta.createdAt || "")}`,
-      `updatedAt: ${JSON.stringify(meta.updatedAt || "")}`,
-      `archivedAt: ${JSON.stringify(new Date().toISOString())}`,
-      `diskBytes: ${meta.diskBytes || 0}`,
-      `status: archived`,
-      `---`,
-      ``,
-      `# Grok Session: ${title}`,
-      ``,
-      `Archiviert aus Glyph UI (Command Overview) am ${date}.`,
-      ``,
-      `## Meta`,
-      ``,
-      `| Feld | Wert |`,
-      `| --- | --- |`,
-      `| Session ID | \`${meta.id}\` |`,
-      `| Workspace | \`${meta.cwd || "—"}\` |`,
-      `| Model | ${meta.model || "—"} |`,
-      `| Agent | ${meta.agent || "—"} |`,
-      `| Messages | ${meta.messages ?? "—"} |`,
-      `| Chat messages | ${meta.chatMessages ?? "—"} |`,
-      `| Disk (vor Close) | ${formatBytes(meta.diskBytes || 0)} |`,
-      `| Freigegeben | ${formatBytes(freedBytes || 0)} |`,
-      ``,
-      `## Kurzfassung`,
-      ``,
-      meta.summary && meta.summary !== title
-        ? meta.summary
-        : `Session „${title}“ — ${userTurns.length} User- und ${assistantTurns.length} Assistant-Turns extrahiert${truncated ? " (gekürzt)" : ""}.`,
-      ``,
-      `## Highlights`,
-      ``,
-      highlights.length ? highlights.join("\n") : "_Keine extrahierbaren Highlights._",
-      ``,
-      `## Auszug`,
-      ``,
-      excerpt || "_Kein Transcript gefunden._",
-      truncated ? `\n\n_… Transcript gekürzt._` : "",
-      ``,
-    ].join("\n"),
-  };
-}
-
 /**
  * True when the session has no real user chat content.
  * Setup-only shells (system + synthetic) and orphan tool debris count as empty.
@@ -741,26 +661,27 @@ export async function getSessionForOpen(sessionId) {
 }
 
 /**
- * Close session: optional wiki summary → optional disk delete.
- * Modes:
- *   writeWiki + deleteDisk  → Ja + Wiki (archive then remove folder)
- *   !writeWiki + deleteDisk → TUI /delete (disk only, no wiki)
- * Does NOT delete if sessionId === protectId (active chat session).
+ * Close session: disk delete. Wiki-Archiv ist tot (Persistenz `/merken`).
+ * writeWiki:true wirft. Does NOT delete if sessionId === protectId (active chat).
  */
 export async function closeSession(sessionId, {
   deleteDisk = true,
-  writeWiki = true,
+  writeWiki = false,
   protectId = null,
   wikiWriter,
 } = {}) {
   if (!isSessionId(sessionId)) {
     throw new Error("Invalid session id");
   }
+  if (writeWiki) {
+    throw new Error("Wiki-Archiv tot — Persistenz nur /merken");
+  }
+  void wikiWriter;
   if (isProtectedSession(sessionId, protectId)) {
     throw new Error("Aktive Chat-Session kann nicht geschlossen werden. Starte zuerst eine neue Session.");
   }
-  if (!writeWiki && !deleteDisk) {
-    throw new Error("Nichts zu tun: writeWiki und deleteDisk sind beide false");
+  if (!deleteDisk) {
+    throw new Error("Nichts zu tun: deleteDisk ist false");
   }
 
   const dir = await findSessionDir(sessionId);
@@ -771,16 +692,7 @@ export async function closeSession(sessionId, {
   if (!meta) throw new Error("Session metadata missing");
 
   const freedBytes = deleteDisk ? meta.diskBytes : 0;
-  let wikiPath = null;
-
-  if (writeWiki) {
-    if (typeof wikiWriter !== "function") {
-      throw new Error("Wiki writer missing");
-    }
-    const { turns, truncated } = await extractTranscript(dir);
-    const doc = buildSummaryMarkdown({ meta, turns, truncated, freedBytes });
-    wikiPath = await wikiWriter(doc, meta);
-  }
+  const wikiPath = null;
 
   if (deleteDisk) {
     const safeDir = await assertSafeSessionDir(dir);

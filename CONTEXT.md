@@ -16,11 +16,11 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel. Header-Unterzeile: Term · ACP (Handy nur am Sitz phone). cwd nicht in der Zeile — Tooltip auf Glyph #N + Workspace-Button. Verlauf: letzte 40 Nachrichten im DOM, ältere per Button. Graph / Buch / Kalender lazy. **Web-Fläche** auf glyph-ui.com: maximierter °_Agent-Chat, kein Admin-Chrome. | `client/src/App.jsx`, `client/src/main.jsx`, `client/src/utils/messages.js` (`transcriptWindow`), `client/src/utils/webSurface.js` | Bridge-Events |
 | **Palette / Type** | Eine Gold-Hex, eine Danger-Hex, Neutrals via `color-mix`; IBM Plex; Type-Scale fest | `client/src/styles.css` (`:root`) | Client-Shell |
 | **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende. Über Soft-Cap (Grok): **Zusammenpressen** → `/compact`. | `ContextLvlBar.jsx` | Client-Shell |
-| **Arbeitsleiste** | Angedockte Fläche über der LVL-Leiste: Plan, Ordner-Suche, Zusammenfassen, **Aktiver Task**. Gleiches Chrome (Label · Zähler · ×). Kein Mitte-Modal. | `ComposerSheet.jsx`, `PlanBar.jsx`, `VaultSearchHits.jsx`, `SummarizeDialog.jsx` | Client-Shell |
+| **Arbeitsleiste** | Angedockte Fläche über der LVL-Leiste: Plan, Ordner-Suche, **Aktiver Task**. Gleiches Chrome (Label · Zähler · ×). Kein Mitte-Modal. | `ComposerSheet.jsx`, `PlanBar.jsx`, `VaultSearchHits.jsx` | Client-Shell |
 | **Tool-Karte** | Aufklappbare ACP-Toolzeile (Verb + Ziel, Diff/Ausgabe nach Klick). ^_Code: *Warum erlaubt?* | `client/src/components/ToolCard.jsx`, `client/src/utils/toolCard.js`, `server/toolTitle.mjs` | Bridge `type: tool` |
-| **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen. Modus **Chat · Deep Search · Fork · Swarm**: Fork = `x.ai/session/fork` dann ACP `session/fork`; Deep Search = Grok `/deep-research` (andere Köpfe ausgegraut); Swarm = °_Agent/^_Code `POST /chat` `swarm: true`. | `client/src/App.jsx`, `shared/composerActions.mjs`, `server/glyph-agent-acp.mjs` | Bridge |
-| **Ordner-Suche** | °_Agent: Pixel-Apfel über ↵ (rot, ohne extra Höhe). Aus = keine Vault-Suche. An → `/api/vault/find`, Treffer in der Arbeitsleiste, Default aus, nur aktivierte in den Kontext. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
-| **Sessions** | Session-Liste, Überblick, Summaries, **Name** (`/rename`) | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
+| **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen. Idle-Senden = Graph-Kopf (Grok Build / °_Agent / ^_Code); Arbeit = Snack. Modus **Chat · Deep Search · Fork · Swarm**: Fork = `x.ai/session/fork` dann ACP `session/fork`; Deep Search = Grok `/deep-research` (andere Köpfe ausgegraut); Swarm = °_Agent/^_Code `POST /chat` `swarm: true`. | `client/src/App.jsx`, `client/src/components/GraphFaces.jsx`, `shared/composerActions.mjs`, `server/glyph-agent-acp.mjs` | Bridge |
+| **Ordner-Suche** | °_Agent: Pixel-Apfel über dem Kopf (rot, ohne extra Höhe). Aus = keine Vault-Suche. An → `/api/vault/find`, Treffer in der Arbeitsleiste, Default aus, nur aktivierte in den Kontext. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
+| **Sessions** | Session-Liste, Überblick, **Name** (`/rename`) | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
 | **Rewind** | Nutzer-Turn und alles danach aus dem Verlauf. Esc Esc, `/rewind`, ↺ an der Nachricht. Dateien bleiben. | `shared/rewind.mjs`, `RewindPicker.jsx`, Bridge `type: rewind` | Sessions, Bridge |
 | **Prompt-History** | ↑ auf leerem Composer: letzte Prompts (lokal, pro Profil) | `utils/promptHistory.js`, `PromptHistoryPopup.jsx` | Composer |
 | **Bindings** | Keys/Host/Modell: zweites Blatt **Anbindung** in der Graph-Legende (nicht die erste Fläche). Polling der Pille: GET `/api/bindings`; POST `/api/models/apply` nur bei Verbindung, Speichern oder mismatch-Klick. | `server/bindings.js`, `GraphLegend.jsx` (`CloudBind`), `utils/bindingsModels.js` | `~/.glyph-ui/bindings.json` |
@@ -35,7 +35,7 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 
 **Crux (häufige Bugs):** Workspace-Recht und Freigaben leben in **glyph-agent** (`code_loop` / `code_tools`). UI zeigt Dialog, Aktiven Task und Banner — sie entscheidet nicht. `r+w` ist Capability, nicht Auto-Write. ACP-Bridge ≠ HTTP-API der Engine. Composer-Caret: Overlay (Slash-Gold) nur wenn ein Katalog-Command im Entwurf steht — sonst malt die Textarea selbst. Extra-Pad nur auf dem Mirror wrappt früher → Caret ab Zeile 2 mitten im Text.
 
-**Session zusammenfassen → Skill:** Button **Zusammenfassen** im Header (rechts neben der Kette), sobald Agent verbunden + Session da; Grok zusätzlich in der Lupe. Vorschau in der **Arbeitsleiste** über der LVL-Leiste (kein Mitte-Modal). Beim Speichern (≥3 Nutzer-Turns) Workflow-Skill unter `~/.glyph/skills/<slug>/` (`source: session-summary`). Hand-Skills ohne Flag: nur `references/`. Opt-out in der Leiste. Titel = letzte substanzielle Nutzerzeile, nicht Test-Pings („TEST TEST TEST“). Code: `server/summaries.js` (`buildDraftFromTurns`) + `SummarizeDialog.jsx`.
+**Merken:** Skill `/merken` (Befehle / Skills), kein Header-Button. Schicht-Router; Wiki nur nach Vorlage und Chat-Ja. Ablehnen ohne Suchwert. Code: `shared/merkenOutcome.mjs`, Skill `~/.glyph/skills/merken/`. ADR `docs/adr/0005-merken-not-summarize.md`.
 
 ## Language
 
@@ -96,8 +96,8 @@ Manueller Name einer Grok-Disk-Session (`title_is_manual`). Lupe: Button **Name*
 _Avoid_: Auto-Titel überschreiben ohne Flag
 
 **Arbeitsleiste**:
-Angedockte Fläche über der LVL-Leiste für laufende Arbeit am Composer: **Plan**, **Ordner-Suche**, **Zusammenfassen**, **Aktiver Task**. Ein Chrome (Gold-Rand, Label, Zähler, ×, optionale Primäraktion). Nicht Bildschirmmitte, nicht zweites Overlay-System. Freigabe-Dialog (^_Code) bleibt eigenes Blocking-Modal.
-_Avoid_: Zusammenfassen als Vollbild-Dialog; Ordner-Suche als schwebendes Overlay; Freigabe als Leisten-Fläche; zweite Bildsprache für diese Flächen
+Angedockte Fläche über der LVL-Leiste für laufende Arbeit am Composer: **Plan**, **Ordner-Suche**, **Aktiver Task**. Ein Chrome (Gold-Rand, Label, Zähler, ×, optionale Primäraktion). Nicht Bildschirmmitte, nicht zweites Overlay-System. Freigabe-Dialog (^_Code) bleibt eigenes Blocking-Modal.
+_Avoid_: Ordner-Suche als schwebendes Overlay; Freigabe als Leisten-Fläche; zweite Bildsprache für diese Flächen; Session-Zusammenfassen in der Leiste
 
 **Plan-Freigabe**:
 Aktionen an der Plan-Leiste (Arbeitsleiste), solange jeder Eintrag `pending` ist: **Umsetzen** sendet den Auftrag, **Ändern** fokussiert den Composer. Kein TUI-Plan-Modus (`plan.md` / Approve-Preview).
@@ -112,8 +112,8 @@ _Avoid_: Grok Bot; Cloud-VM; Chat-Cron; `recurring.json` per Hand patchen; Timeo
 _Avoid_: Compact für °_Agent/^_Code; Compact-Button immer sichtbar
 
 **Multiline (Composer)**:
-Desk: Enter = senden, Shift+Enter = Zeile. Phone: Tastatur-Enter = Zeile; der runde ↵-Button sendet (⌘/Ctrl+Enter ebenfalls). Erster Tap auf ↵ sendet — die Tastatur darf den Klick nicht schlucken. Slash-Popup: Enter = auswählen, beide Sitze. Kein globaler Multiline-Toggle.
-_Avoid_: textarea rows (nur visuelle Höhe); erster Tap schließt nur die Tastatur
+Desk: Enter = senden, Shift+Enter = Zeile. Phone: Tastatur-Enter = Zeile; der runde **Kopf** sendet (⌘/Ctrl+Enter ebenfalls). Erster Tap auf den Kopf sendet — die Tastatur darf den Klick nicht schlucken. Idle-Kopf = Graph-Pixel (Grok Build · °_Agent · ^_Code), gleicher `SnakeHead` wie im Graph. Klick startet Snack wie bisher. Slash-Popup: Enter = auswählen, beide Sitze. Kein globaler Multiline-Toggle.
+_Avoid_: textarea rows (nur visuelle Höhe); erster Tap schließt nur die Tastatur; ↵-Glyph als Send-Icon
 
 **Agent-Command**:
 Ein vom verbundenen Agenten per ACP gemeldeter Slash-Befehl (Live-Katalog `available_commands`), z. B. `/compact`, `/plan`.
@@ -122,6 +122,10 @@ _Avoid_: Skill (lokal/dateibasiert, nicht zwingend vom Agenten gelistet)
 **Skill (Glyph-UI)**:
 Ein entdeckbarer, benennbarer Prompt-/Workflow-Eintrag (z. B. aus `~/.grok/skills` oder gebündelten Quellen), den die UI im Extensions-Modal und ggf. im Slash-Popup anbietet.
 _Avoid_: Plugin, Hook, Agent-Command
+
+**Merken**:
+Skill `/merken`: eine Erkenntnis in die richtige Schicht. Wiki-Karte nur nach Vorlage (Aufgabe · Lösung · Datei oder Beleg · Suchbegriffe), erst nach **Ja** im Chat. Ablehnen, wenn der Satz ohne den Chat nichts sucht. Gleiches Thema → bestehende Seite. MEMORY / CONTEXT / pending: eine Zeile.
+_Avoid_: Header-Button Zusammenfassen; Auto-Skill aus Session; Dump nach `summaries/` oder `grok-sessions/`; Chat-Dump ins Wiki; Ja+Wiki beim Session-Schließen
 
 **Sitz**:
 Gerätessessel: **`desk`** (Schreibtisch), **`phone`** (Handy), **`web`** (glyph-ui.com). Jeder Sitz hat eigenen ACP-Prozess und eigene Live-Session. SoT (Vaults, Roots, Vertrag) ist eins. Kein Crew: nicht dieselbe Aufgabe parallel. Query `?seat=` · Header `X-Glyph-Seat`. Öffentliche Domain erzwingt `web` — Query kann nicht auf desk/phone eskalieren. Dieselbe Session-ID nicht auf zwei Sitzen gleichzeitig offen.
@@ -132,8 +136,12 @@ Sitz `web` für die Domain glyph-ui.com (Arbeits-PC). Eigener ACP-Prozess, fest 
 _Avoid_: Funnel; geteilter Live-Chat mit dem Mac; Grok Build oder ^_Code auf der Domain
 
 **Web-Fläche**:
-Maximierte Chat-Oberfläche auf glyph-ui.com: eine Konversation = Verlauf + Composer. Kein Graph, kein Agent-Picker, kein Grok/^_Code.
-_Avoid_: volle Admin-UI hinter der Domain; Session-Lupe (Grok)
+Maximierte Chat-Oberfläche auf glyph-ui.com: eine Konversation = Verlauf + Composer. Kein Graph, kein Agent-Picker, kein Grok/^_Code. Header begrenzt: Stift · Befehle · Theme · Schloss · **UI neu laden**. Kein **Beenden** (Kette) — Tab schließen beendet den Browser, nicht den Agenten. Dieselben Themen-/Wiki-Schreibrechte wie am Schreibtisch (°_Agent Fortschreiben).
+_Avoid_: volle Admin-UI hinter der Domain; Session-Lupe (Grok); Beenden auf glyph-ui.com
+
+**Fortschreiben**:
+°_Agent legt an und ergänzt `Themen/` und Wiki-Seiten. Kein Löschen, kein Leeren. Engine-SoT: glyph-agent CONTEXT + ADR 0002.
+_Avoid_: Delete-Tool; Vorlagen aus dem Chat umschreiben
 
 **Admin-Fläche**:
 Volle Glyph-UI (Grok Build, ^_Code, °_Agent, Graph, Anbindung) auf Loopback. Nicht auf glyph-ui.com.
@@ -257,15 +265,16 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 
 ### Ordner-Suche (2026-08-15)
 
-- °_Agent-Composer: Pixel-Apfel (Minecraft: rot / Stiel braun / Blatt grün) **über ↵**, außerhalb des Flow — Composer-Höhe unverändert. Standard **aus**. An = Gold-Outline + Puls, nicht goldene Füllung.
+- °_Agent-Composer: Pixel-Apfel (Minecraft: rot / Stiel braun / Blatt grün) **über dem Kopf**, außerhalb des Flow — Composer-Höhe unverändert. Standard **aus**. An = Gold-Outline + Puls, nicht goldene Füllung.
 - An: Suche erst beim Senden; Treffer in der Arbeitsleiste über der LVL-Leiste, nie im Chat-Verlauf. Default **aus**; nur explizit aktivierte Treffer gehen in den Agent-Kontext (`vault_search` + `vault_selected`). Ohne Auswahl: normale Nachricht, kein Vault.
-- Erste ↵ startet die Suche und **leert den Composer**; Query steht in der Leiste. Weiterer Prompt sofort tippbar.
-- Suche abbrechen: × in der Leiste, Snack, oder ↵ ohne neuen Text. Fetch bricht ab — Leiste zu ≠ Suche läuft weiter.
+- Erster Kopf-Klick startet die Suche und **leert den Composer**; Query steht in der Leiste. Weiterer Prompt sofort tippbar.
+- Suche abbrechen: × in der Leiste, Snack, oder Kopf ohne neuen Text. Fetch bricht ab — Leiste zu ≠ Suche läuft weiter.
 - Toggle-Zustand pro Session, nicht global.
 - Interaktives ACP: `vault_search` nur bei mindestens einem aktivierten Treffer. Fehlt/aus = kein VaultFind. Jobs/`/chat` ohne Flag: B+ unverändert.
 - Suchfehler (404 etc.) rot in der Arbeitsleiste; Chat bleibt sendbar.
 - Treffer: Ordner- und Dateinamen auf Disk (nicht nur Index-Eltern). Gleichnamige Ordner in HSEQ Sync und Hauptarchiv beide listen.
 - Vault leer: Exa+TinyFish auf KomNet; 0 Treffer → dieselben auf DGUV. Gleiche Leiste, Label **KOMNET** / **DGUV**, `kind: web`. Nur aktivierte URLs in den Kontext — nicht als Vault-Pfad.
+- Nach einer Auswahl: Follow-up sendet mit letzter Auswahl, kein zweiter Picker. × verwirft die Liste — neu fragen. Erste `sessionId` hält die Auswahl; Chat-Wechsel setzt sie zurück.
 
 ### Direct Vision-Exp (2026-08-21)
 
@@ -274,10 +283,17 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 
 ### Arbeitsleiste (2026-08-20)
 
-- Plan, Ordner-Suche und Zusammenfassen teilen **ein** Chrome über der LVL-Leiste (`ComposerSheet`, Vorbild Plan).
-- Zusammenfassen: kein Mitte-Modal. Header (aktive Session) und Lupe (andere Grok-Sessions) docken dieselbe Leiste; Lupe schließt vorher.
+- Plan und Ordner-Suche teilen **ein** Chrome über der LVL-Leiste (`ComposerSheet`, Vorbild Plan).
 - Freigabe Write/Shell bleibt Blocking-Modal (unterbricht). Slash-Popup / Rewind / Lupe selbst bleiben eigene Flächen.
 - Kein ADR — CONTEXT reicht.
+
+### Merken statt Zusammenfassen (2026-08-28)
+
+- Kein Header-Button, keine Lupe-Aktion, keine neuen `summaries/` / `grok-sessions/`, keine Auto-Skills aus Sessions.
+- Persistenz: Skill `/merken`. Chat-Ja vor Wiki-Schreiben. Ablehnen ohne Suchwert.
+- Lupe **Schließen** = Disk-Ordner weg, kein Wiki-Dump.
+- Router bleibt: Wiki-Karte **oder** MEMORY / CONTEXT / pending.
+- ADR `docs/adr/0005-merken-not-summarize.md`.
 
 ### ^_Code Freigabe (2026-08-22)
 
@@ -301,7 +317,7 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - Sitz **`web`**: eigener ACP-Prozess, nicht desk/phone. Arbeits-PC spiegelt den Mac-Chat nicht.
 - Nur **°_Agent**. Grok Build und ^_Code bleiben Admin-Fläche (Mac / Loopback).
 - Kein Tailscale Serve. Handy-Remote über das Tailnet ist abgezogen.
-- UI: maximierter Chat (Verlauf + Composer). Eine Konversation = eine Fläche. Stift = neuer Chat.
+- UI: maximierter Chat (Verlauf + Composer). Eine Konversation = eine Fläche. Stift = neuer Chat. Header: **UI neu laden**, nicht Beenden (Kette bleibt Mac).
 - Web-Tor Pflicht (Passwort). Eingeloggter Web-Nutzer ändert es in der Fläche (aktuell + neu). Origin exakt `https://glyph-ui.com`, kein Substring.
 - ADR `docs/adr/0004-web-surface.md`.
 
