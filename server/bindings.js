@@ -215,7 +215,13 @@ export function normalizeBindingsFile(raw) {
       : setSrc?.PROVIDER) ||
       "",
   );
-  return { keys, settings, models, provider };
+  const codeProvider = normalizeProvider(
+    (obj.codeProvider != null && obj.codeProvider !== ""
+      ? obj.codeProvider
+      : obj.provider) ||
+      "",
+  );
+  return { keys, settings, models, provider, codeProvider };
 }
 
 /**
@@ -232,6 +238,7 @@ export async function readBindingsFile(filePath = bindingsPath()) {
       settings: {},
       models: { shared: null, code: null },
       provider: "hybrid",
+      codeProvider: "hybrid",
     };
   }
 }
@@ -262,6 +269,13 @@ export async function writeBindingsFile(data, filePath = bindingsPath()) {
       "",
   );
   payload.provider = provider;
+  const codeProvider = normalizeProvider(
+    (data?.codeProvider != null && data.codeProvider !== ""
+      ? data.codeProvider
+      : data?.provider) ||
+      "",
+  );
+  if (codeProvider !== provider) payload.codeProvider = codeProvider;
   const models = normalizeModels({ models: data?.models || data });
   if (models.shared || models.code) {
     payload.models = {};
@@ -337,6 +351,16 @@ export function applyBindingsToEnv(data, opts = {}) {
     const prov = normalizeProvider(data.provider);
     if (overwrite || !String(env.AGENT_PRIMARY_PROVIDER || "").trim()) {
       env.AGENT_PRIMARY_PROVIDER = prov;
+    }
+    if (overwrite || !String(env.AGENT_PROVIDER || "").trim()) {
+      env.AGENT_PROVIDER = prov;
+    }
+  }
+  // Code-Provider getrennt
+  if (Object.prototype.hasOwnProperty.call(data, "codeProvider")) {
+    const cprov = normalizeProvider(data.codeProvider);
+    if (overwrite || !String(env.CODE_PROVIDER || "").trim()) {
+      env.CODE_PROVIDER = cprov;
     }
   }
 }
@@ -515,11 +539,16 @@ export function buildAgentPush(saved, body = {}) {
       credsTouched ||
       providerTouched,
   );
+  const kind = String(body?.kind || "agent").toLowerCase();
   return {
     push,
     models: saved?.models || null,
     direct: Object.keys(direct).length ? direct : undefined,
-    provider: saved?.provider || "hybrid",
+    provider:
+      kind === "code"
+        ? saved?.codeProvider || saved?.provider || "hybrid"
+        : saved?.provider || "hybrid",
+    kind,
   };
 }
 
@@ -529,6 +558,7 @@ export async function pushModelsToAgent(baseUrl, models, opts = {}) {
   const payload = modelsToAgentPayload(models) || {};
   if (opts.provider) {
     payload.provider = normalizeProvider(opts.provider);
+    if (opts.kind) payload.kind = opts.kind;
   }
   if (opts.direct && typeof opts.direct === "object") {
     const d = {};
@@ -773,11 +803,18 @@ export async function buildBindingsStatus(opts = {}) {
     file.provider ||
     String(env.AGENT_PRIMARY_PROVIDER || "").trim().toLowerCase() ||
     "hybrid";
+  const codeProvider =
+    file.codeProvider || file.provider || provider;
   const activeProvider = normalizeProvider(
     modelsActive?.provider ||
       modelsActive?.provider_mode ||
       agentHealth.body?.provider ||
       provider,
+  );
+  const activeCodeProvider = normalizeProvider(
+    modelsActive?.code_provider ||
+      modelsActive?.code_provider_mode ||
+      activeProvider,
   );
   const isPeak = Boolean(modelsActive?.provider_peak);
   const mismatch =
@@ -883,6 +920,12 @@ export async function buildBindingsStatus(opts = {}) {
       agentHealth.ok &&
       providerEffective(provider, { isPeak }) !==
         providerEffective(activeProvider, { isPeak }),
+    codeProvider,
+    codeProviderActive: activeCodeProvider,
+    codeProviderMismatch:
+      agentHealth.ok &&
+      providerEffective(codeProvider, { isPeak }) !==
+        providerEffective(activeCodeProvider, { isPeak }),
     profiles: {
       grok: {
         id: "grok",
@@ -1000,11 +1043,18 @@ export async function updateBindings(patch, opts = {}) {
       code: current.models?.code ? { ...current.models.code } : null,
     },
     provider: current.provider || "hybrid",
+    codeProvider: current.codeProvider || current.provider || "hybrid",
   };
 
   const body = patch && typeof patch === "object" ? patch : {};
   if (Object.prototype.hasOwnProperty.call(body, "provider")) {
-    next.provider = normalizeProvider(body.provider);
+    const mode = normalizeProvider(body.provider);
+    const kind = String(body.kind || "agent").toLowerCase();
+    if (kind === "code") {
+      next.codeProvider = mode;
+    } else {
+      next.provider = mode;
+    }
   }
   for (const id of BINDING_KEY_IDS) {
     if (!Object.prototype.hasOwnProperty.call(body, id)) continue;

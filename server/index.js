@@ -1663,6 +1663,7 @@ app.put("/api/bindings", async (req, res) => {
       modelsApply = await pushModelsToAgent(agentUrl, plan.models, {
         direct: plan.direct,
         provider: plan.provider,
+        kind: plan.kind,
       });
     }
 

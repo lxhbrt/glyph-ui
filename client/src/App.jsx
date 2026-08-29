@@ -3521,11 +3521,13 @@ export default function App() {
                 mismatch={Boolean(modelHud?.mismatch)}
                 disabled={isWorking || agentSwitching}
                 onChange={async (mode) => {
+                  const kind =
+                    agent?.id === "_code" ? "code" : "agent";
                   try {
                     await fetch("/api/bindings", {
                       method: "PUT",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ provider: mode }),
+                      body: JSON.stringify({ provider: mode, kind }),
                     });
                   } catch {
                     /* ignore */

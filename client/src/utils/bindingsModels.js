@@ -116,10 +116,18 @@ export function modelHudFromBindings(data = {}, profileId = "") {
       "");
   const label = primary && fb ? `${primary} → ${fb}` : primary || "—";
   const liveLabel = String(data.modelsActive?.active?.label || "").trim();
-  // Gewählter Modus (data.provider) — nicht der effektive Hop — damit Hybrid
-  // als aktiv angezeigt wird, auch wenn gerade off-peak → direct läuft.
+  // Gewählter Modus pro Kopf — °_Agent: provider, ^_Code: code_provider.
+  // Nicht der effektive Hop, damit Hybrid als aktiv erscheint (auch off-peak).
   const prov = normalizeProvider(
-    data.provider || data.providerActive || data.modelsActive?.provider || "hybrid",
+    useCode
+      ? data.codeProvider ||
+        data.codeProviderMode ||
+        data.provider ||
+        "hybrid"
+      : data.provider ||
+        data.providerActive ||
+        data.modelsActive?.provider ||
+        "hybrid",
   );
   const isPeak = Boolean(data.providerPeak || data.modelsActive?.provider_peak);
   return {
