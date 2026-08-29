@@ -439,13 +439,16 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
             }`}
           >
             {bindings?.providerMismatch
-              ? `aktiv: ${providerLabel(bindings?.providerActive)}`
-              : providerLabel(provider)}
+              ? `aktiv: ${providerLabel(bindings?.providerActive, {
+                  isPeak: bindings?.providerPeak,
+                })}`
+              : providerLabel(provider, { isPeak: bindings?.providerPeak })}
           </span>
         </div>
         <p className="lage-lede">
           Direkt = eigene API (DeepSeek/…), Fallback = nur OpenRouter, Hybrid =
-          Direkt zuerst, OpenRouter als Reserve.
+          Direkt zuerst, OpenRouter als Reserve. Bei Hybrid gilt: DeepSeek-Peak
+          (Mo–Fr 03–06 & 08–12 MESZ) → automatisch OpenRouter, sonst Direkt.
         </p>
         <div
           className="lage-provider"

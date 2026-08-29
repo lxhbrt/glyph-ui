@@ -23,14 +23,25 @@ export function providerOf(bindings) {
 }
 
 /**
+ * Effektiver Hop eines Provider-Modus (für Anzeige/Vergleich):
+ * hybrid → direct (off-peak) / openrouter (Peak).
+ */
+export function providerEffective(mode, opts = {}) {
+  const m = normalizeProvider(mode);
+  if (m !== "hybrid") return m;
+  return opts.isPeak ? "openrouter" : "direct";
+}
+
+/**
  * Provider-Label für die Anzeige.
  * @param {string} mode
+ * @param {{ isPeak?: boolean }} [opts]
  */
-export function providerLabel(mode) {
+export function providerLabel(mode, opts = {}) {
   const m = normalizeProvider(mode);
   if (m === "direct") return "Direkt";
   if (m === "openrouter") return "OpenRouter";
-  return "Hybrid";
+  return opts.isPeak ? "Hybrid · Peak → OpenRouter" : "Hybrid";
 }
 
 /**
@@ -108,6 +119,7 @@ export function modelHudFromBindings(data = {}, profileId = "") {
   const prov = normalizeProvider(
     data.providerActive || data.provider || data.modelsActive?.provider || "hybrid",
   );
+  const isPeak = Boolean(data.providerPeak || data.modelsActive?.provider_peak);
   return {
     kind: "openrouter",
     label,
@@ -115,6 +127,7 @@ export function modelHudFromBindings(data = {}, profileId = "") {
     fallback: fb || "",
     liveLabel,
     provider: prov,
+    isPeak,
     mismatch: Boolean(data.modelsMismatch) || Boolean(data.providerMismatch),
   };
 }

@@ -42,11 +42,12 @@ export function normalizeProvider(value) {
 
 /**
  * Effektiver Hop eines Provider-Modus (für Vergleiche):
- * hybrid läuft über Direct primär → effektiv "direct".
+ * hybrid läuft je nach Peak über direct (off-peak) oder openrouter (Peak).
  */
-export function providerEffective(mode) {
+export function providerEffective(mode, opts = {}) {
   const m = normalizeProvider(mode);
-  return m === "hybrid" ? "direct" : m;
+  if (m !== "hybrid") return m;
+  return opts.isPeak ? "openrouter" : "direct";
 }
 
 /**
@@ -165,10 +166,10 @@ export function modelsMismatch(desired, health) {
     const actProv =
       actProvRaw === "fallback" ? "openrouter" : actProvRaw;
     if (actProv) {
-      // hybrid (gewünscht) == direct (Agent meldet den effektiven Hop)
-      const wantEffective =
-        wantProv === "hybrid" ? "direct" : wantProv;
-      const actEffective = actProv === "hybrid" ? "direct" : actProv;
+      // Agent meldet den effektiven Hop; hybrid == direct (off-peak) / openrouter (peak)
+      const isPeak = Boolean(snap.provider_peak);
+      const wantEffective = providerEffective(wantProv, { isPeak });
+      const actEffective = providerEffective(actProv, { isPeak });
       if (wantEffective !== actEffective) return true;
     }
   }
@@ -778,6 +779,7 @@ export async function buildBindingsStatus(opts = {}) {
       agentHealth.body?.provider ||
       provider,
   );
+  const isPeak = Boolean(modelsActive?.provider_peak);
   const mismatch =
     Boolean(modelsDesired.shared?.primary) &&
     agentHealth.ok &&
@@ -876,9 +878,11 @@ export async function buildBindingsStatus(opts = {}) {
     modelsApply: opts.modelsApply || null,
     provider,
     providerActive: activeProvider,
+    providerPeak: isPeak,
     providerMismatch:
       agentHealth.ok &&
-      providerEffective(provider) !== providerEffective(activeProvider),
+      providerEffective(provider, { isPeak }) !==
+        providerEffective(activeProvider, { isPeak }),
     profiles: {
       grok: {
         id: "grok",
