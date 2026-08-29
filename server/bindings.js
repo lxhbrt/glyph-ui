@@ -747,18 +747,107 @@ export async function syncModelsIfMismatch(opts = {}) {
     };
   }
   if (!modelsMismatch(file.models, health.body)) {
+    // Modelle in sync — Provider-Modi trotzdem prüfen/pushen
+    const provOk = await syncProviderIfMismatch(file, health.body);
+    if (!provOk.skipped) {
+      return {
+        ok: provOk.ok,
+        skipped: false,
+        applied: Boolean(provOk.applied),
+        error: provOk.error,
+        body: provOk.body,
+      };
+    }
     return { ok: true, skipped: true, reason: "in_sync", health: health.body };
   }
-  const push = await pushModelsToAgent(agentUrl, file.models, {
+  // Modelle weichen ab → Modelle + beide Provider-Modi pushen
+  const modelPush = await pushModelsToAgent(agentUrl, file.models, {
     fetchImpl: opts.fetchImpl,
   });
+  if (!modelPush.ok) {
+    return {
+      ok: false,
+      skipped: false,
+      applied: false,
+      error: modelPush.error,
+      body: modelPush.body,
+    };
+  }
+  const provOk = await syncProviderIfMismatch(file, health.body);
   return {
-    ok: push.ok,
+    ok: provOk.ok && modelPush.ok,
     skipped: false,
-    applied: Boolean(push.applied),
-    error: push.error,
-    body: push.body,
+    applied: Boolean(modelPush.applied || provOk.applied),
+    error: provOk.error,
+    body: provOk.body || modelPush.body,
   };
+}
+
+/**
+ * Provider-Modi (agent/code) an glyph-agent pushen, wenn sie abweichen.
+ * @param {{ provider?: string, codeProvider?: string }} file
+ * @param {object|null|undefined} healthBody
+ */
+async function syncProviderIfMismatch(file, healthBody) {
+  const snap = healthBody?.models || healthBody || {};
+  const agentWant = normalizeProvider(file.provider || "hybrid");
+  const codeWant = normalizeProvider(
+    file.codeProvider || file.provider || "hybrid",
+  );
+  const agentHas = normalizeProvider(
+    snap.provider_mode || snap.provider || "hybrid",
+  );
+  const codeHas = normalizeProvider(
+    snap.code_provider_mode || snap.code_provider || agentHas,
+  );
+  if (agentWant === agentHas && codeWant === codeHas) {
+    return { ok: true, skipped: true };
+  }
+  const env = process.env;
+  const agentUrl =
+    String(env.GLYPH_AGENT_URL || file.settings?.GLYPH_AGENT_URL || "").trim() ||
+    "http://127.0.0.1:18899";
+  const results = [];
+  if (agentWant !== agentHas) {
+    results.push(
+      await pushProviderToAgent(agentUrl, agentWant, "agent"),
+    );
+  }
+  if (codeWant !== codeHas) {
+    results.push(
+      await pushProviderToAgent(agentUrl, codeWant, "code"),
+    );
+  }
+  const failed = results.find((r) => !r.ok);
+  if (failed) return failed;
+  return { ok: true, skipped: false, applied: true };
+}
+
+async function pushProviderToAgent(baseUrl, provider, kind) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(`${baseUrl}/models`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, kind }),
+      signal: ctrl.signal,
+    });
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok || body?.ok === false) {
+      return { ok: false, error: body?.error || `HTTP ${res.status}` };
+    }
+    return { ok: true, applied: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 /**
