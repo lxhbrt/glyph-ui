@@ -2972,55 +2972,16 @@ export default function App() {
   }, [agent?.id, connected, refreshModelHud]);
 
   /**
-   * Provider-Wechsel im Header: Modell-Paar automatisch an den Modus anpassen.
-   * - openrouter (Fallback): Primary muss OR-Slug sein (mit /) — wenn das
-   *   bisherige Primary eine Direct-ID ist, wird das Reserve zum Primary.
-   * - direct: Primary muss Direct-ID sein (ohne /) — wenn das bisherige
-   *   Primary ein OR-Slug ist, wird das Reserve (falls Direct-ID) getauscht.
-   * - hybrid: Primary=Direct-ID, Reserve=OR-Slug (Tausch, falls nötig).
+   * Provider-Wechsel im Header.
+   * Setzt NUR den Modus — die Modell-Paare bleiben unangetastet. Der Nutzer
+   * entscheidet selbst, welches Modell Primary/Reserve ist (Anbindung/Graph).
+   * Ein automatischer Tausch war der Fehler: „Fallback" hat glm zum Primary
+   * gemacht, obwohl DeepSeek Flash gewollt war.
    */
   const handleProviderChange = useCallback(
     async (mode) => {
       const kind = agent?.id === "_code" ? "code" : "agent";
-      const hasSlash = (id) => String(id || "").includes("/");
-      let primary = modelHud?.primary || "";
-      let fallback = modelHud?.fallback || "";
-      const normMode =
-        mode === "openrouter" ? "openrouter" : mode === "direct" ? "direct" : "hybrid";
-
-      if (normMode === "openrouter") {
-        // Primary muss OR-Slug sein
-        if (!hasSlash(primary) && hasSlash(fallback)) {
-          const tmp = primary;
-          primary = fallback;
-          fallback = tmp;
-        } else if (!hasSlash(primary) && !hasSlash(fallback)) {
-          fallback = "";
-        }
-      } else if (normMode === "direct") {
-        // Primary muss Direct-ID sein
-        if (hasSlash(primary) && !hasSlash(fallback)) {
-          const tmp = primary;
-          primary = fallback;
-          fallback = tmp;
-        } else if (hasSlash(primary)) {
-          fallback = "";
-        }
-      } else {
-        // hybrid: Primary Direct-ID, Reserve OR-Slug
-        if (hasSlash(primary) && !hasSlash(fallback)) {
-          const tmp = primary;
-          primary = fallback;
-          fallback = tmp;
-        }
-      }
-
       const body = { provider: mode, kind };
-      const pair =
-        kind === "code"
-          ? { code: { primary, fallback } }
-          : { shared: { primary, fallback } };
-      if (primary) body.models = pair;
       try {
         await fetch("/api/bindings", {
           method: "PUT",
@@ -3032,7 +2993,7 @@ export default function App() {
       }
       void refreshModelHud();
     },
-    [agent?.id, modelHud?.primary, modelHud?.fallback, refreshModelHud],
+    [agent?.id, refreshModelHud],
   );
 
   /** Stale UI vs running bridge — only then surface a banner. */
