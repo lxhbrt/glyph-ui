@@ -7,11 +7,7 @@ import { useEffect, useState } from "react";
 import {
   applyLiveStatus,
   buildModelsPatch,
-  buildProviderPatch,
   modelsForHead,
-  normalizeProvider,
-  providerLabel,
-  providerOf,
 } from "../utils/bindingsModels.js";
 import { bindsOf } from "../utils/lageLayout.js";
 import { ModeGlyph } from "./ModeGlyph.jsx";
@@ -286,18 +282,12 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
   const [host, setHost] = useState(urlNow);
   const [primary, setPrimary] = useState(shown.primary);
   const [fallback, setFallback] = useState(shown.fallback);
-  const [provider, setProvider] = useState(providerOf(bindings));
 
   useEffect(() => {
     setHost(urlNow);
     setPrimary(shown.primary);
     setFallback(shown.fallback);
   }, [urlNow, shown.primary, shown.fallback, absorb]);
-
-  useEffect(() => {
-    setProvider(providerOf(bindings));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur Provider-Felder beobachten
-  }, [bindings?.provider, bindings?.providerActive]);
 
   const d = bindings?.keys?.DIRECT_API_KEY;
   const o = bindings?.keys?.OPENROUTER_API_KEY;
@@ -340,12 +330,7 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
     }
     const body = { ...patch };
     if (host.trim()) body.DIRECT_API_URL = host.trim();
-    body.provider = normalizeProvider(provider);
     await put(body);
-  }
-
-  async function saveProvider(next) {
-    await put(buildProviderPatch(next));
   }
 
   async function testModel() {
@@ -430,63 +415,6 @@ function CloudBind({ absorb, bindings, onBindingsChange }) {
         onPut={put}
         busy={busy}
       />
-      <form className="lage-keyline" onSubmit={saveModels}>
-        <div className="lage-keyline-head">
-          <strong>Provider</strong>
-          <span
-            className={`lage-pill${
-              bindings?.providerMismatch ? " lage-pill--warn" : ""
-            }`}
-          >
-            {bindings?.providerMismatch
-              ? `aktiv: ${providerLabel(bindings?.providerActive, {
-                  isPeak: bindings?.providerPeak,
-                })}`
-              : providerLabel(provider, { isPeak: bindings?.providerPeak })}
-          </span>
-        </div>
-        <p className="lage-lede">
-          Direkt = eigene API (DeepSeek/…), Fallback = nur OpenRouter, Hybrid =
-          Direkt zuerst, OpenRouter als Reserve. Bei Hybrid gilt: DeepSeek-Peak
-          (Mo–Fr 03–06 & 08–12 MESZ) → automatisch OpenRouter, sonst Direkt.
-        </p>
-        <div
-          className="lage-provider"
-          role="radiogroup"
-          aria-label="Provider"
-        >
-          {["direct", "hybrid", "openrouter"].map((mode) => {
-            const active = normalizeProvider(provider) === mode;
-            return (
-              <button
-                key={mode}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                className={`lage-provider-opt${active ? " is-on" : ""}`}
-                disabled={busy}
-                title={
-                  mode === "direct"
-                    ? "Nur Direct-API (Primary)"
-                    : mode === "openrouter"
-                      ? "Nur OpenRouter"
-                      : "Direct primär → OpenRouter-Fallback"
-                }
-                onClick={() => {
-                  setProvider(mode);
-                  void saveProvider(mode);
-                }}
-              >
-                {mode === "direct"
-                  ? "Direkt"
-                  : mode === "openrouter"
-                    ? "Fallback"
-                    : "Hybrid"}
-              </button>
-            );
-          })}
-        </div>
-      </form>
       <form className="lage-keyline" onSubmit={saveModels}>
         <div className="lage-keyline-head">
           <strong>{isCode ? "Modell ^_Code" : "Modell °_Agent"}</strong>

@@ -476,6 +476,101 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* —— Provider-Umschalter (Header, °_Agent/^_Code) —— */
+.provider-switch {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.provider-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #333);
+  background: transparent;
+  color: var(--muted, #999);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.provider-switch-btn:hover:not(:disabled) {
+  color: var(--fg, #eee);
+  border-color: var(--fg-dim, #666);
+}
+
+.provider-switch-btn.is-mismatch {
+  border-color: #c9a227;
+  color: #e6c35c;
+}
+
+.provider-switch-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.provider-switch-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.provider-switch-caret {
+  font-size: 0.6rem;
+  opacity: 0.8;
+}
+
+.provider-switch-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 9.5rem;
+  background: var(--panel, #1c1c1e);
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.provider-switch-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted, #999);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.provider-switch-opt:hover {
+  background: color-mix(in srgb, var(--accent, #c9a227) 12%, transparent);
+  color: var(--fg, #eee);
+}
+
+.provider-switch-opt.is-on {
+  color: var(--accent, #c9a227);
+}
+
+.provider-switch-peak {
+  margin-left: auto;
+  font-size: 0.62rem;
+  opacity: 0.75;
+}
 /* —— Kabelsalat · Vaults (Buch → Vaults) —— */
 .vaults-panel {
   padding: 0 0 0.25rem;

@@ -89,6 +89,7 @@ import { PermissionDialog } from "./components/PermissionDialog.jsx";
 import { WebGate } from "./components/WebGate.jsx";
 import { WebPasswordDialog } from "./components/WebPasswordDialog.jsx";
 import { ActiveTaskBar } from "./components/ActiveTaskBar.jsx";
+import ProviderSwitch from "./components/ProviderSwitch.jsx";
 import { GRANT_DEMO_REQ, TASK_DEMO } from "./utils/codeGrants.js";
 import {
   TRANSCRIPT_WINDOW,
@@ -3510,6 +3511,28 @@ export default function App() {
                   {modelHud.mismatch ? " ⚠" : ""}
                 </span>
               </button>
+            ) : null}
+            {!webSurface &&
+            isCloudModelProfile(agent?.id || "") &&
+            modelHud?.kind !== "grok" ? (
+              <ProviderSwitch
+                provider={modelHud?.provider || "hybrid"}
+                isPeak={Boolean(modelHud?.isPeak)}
+                mismatch={Boolean(modelHud?.mismatch)}
+                disabled={isWorking || agentSwitching}
+                onChange={async (mode) => {
+                  try {
+                    await fetch("/api/bindings", {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ provider: mode }),
+                    });
+                  } catch {
+                    /* ignore */
+                  }
+                  void refreshModelHud();
+                }}
+              />
             ) : null}
             {headerControls.quit ? (
               <button
