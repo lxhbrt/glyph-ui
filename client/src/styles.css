@@ -6205,6 +6205,43 @@ button.cal-cell {
   margin-top: 1px;
 }
 
+.bindings-provider {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.bindings-provider-opt {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 8px 6px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.bindings-provider-opt:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.bindings-provider-opt.is-on,
+.bindings-provider-opt.is-on:disabled {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.bindings-provider-opt:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
 .bindings-input {
   width: 100%;
   box-sizing: border-box;
@@ -7619,6 +7656,53 @@ button.send.send--morph-out .send-tail-stone {
   flex-wrap: wrap;
   gap: 0.15rem 0.85rem;
   margin-top: 0.7rem;
+}
+
+.lage-provider {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+
+.lage-provider-opt {
+  appearance: none;
+  text-decoration: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0.3rem 0.15rem;
+  border: 1px solid color-mix(in srgb, var(--gold) 18%, #000);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--lage-mute);
+  font: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.lage-provider-opt:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+}
+
+.lage-provider-opt.is-on,
+.lage-provider-opt.is-on:disabled {
+  color: var(--gold);
+  border: 1.5px solid var(--gold);
+  opacity: 1;
+}
+
+.lage-provider-opt:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.lage-pill--warn {
+  color: var(--danger, #e07a5f);
 }
 
 .lage-link {

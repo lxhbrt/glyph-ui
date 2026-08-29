@@ -5,7 +5,10 @@
  */
 import { useCallback, useEffect, useId, useState } from "react";
 import { cablePath } from "../utils/cables.js";
-import { applyLiveStatus } from "../utils/bindingsModels.js";
+import {
+  applyLiveStatus,
+  normalizeProvider,
+} from "../utils/bindingsModels.js";
 import { GlyphMark } from "./EgyptMarks.jsx";
 
 /** Agent profiles on the map (full nodes). */
@@ -263,6 +266,7 @@ function BindingsPanel({ active }) {
   const [codePrimary, setCodePrimary] = useState("");
   const [codeFallback, setCodeFallback] = useState("");
   const [codeOpen, setCodeOpen] = useState(false);
+  const [provider, setProvider] = useState("hybrid");
   const [modelsDirty, setModelsDirty] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
 
@@ -277,6 +281,7 @@ function BindingsPanel({ active }) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       setStatus(data);
+      setProvider(data?.provider || "hybrid");
       setAgentUrl(
         data?.settings?.GLYPH_AGENT_URL?.value || "http://127.0.0.1:18899",
       );
@@ -389,6 +394,7 @@ function BindingsPanel({ active }) {
               : null,
         };
       }
+      body.provider = normalizeProvider(provider);
 
       if (!Object.keys(body).length) {
         setOkMsg("Nichts zu speichern — Key oder Model eintippen.");
@@ -410,6 +416,7 @@ function BindingsPanel({ active }) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       setStatus(data);
+      setProvider(data?.provider || "hybrid");
       setOpenrouter("");
       setXai("");
       setDirectKey("");
@@ -532,6 +539,45 @@ function BindingsPanel({ active }) {
             Gespeicherte Models ≠ laufender Agent — Speichern oder Connect synct.
           </p>
         ) : null}
+
+        <div className="bindings-plug">
+          <span className="bindings-label" id="bind-provider-label">
+            Provider
+          </span>
+          <div
+            className="bindings-provider"
+            role="radiogroup"
+            aria-labelledby="bind-provider-label"
+          >
+            {["direct", "hybrid", "openrouter"].map((mode) => {
+              const active = normalizeProvider(provider) === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  className={`bindings-provider-opt${active ? " is-on" : ""}`}
+                  disabled={saving}
+                  title={
+                    mode === "direct"
+                      ? "Nur Direct-API (Primary)"
+                      : mode === "openrouter"
+                        ? "Nur OpenRouter"
+                        : "Direct primär → OpenRouter-Fallback"
+                  }
+                  onClick={() => setProvider(mode)}
+                >
+                  {mode === "direct"
+                    ? "Direkt"
+                    : mode === "openrouter"
+                      ? "Fallback"
+                      : "Hybrid"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="bindings-plug">
           <label className="bindings-label" htmlFor="bind-model-primary">

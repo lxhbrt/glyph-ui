@@ -3,6 +3,36 @@
  * Slash in der ID = OpenRouter-Slug; ohne Slash = Direct-ID.
  */
 
+export const PROVIDER_MODES = ["direct", "openrouter", "hybrid"];
+
+export function normalizeProvider(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "fallback") return "openrouter";
+  if (PROVIDER_MODES.includes(v)) return v;
+  return "hybrid";
+}
+
+/**
+ * @param {object|null|undefined} bindings
+ * @returns {string} gewünschter Provider-Modus (direct|openrouter|hybrid)
+ */
+export function providerOf(bindings) {
+  return normalizeProvider(
+    bindings?.provider || bindings?.providerActive || "hybrid",
+  );
+}
+
+/**
+ * Provider-Label für die Anzeige.
+ * @param {string} mode
+ */
+export function providerLabel(mode) {
+  const m = normalizeProvider(mode);
+  if (m === "direct") return "Direkt";
+  if (m === "openrouter") return "OpenRouter";
+  return "Hybrid";
+}
+
 /**
  * @param {object|null|undefined} bindings
  * @param {"agent"|"code"|string} absorb
@@ -75,13 +105,17 @@ export function modelHudFromBindings(data = {}, profileId = "") {
       "");
   const label = primary && fb ? `${primary} → ${fb}` : primary || "—";
   const liveLabel = String(data.modelsActive?.active?.label || "").trim();
+  const prov = normalizeProvider(
+    data.providerActive || data.provider || data.modelsActive?.provider || "hybrid",
+  );
   return {
     kind: "openrouter",
     label,
     primary,
     fallback: fb || "",
     liveLabel,
-    mismatch: Boolean(data.modelsMismatch),
+    provider: prov,
+    mismatch: Boolean(data.modelsMismatch) || Boolean(data.providerMismatch),
   };
 }
 
@@ -94,4 +128,8 @@ export function buildModelsPatch({ absorb, primary, fallback } = {}) {
   }
   if (!p) return null;
   return { models: { shared: { primary: p, fallback: fb } } };
+}
+
+export function buildProviderPatch(provider) {
+  return { provider: normalizeProvider(provider) };
 }

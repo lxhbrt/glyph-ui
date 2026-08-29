@@ -26,6 +26,30 @@ export const BINDING_KEY_IDS = [
 export const BINDING_SETTING_IDS = ["GLYPH_AGENT_URL", "DIRECT_API_URL"];
 
 /**
+ * Provider modes (UI-Radio). Stored in bindings.json → env → glyph-agent.
+ * - direct     : Direct-API (Primary), kein Fallback
+ * - openrouter : nur OpenRouter
+ * - hybrid     : Direct primär → OpenRouter-Fallback (Default)
+ */
+export const PROVIDER_MODES = ["direct", "openrouter", "hybrid"];
+
+export function normalizeProvider(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "fallback") return "openrouter";
+  if (PROVIDER_MODES.includes(v)) return v;
+  return "hybrid"; // Default
+}
+
+/**
+ * Effektiver Hop eines Provider-Modus (für Vergleiche):
+ * hybrid läuft über Direct primär → effektiv "direct".
+ */
+export function providerEffective(mode) {
+  const m = normalizeProvider(mode);
+  return m === "hybrid" ? "direct" : m;
+}
+
+/**
  * @param {string} [stateDir]
  * @returns {string}
  */
@@ -130,6 +154,24 @@ export function modelsMismatch(desired, health) {
     // agent has code override but we want shared-only
     return true;
   }
+  // Provider-Modus vergleichen (nur wenn gewünscht gesetzt)
+  if (desired?.provider) {
+    const wantProv = normalizeProvider(desired.provider);
+    const actProvRaw = String(
+      snap.provider || snap.provider_mode || "",
+    )
+      .trim()
+      .toLowerCase();
+    const actProv =
+      actProvRaw === "fallback" ? "openrouter" : actProvRaw;
+    if (actProv) {
+      // hybrid (gewünscht) == direct (Agent meldet den effektiven Hop)
+      const wantEffective =
+        wantProv === "hybrid" ? "direct" : wantProv;
+      const actEffective = actProv === "hybrid" ? "direct" : actProv;
+      if (wantEffective !== actEffective) return true;
+    }
+  }
   return false;
 }
 
@@ -166,7 +208,13 @@ export function normalizeBindingsFile(raw) {
     if (typeof v === "string" && v.trim()) settings[id] = v.trim();
   }
   const models = normalizeModels(obj);
-  return { keys, settings, models };
+  const provider = normalizeProvider(
+    (obj.provider != null && obj.provider !== ""
+      ? obj.provider
+      : setSrc?.PROVIDER) ||
+      "",
+  );
+  return { keys, settings, models, provider };
 }
 
 /**
@@ -178,7 +226,12 @@ export async function readBindingsFile(filePath = bindingsPath()) {
     const raw = await fs.readFile(filePath, "utf8");
     return normalizeBindingsFile(JSON.parse(raw));
   } catch {
-    return { keys: {}, settings: {}, models: { shared: null, code: null } };
+    return {
+      keys: {},
+      settings: {},
+      models: { shared: null, code: null },
+      provider: "hybrid",
+    };
   }
 }
 
@@ -201,6 +254,13 @@ export async function writeBindingsFile(data, filePath = bindingsPath()) {
     const v = data?.settings?.[id];
     if (typeof v === "string" && v.trim()) payload.settings[id] = v.trim();
   }
+  const provider = normalizeProvider(
+    (data?.provider != null && data.provider !== ""
+      ? data.provider
+      : data?.settings?.PROVIDER) ||
+      "",
+  );
+  payload.provider = provider;
   const models = normalizeModels({ models: data?.models || data });
   if (models.shared || models.code) {
     payload.models = {};
@@ -268,6 +328,14 @@ export function applyBindingsToEnv(data, opts = {}) {
     } else if (overwrite) {
       if (id === "GLYPH_AGENT_URL") env[id] = "http://127.0.0.1:18899";
       else delete env[id];
+    }
+  }
+
+  // Provider-Modus → AGENT_PRIMARY_PROVIDER (glyph-agent hot-apply)
+  if (Object.prototype.hasOwnProperty.call(data, "provider")) {
+    const prov = normalizeProvider(data.provider);
+    if (overwrite || !String(env.AGENT_PRIMARY_PROVIDER || "").trim()) {
+      env.AGENT_PRIMARY_PROVIDER = prov;
     }
   }
 }
@@ -433,6 +501,7 @@ export function buildAgentPush(saved, body = {}) {
   else if (clearingOr) direct.openrouter_key = "";
 
   const modelsTouched = Boolean(body?.models);
+  const providerTouched = Object.prototype.hasOwnProperty.call(body, "provider");
   const credsTouched = [
     "DIRECT_API_KEY",
     "DIRECT_API_URL",
@@ -442,12 +511,14 @@ export function buildAgentPush(saved, body = {}) {
   const push = Boolean(
     (modelsTouched && hasShared) ||
       Object.keys(direct).length > 0 ||
-      credsTouched,
+      credsTouched ||
+      providerTouched,
   );
   return {
     push,
     models: saved?.models || null,
     direct: Object.keys(direct).length ? direct : undefined,
+    provider: saved?.provider || "hybrid",
   };
 }
 
@@ -455,6 +526,9 @@ export async function pushModelsToAgent(baseUrl, models, opts = {}) {
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
   const timeoutMs = opts.timeoutMs ?? 8000;
   const payload = modelsToAgentPayload(models) || {};
+  if (opts.provider) {
+    payload.provider = normalizeProvider(opts.provider);
+  }
   if (opts.direct && typeof opts.direct === "object") {
     const d = {};
     if (opts.direct.url) d.url = String(opts.direct.url).trim();
@@ -694,10 +768,23 @@ export async function buildBindingsStatus(opts = {}) {
 
   const modelsDesired = file.models || { shared: null, code: null };
   const modelsActive = agentHealth.body?.models || null;
+  const provider =
+    file.provider ||
+    String(env.AGENT_PRIMARY_PROVIDER || "").trim().toLowerCase() ||
+    "hybrid";
+  const activeProvider = normalizeProvider(
+    modelsActive?.provider ||
+      modelsActive?.provider_mode ||
+      agentHealth.body?.provider ||
+      provider,
+  );
   const mismatch =
     Boolean(modelsDesired.shared?.primary) &&
     agentHealth.ok &&
-    modelsMismatch(modelsDesired, agentHealth.body);
+    modelsMismatch(
+      { ...modelsDesired, provider },
+      agentHealth.body,
+    );
 
   // Priority matches server/voice.js: xAI → OpenRouter
   const voiceProvider = xai.set
@@ -787,6 +874,11 @@ export async function buildBindingsStatus(opts = {}) {
     modelsActive,
     modelsMismatch: mismatch,
     modelsApply: opts.modelsApply || null,
+    provider,
+    providerActive: activeProvider,
+    providerMismatch:
+      agentHealth.ok &&
+      providerEffective(provider) !== providerEffective(activeProvider),
     profiles: {
       grok: {
         id: "grok",
@@ -903,9 +995,13 @@ export async function updateBindings(patch, opts = {}) {
       shared: current.models?.shared ? { ...current.models.shared } : null,
       code: current.models?.code ? { ...current.models.code } : null,
     },
+    provider: current.provider || "hybrid",
   };
 
   const body = patch && typeof patch === "object" ? patch : {};
+  if (Object.prototype.hasOwnProperty.call(body, "provider")) {
+    next.provider = normalizeProvider(body.provider);
+  }
   for (const id of BINDING_KEY_IDS) {
     if (!Object.prototype.hasOwnProperty.call(body, id)) continue;
     const raw = body[id];

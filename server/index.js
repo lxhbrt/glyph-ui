@@ -1662,6 +1662,7 @@ app.put("/api/bindings", async (req, res) => {
     if (plan.push) {
       modelsApply = await pushModelsToAgent(agentUrl, plan.models, {
         direct: plan.direct,
+        provider: plan.provider,
       });
     }
 
