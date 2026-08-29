@@ -130,7 +130,12 @@ import {
 } from "./utils/vaultSearch.js";
 import { LageFallback } from "./components/LageFallback.jsx";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
-import { GLYPH_BUILD, GLYPH_VERSION } from "./version.js";
+import {
+  GLYPH_BUILD,
+  GLYPH_BUILD_LABEL,
+  GLYPH_VERSION,
+  glyphBuildLabel,
+} from "./version.js";
 
 const GraphModal = lazy(() =>
   import("./components/CableLage.jsx").then((m) => ({ default: m.GraphModal })),
@@ -2898,11 +2903,17 @@ export default function App() {
     );
     if (sessionId) lines.push(`Session ${sessionId}`);
     if (cwd) lines.push(cwd);
-    // Build # is the product mark; semver stays secondary (package.json).
-    lines.push(`UI #${GLYPH_BUILD} · v${GLYPH_VERSION}`);
+    lines.push(
+      GLYPH_BUILD_LABEL
+        ? `UI ${GLYPH_BUILD_LABEL} · v${GLYPH_VERSION}`
+        : `UI v${GLYPH_VERSION}`,
+    );
     if (bridgeMeta) {
+      const bridgeMark = glyphBuildLabel(bridgeMeta.build);
       lines.push(
-        `Bridge #${bridgeMeta.build} · v${bridgeMeta.version}`,
+        bridgeMark
+          ? `Bridge ${bridgeMark} · v${bridgeMeta.version}`
+          : `Bridge v${bridgeMeta.version}`,
       );
       lines.push(`${bridgeMeta.host}:${bridgeMeta.port}`);
       if (bridgeMeta.root) lines.push(bridgeMeta.root);
@@ -3373,7 +3384,7 @@ export default function App() {
                   className={`app-build${buildMismatch ? " app-build--drift" : ""}`}
                   title={headerTooltip}
                 >
-                  #{GLYPH_BUILD}
+                  {GLYPH_BUILD_LABEL}
                 </span>
               )}
               <span className="sub sub--inline" title={headerTooltip}>
@@ -3541,9 +3552,9 @@ export default function App() {
 
         {buildMismatch ? (
           <div className="banner banner--warn" role="status">
-            ⚠ UI <code>#{GLYPH_BUILD}</code>
+            ⚠ UI <code>{GLYPH_BUILD_LABEL}</code>
             {" · "}
-            Bridge <code>#{bridgeMeta.build}</code>
+            Bridge <code>{glyphBuildLabel(bridgeMeta.build)}</code>
             {" — "}
             <code>npm run service:install</code>
           </div>

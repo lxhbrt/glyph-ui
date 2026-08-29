@@ -120,6 +120,7 @@ import {
 } from "./bindings.js";
 import {
   getGlyphRoot,
+  glyphBuildLabel,
   readGlyphBuild,
   readGlyphVersion,
 } from "../shared/meta.js";
@@ -3435,7 +3436,9 @@ httpServer.listen(PORT, HOST, () => {
   console.log(
     `Glyph bridge → http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`,
   );
-  console.log(`Build              → #${GLYPH_BUILD} · v${GLYPH_VERSION}`);
+  console.log(
+    `Build              → ${glyphBuildLabel(GLYPH_BUILD) || `#${GLYPH_BUILD}`} · v${GLYPH_VERSION}`,
+  );
   console.log(
     `WebSocket          → ws://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}/ws`,
   );

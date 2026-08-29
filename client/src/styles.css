@@ -355,7 +355,7 @@ body,
   gap: 0.4rem 0.55rem;
 }
 
-/* Build mark next to “Glyph” — product identity (#17), not semver noise */
+/* Build mark next to “Glyph” — #0.9.0 from git count 90 */
 .app-build {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.72rem;
@@ -386,7 +386,7 @@ body,
   font-size: 0.85rem;
 }
 
-/* Product line sits next to Glyph #N — one header row, less height on phone */
+/* Product line sits next to Glyph #0.9.0 — one header row, less height on phone */
 .sub.sub--inline {
   margin: 0;
   font-size: 0.72rem;

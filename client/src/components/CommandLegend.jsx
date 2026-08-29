@@ -298,7 +298,7 @@ const SHORT_HANDBOOK = [
     title: "Oberfläche",
     body: [
       "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, UI neu laden, **Buch** (Handbuch · UI-Legende).",
-      "Header links: Glyph #N · Term · ACP. cwd nicht in der Zeile (Tooltip / Workspace-Button). Rechts: Profil · Modell-Pille (eingesetztes Modell, nicht Primary→Reserve) · Kette.",
+      "Header links: Glyph #0.9.0 · Term · ACP. cwd nicht in der Zeile (Tooltip / Workspace-Button). Rechts: Profil · Modell-Pille (eingesetztes Modell, nicht Primary→Reserve) · Kette.",
       "glyph-ui.com: Header Stift · Befehle · Theme · Schloss · **UI neu laden**. Keine Kette (Beenden).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
       "Unten: **Arbeitsleiste** (Plan · Ordner · Aktiver Task) über der LVL-Leiste · Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **Kopf**. °_Agent: Pixel-Apfel über dem Kopf = Ordner-Suche.",

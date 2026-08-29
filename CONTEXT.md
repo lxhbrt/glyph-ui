@@ -13,7 +13,7 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | Node | Tut | Quellen (Einstieg) | Hängt an |
 |------|-----|--------------------|----------|
 | **Bridge** | Browser ↔ WebSocket ↔ ACP stdio (`grok agent` / glyph-agent-acp). Drei Sitze: `desk` · `phone` · `web`. | `server/index.js`, `server/seats.js`, `server/webSurface.mjs`, `server/glyph-agent-acp.mjs`, `server/acpIdle.mjs` | Sessions, Agents |
-| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel. Header-Unterzeile: Term · ACP (Handy nur am Sitz phone). cwd nicht in der Zeile — Tooltip auf Glyph #N + Workspace-Button. Verlauf: letzte 40 Nachrichten im DOM, ältere per Button. Graph / Buch / Kalender lazy. **Web-Fläche** auf glyph-ui.com: maximierter °_Agent-Chat, kein Admin-Chrome. | `client/src/App.jsx`, `client/src/main.jsx`, `client/src/utils/messages.js` (`transcriptWindow`), `client/src/utils/webSurface.js` | Bridge-Events |
+| **Client-Shell** | Chat-UI, Composer, Sidebars, Buch-Panel. Header-Unterzeile: Term · ACP (Handy nur am Sitz phone). cwd nicht in der Zeile — Tooltip auf Glyph #0.9.0 + Workspace-Button. Verlauf: letzte 40 Nachrichten im DOM, ältere per Button. Graph / Buch / Kalender lazy. **Web-Fläche** auf glyph-ui.com: maximierter °_Agent-Chat, kein Admin-Chrome. | `client/src/App.jsx`, `client/src/main.jsx`, `client/src/utils/messages.js` (`transcriptWindow`), `client/src/utils/webSurface.js` | Bridge-Events |
 | **Palette / Type** | Eine Gold-Hex, eine Danger-Hex, Neutrals via `color-mix`; IBM Plex; Type-Scale fest | `client/src/styles.css` (`:root`) | Client-Shell |
 | **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende. Über Soft-Cap (Grok): **Zusammenpressen** → `/compact`. | `ContextLvlBar.jsx` | Client-Shell |
 | **Arbeitsleiste** | Angedockte Fläche über der LVL-Leiste: Plan, Ordner-Suche, **Aktiver Task**. Gleiches Chrome (Label · Zähler · ×). Kein Mitte-Modal. | `ComposerSheet.jsx`, `PlanBar.jsx`, `VaultSearchHits.jsx` | Client-Shell |
@@ -94,6 +94,10 @@ _Avoid_: Grok-Memory, TUI `prompt_history.jsonl` als Pflichtquelle
 **Session-Titel**:
 Manueller Name einer Grok-Disk-Session (`title_is_manual`). Lupe: Button **Name** oder `r`. Composer: `/rename Titel`.
 _Avoid_: Auto-Titel überschreiben ohne Flag
+
+**Build-Marke**:
+Git-Commit-Zähler im Header: 90 → `#0.9.0`, 112 → `#1.1.2`. Integer bleibt intern (UI vs Bridge). package.json-Semver nur sekundär (Tooltip).
+_Avoid_: `#90` als sichtbare Marke; package.json als Header-Nummer
 
 **Arbeitsleiste**:
 Angedockte Fläche über der LVL-Leiste für laufende Arbeit am Composer: **Plan**, **Ordner-Suche**, **Aktiver Task**, **Aufgabe-Übergabe**. Ein Chrome (Gold-Rand, Label, Zähler, ×, optionale Primäraktion). Nicht Bildschirmmitte, nicht zweites Overlay-System. Freigabe-Dialog (^_Code) bleibt eigenes Blocking-Modal.

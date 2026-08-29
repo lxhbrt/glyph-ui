@@ -643,7 +643,7 @@ Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
 - [ ] Aktives Profil passt (Header / `GLYPH_AGENT`)  
 - [ ] °_Agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
 - [ ] °_Agent Cloud-Antwort: `OPENROUTER_API_KEY` in der glyph-agent-Umgebung (Technik)  
-- [ ] Workspace passt (Tooltip auf Glyph #N / Workspace-Button / `GLYPH_UI_CWD`)  
+- [ ] Workspace passt (Tooltip auf Glyph #0.9.0 / Workspace-Button / `GLYPH_UI_CWD`)  
 - [ ] Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, Kopf = senden 
 - [ ] Während Arbeit: Text → Queue, leer → Stop  
 - [ ] Sessions: Lupe · Aktivität: Kalender · Wissen: Wiki  
