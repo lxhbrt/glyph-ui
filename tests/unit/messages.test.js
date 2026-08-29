@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   TRANSCRIPT_WINDOW,
   formatToolText,
+  priorUserMessage,
   toolMessageId,
   transcriptWindow,
   upsertToolMessage,
@@ -193,5 +194,38 @@ describe("transcriptWindow", () => {
     assert.equal(slice.hiddenCount, 0);
     assert.equal(slice.visible.length, 50);
     assert.equal(slice.start, 0);
+  });
+});
+
+describe("priorUserMessage", () => {
+  const rows = [
+    { id: "u1", role: "user", text: "Bitte den Apfel verschieben" },
+    { id: "a1", role: "assistant", text: "Apfel sitzt über dem Kopf." },
+    { id: "t1", role: "tool", text: "read" },
+    { id: "a2", role: "assistant", text: "Fertig." },
+    { id: "u2", role: "user", text: "   " },
+    { id: "a3", role: "assistant", text: "Ohne Meldung." },
+  ];
+
+  it("finds the last user turn with text, skipping tools", () => {
+    assert.equal(priorUserMessage(rows, 1)?.id, "u1");
+    assert.equal(priorUserMessage(rows, 3)?.id, "u1");
+  });
+
+  it("skips blank user rows and still finds the last real message", () => {
+    assert.equal(priorUserMessage(rows, 5)?.id, "u1");
+  });
+
+  it("returns null when no user text exists before the answer", () => {
+    assert.equal(
+      priorUserMessage(
+        [
+          { id: "u0", role: "user", text: "   " },
+          { id: "a0", role: "assistant", text: "Ohne Meldung." },
+        ],
+        1,
+      ),
+      null,
+    );
   });
 });

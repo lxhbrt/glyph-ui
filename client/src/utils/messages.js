@@ -20,6 +20,24 @@ export function toolMessageId(toolCallId, now = Date.now) {
 export const TRANSCRIPT_WINDOW = 40;
 
 /**
+ * Last user turn with text before `index` — tools and blank rows do not count.
+ * Search the full transcript, not the mounted window.
+ *
+ * @param {Array<{ role?: string, text?: string }>} messages
+ * @param {number} index
+ */
+export function priorUserMessage(messages, index) {
+  const list = Array.isArray(messages) ? messages : [];
+  const at = Number(index);
+  if (!Number.isFinite(at)) return null;
+  for (let i = at - 1; i >= 0; i--) {
+    const row = list[i];
+    if (row?.role === "user" && String(row.text || "").trim()) return row;
+  }
+  return null;
+}
+
+/**
  * Slice the transcript for the DOM. Older rows stay in React state;
  * only the last window (+ extra revealed) is mounted.
  *

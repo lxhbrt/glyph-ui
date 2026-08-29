@@ -278,27 +278,6 @@ function IconStop({ size = 18 }) {
   );
 }
 
-/** Enter / return — send in composer (replaces flaky Unicode ↵ on mobile). */
-function IconEnter({ size = 20 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M19 6.5v6a3 3 0 0 1-3 3H7"
-        stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinecap="round"
-      />
-      <path
-        d="M10.25 11.75L6.5 15.5l3.75 3.75"
-        stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 /** Web-Tor password. */
 function IconLock({ size = 18 }) {
   return (
@@ -370,39 +349,6 @@ function IconLinkOff({ size = 18 }) {
   );
 }
 
-/** Session zusammenfassen — pen on note (icon-only header control). */
-function IconSummarize({ size = 18 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M7 4.75h7.5A2.25 2.25 0 0 1 16.75 7v2.2"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 4.75A1.75 1.75 0 0 0 5.25 6.5v11A1.75 1.75 0 0 0 7 19.25h7.5A1.75 1.75 0 0 0 16.25 17.5V14"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M8.5 9h4M8.5 12.5h3"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M14.2 17.3l5.1-5.1a1.1 1.1 0 0 1 1.55 0l.35.35a1.1 1.1 0 0 1 0 1.55l-5.1 5.1-2.15.55.55-2.15z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function IconRewind({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -442,10 +388,8 @@ export {
   IconCheck,
   IconRefresh,
   IconStop,
-  IconEnter,
   IconLock,
   IconLink,
   IconLinkOff,
-  IconSummarize,
   IconRewind,
 };

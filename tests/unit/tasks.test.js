@@ -5,15 +5,38 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canCreateHandoff,
   canMarkDone,
   cleanArtifact,
   compactTrace,
+  evidenceClip,
   formatTaskMeta,
+  handoffTitleFrom,
+  hasHandoffPair,
   headLabel,
   sanitizeEvidence,
   statusLabel,
   tasksEndpointError,
 } from "../../client/src/utils/tasks.js";
+
+describe("handoffTitleFrom", () => {
+  it("uses the user prompt, not the assistant ping", () => {
+    assert.equal(
+      handoffTitleFrom(
+        { text: "Bitte den Apfel-Button verschieben" },
+        { text: "Hier. Was soll ich tun?" },
+      ),
+      "Bitte den Apfel-Button verschieben",
+    );
+  });
+
+  it("does not use trivial user pings as title", () => {
+    assert.equal(
+      handoffTitleFrom({ text: "test" }, { text: "Hier. Was soll ich tun?" }),
+      "Aufgabe",
+    );
+  });
+});
 
 describe("headLabel / statusLabel", () => {
   it("keeps empty target as later, never Analyse as a head", () => {
@@ -29,6 +52,34 @@ describe("headLabel / statusLabel", () => {
     assert.equal(
       formatTaskMeta({ status: "analysis", target: "grok" }),
       "Analyse · Grok Build",
+    );
+  });
+});
+
+describe("hasHandoffPair", () => {
+  it("requires both prompt and answer text", () => {
+    assert.equal(hasHandoffPair({ prompt: "Enter sendet nicht", answer: "offen" }), true);
+    assert.equal(hasHandoffPair({ prompt: "Enter sendet nicht", answer: "" }), false);
+    assert.equal(hasHandoffPair({ prompt: "  ", answer: "offen" }), false);
+    assert.equal(hasHandoffPair({}), false);
+  });
+});
+
+describe("canCreateHandoff", () => {
+  it("needs title, pass, and the message/answer pair", () => {
+    const pair = { prompt: "Apfel verschieben", answer: "Sitzt über dem Kopf." };
+    assert.equal(canCreateHandoff({ title: "Apfel", pass: "Button über den Kopf", ...pair }), true);
+    assert.equal(canCreateHandoff({ title: "Apfel", pass: "Button über den Kopf", prompt: pair.prompt, answer: "" }), false);
+    assert.equal(canCreateHandoff({ title: "Apfel", pass: "", ...pair }), false);
+  });
+});
+
+describe("evidenceClip", () => {
+  it("collapses whitespace and marks a truncated answer", () => {
+    assert.equal(evidenceClip("Apfel sitzt über dem Kopf."), "Apfel sitzt über dem Kopf.");
+    assert.equal(
+      evidenceClip("x".repeat(80), 40),
+      `${"x".repeat(39)}…`,
     );
   });
 });

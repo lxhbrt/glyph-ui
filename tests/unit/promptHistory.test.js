@@ -35,6 +35,8 @@ describe("prompt history", () => {
     assert.equal(isLocalSlashCommand("/rewind"), true);
     assert.equal(isLocalSlashCommand("/undo"), true);
     assert.equal(isLocalSlashCommand("/rename Titel"), true);
+    assert.equal(isLocalSlashCommand("/quit"), true);
+    assert.equal(isLocalSlashCommand("/exit"), true);
     assert.equal(isLocalSlashCommand("/compact keep auth"), false);
     assert.equal(isLocalSlashCommand("hello"), false);
   });

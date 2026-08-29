@@ -4,6 +4,7 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
+import { appleToggleLabel } from "../utils/vaultSearch.js";
 
 /** Minecraft-Apfel, 16×16: roter Körper, brauner Stiel, kleines Blatt. */
 function PixelApple({ size = 16 }) {
@@ -43,12 +44,8 @@ export function VaultSearchToggle({ on, disabled, onToggle, className = "" }) {
         className ? ` ${className}` : ""
       }`}
       aria-pressed={on}
-      aria-label={
-        on
-          ? "Ordner-Suche an — Klick schaltet aus"
-          : "Ordner-Suche aus — Klick sucht im Vault"
-      }
-      title={on ? "Ordner-Suche an" : "Ordner-Suche aus"}
+      aria-label={appleToggleLabel(on)}
+      title={appleToggleLabel(on)}
       disabled={disabled}
       onClick={onToggle}
     >

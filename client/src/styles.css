@@ -1054,7 +1054,7 @@ button.pill-btn {
     transform 0.1s ease;
 }
 
-/* Compact icon-only pills (status / summarize) — saves header space on phone */
+/* Compact icon-only pills (status) — saves header space on phone */
 button.pill-btn.pill-btn--icon {
   display: inline-flex;
   align-items: center;
@@ -1207,7 +1207,7 @@ button.send .send-icon svg {
   flex-shrink: 0;
 }
 
-/* Stacked faces for ↵ ⇄ Snack morph */
+/* Stacked faces for Kopf ⇄ Snack morph */
 button.send .send-face {
   position: absolute;
   inset: 0;
@@ -1222,12 +1222,95 @@ button.send .send-face {
   pointer-events: none;
 }
 
-/* Idle: Enter visible, Snack tucked away */
-button.send .send-face--enter {
+/* Idle: Graph head visible, Snack tucked away */
+button.send .send-face--head {
   opacity: 1;
   transform: scale(1) rotate(0deg);
   filter: blur(0);
   z-index: 2;
+}
+
+button.send .send-face--head .send-icon {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+button.send .send-snake {
+  --send-head: 50%;
+  --send-head-pad: 25%;
+  --send-chin: calc(var(--send-head-pad) + var(--send-head) - 2px);
+  --send-head-right: calc(var(--send-head-pad) + var(--send-head));
+  position: absolute;
+  inset: 0;
+}
+
+button.send .send-snake-head {
+  position: absolute;
+  left: var(--send-head-pad);
+  top: var(--send-head-pad);
+  width: var(--send-head);
+  height: var(--send-head);
+  z-index: 2;
+  overflow: hidden;
+}
+
+button.send .send-snake-head .graph-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  color: var(--gold);
+}
+
+button.send .send-tail {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+button.send .send-tail-stone {
+  position: absolute;
+  top: var(--send-chin);
+  border-radius: 0;
+  image-rendering: pixelated;
+  animation: graph-glance 8.4s steps(1, end) infinite;
+}
+
+/* 8 → 6 → 4px along the chin, trailing right toward the rim. */
+button.send .send-tail-stone--a {
+  left: calc(var(--send-head-right) - 10px);
+  width: var(--snack-pixel);
+  height: var(--snack-pixel);
+  background: var(--snack-snake-head);
+  animation-delay: -0.35s;
+}
+
+button.send .send-tail-stone--b {
+  left: calc(var(--send-head-right) - 1px);
+  width: calc(var(--snack-pixel) - var(--snack-pixel-gap));
+  height: calc(var(--snack-pixel) - var(--snack-pixel-gap));
+  background: var(--snack-snake-body);
+  animation-delay: -0.12s;
+}
+
+button.send .send-tail-stone--c {
+  left: calc(var(--send-head-right) + 6px);
+  width: calc(var(--snack-pixel) * 0.5);
+  height: calc(var(--snack-pixel) * 0.5);
+  background: color-mix(in srgb, var(--snack-snake-body) 70%, #fff);
+  animation-delay: 0.12s;
+}
+
+button.send:disabled:not(.send--working) .send-face--head .graph-face {
+  color: color-mix(in srgb, var(--gold) 45%, var(--muted));
+}
+
+button.send:disabled:not(.send--working) .send-tail {
+  opacity: 0.45;
 }
 
 button.send .send-face--snack {
@@ -1238,8 +1321,8 @@ button.send .send-face--snack {
   padding: 4px;
 }
 
-/* Working: Enter collapses into Snack */
-button.send.send--working .send-face--enter {
+/* Working: Head collapses into Snack */
+button.send.send--working .send-face--head {
   opacity: 0;
   transform: scale(0.15) rotate(-100deg);
   filter: blur(3px);
@@ -1253,8 +1336,8 @@ button.send.send--working .send-face--snack {
   z-index: 2;
 }
 
-/* Work done: Snack morphs back into ↵ */
-button.send.send--morph-out .send-face--enter {
+/* Work done: Snack morphs back into the head */
+button.send.send--morph-out .send-face--head {
   opacity: 1;
   transform: scale(1) rotate(0deg);
   filter: blur(0);
@@ -1269,7 +1352,7 @@ button.send.send--morph-out .send-face--snack {
 }
 
 /*
-  Working / Stopp: same fill as idle Enter — only the red rim + snack change.
+  Working / Stopp: same fill as idle head — only the red rim + snack change.
   No black/full color takeover.
 */
 button.send.send--working {
@@ -2637,7 +2720,7 @@ button.tool-card-summary:hover .tool-card-verb {
 }
 
 /* Follow-up queue while Grok is working (TUI-style) */
-/* Arbeitsleiste — Plan, Ordner-Suche, Zusammenfassen. Über der LVL-Leiste. */
+/* Arbeitsleiste — Plan, Ordner-Suche, Aktiver Task. Über der LVL-Leiste. */
 .composer-sheet {
   flex: 0 0 auto;
   margin: 0 0 8px;
@@ -2825,39 +2908,114 @@ button.composer-sheet-head:hover {
   color: var(--danger);
 }
 
-.task-handoff-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
+.composer-sheet--handoff .composer-sheet-body {
+  max-height: min(48vh, 20rem);
+}
+
+.composer-sheet-fields {
   display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgb(0 0 0 / 72%);
+  gap: 8px;
+  padding-top: 4px;
 }
 
-.task-handoff-dialog {
-  position: relative;
-  width: min(560px, 100%);
-  max-height: min(720px, 90vh);
-  overflow: auto;
-  padding: 22px;
-  border: 1px solid var(--gold, #c8a654);
-  border-radius: 12px;
-  background: var(--panel, #151515);
-  color: var(--text, #f2eee4);
-  box-shadow: 0 20px 80px rgb(0 0 0 / 55%);
+.composer-sheet-fields label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--type-secondary);
+  color: var(--muted);
 }
 
-.task-handoff-dialog h2 { margin: 0 0 16px; font-size: 1.05rem; }
-.task-handoff-dialog label { display: grid; gap: 6px; margin: 13px 0; font-size: .82rem; }
-.task-handoff-dialog input,
-.task-handoff-dialog select,
-.task-handoff-dialog textarea {
-  width: 100%; box-sizing: border-box; border: 1px solid rgb(255 255 255 / 20%);
-  border-radius: 6px; padding: 9px; color: inherit; background: rgb(0 0 0 / 22%); font: inherit;
+.composer-sheet-fields input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  color: inherit;
+  background: color-mix(in srgb, var(--bg) 88%, var(--text));
+  font: inherit;
 }
-.task-handoff-dialog textarea { min-height: 110px; resize: vertical; }
-.task-handoff-close { position: absolute; top: 8px; right: 10px; border: 0; background: none; color: inherit; font-size: 24px; cursor: pointer; }
+
+.task-evidence {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+
+.task-evidence summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  outline: none;
+}
+
+.task-evidence summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-evidence summary::before {
+  content: "▸ ";
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--muted) 80%, var(--text));
+}
+
+.task-evidence[open] > summary::before {
+  content: "▾ ";
+}
+
+.task-evidence summary:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--gold) 50%, var(--border));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.task-evidence-kicker {
+  flex-shrink: 0;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.task-evidence-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+}
+
+.task-evidence-body {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 2px 2px;
+  padding: 6px 0 4px 10px;
+  border-left: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+}
+
+.task-evidence-body h4 {
+  margin: 0 0 2px;
+  font-size: var(--type-secondary);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.task-evidence-body pre {
+  margin: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: var(--type-secondary);
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+}
 
 .plan-bar-list {
   list-style: none;
@@ -3733,7 +3891,7 @@ button.composer-sheet-head:hover {
 
 /* Reihen-Wrapper: LVL-Balken + schwebender Ordner-Suche-Apfel darüber.
    Der Apfel (Toggle) hängt als letztes Kind im Row und schwebt absolut
-   über der Oberkante des Balkens — rechts, in Fluchtlinie mit ↵ (Lampe-Prinzip). */
+   über der Oberkante des Balkens — rechts, in Fluchtlinie mit dem Kopf (Lampe-Prinzip). */
 .context-lvl-row {
   position: relative;
   flex: 0 0 auto;
@@ -3998,7 +4156,7 @@ button.composer-sheet-head:hover {
   height: 3.25rem;
   min-height: 3.25rem;
   flex-shrink: 0;
-  border-radius: 999px; /* idle ↵ and working snack/stop share one circle */
+  border-radius: 999px; /* idle head and working snack/stop share one circle */
 }
 
 .composer.composer--grok .send.send--working,
@@ -4009,7 +4167,7 @@ button.composer-sheet-head:hover {
   border-radius: 999px; /* keep circle while snack is visible */
 }
 
-.composer.composer--grok .send.send--working .send-face--enter {
+.composer.composer--grok .send.send--working .send-face--head {
   pointer-events: none;
 }
 
@@ -5522,7 +5680,7 @@ button.cal-cell {
   .composer-vault-btn {
     width: 2.5rem;
     height: 2.5rem;
-    right: 10px; /* composer-row Mobile-Padding = 10px → gleiche Fluchtlinie wie ↵ */
+    right: 10px; /* composer-row Mobile-Padding = 10px → gleiche Fluchtlinie wie der Kopf */
     bottom: calc(100% + 16px);
   }
 
@@ -5605,6 +5763,19 @@ button.cal-cell {
 
   .composer-sheet-body {
     max-height: min(28dvh, 12rem);
+  }
+
+  .composer-sheet--handoff .composer-sheet-body {
+    max-height: min(32dvh, 14rem);
+  }
+
+  .task-evidence summary {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .composer-sheet--handoff .composer-sheet-go {
+    width: 100%;
   }
 
   .composer-sheet-go,
@@ -6221,79 +6392,6 @@ button.cal-cell {
   }
 }
 
-/* Zusammenfassen — Inhalt in der Arbeitsleiste */
-.summarize-label {
-  display: block;
-  font-size: var(--type-secondary);
-  color: var(--muted);
-  margin: 6px 0 4px;
-}
-.summarize-input,
-.summarize-textarea {
-  width: 100%;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font: inherit;
-  box-sizing: border-box;
-}
-.summarize-textarea {
-  resize: vertical;
-  min-height: 72px;
-}
-.summarize-success {
-  color: var(--text);
-  font-size: var(--type-secondary);
-  line-height: var(--type-secondary-leading);
-}
-.summarize-success p {
-  margin: 0 0 8px;
-}
-.summarize-external-warning {
-  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--border));
-  background: color-mix(in srgb, var(--gold) 10%, transparent);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: var(--type-secondary);
-  line-height: var(--type-secondary-leading);
-  margin-bottom: 8px;
-}
-.summarize-consent {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: var(--type-secondary);
-}
-.summarize-consent input {
-  margin: 0;
-}
-.summarize-rendered h4 {
-  margin: 0 0 6px;
-  font-size: 0.85rem;
-}
-.summarize-rendered p {
-  margin: 0 0 8px;
-  font-size: var(--type-secondary);
-  line-height: var(--type-secondary-leading);
-}
-.summarize-rendered ul {
-  margin: 4px 0 8px;
-  padding-left: 18px;
-  font-size: var(--type-secondary);
-}
-.summarize-target {
-  font-size: 0.7rem;
-  color: var(--muted);
-  word-break: break-all;
-  margin: 8px 0 0;
-}
-.summarize-edit {
-  margin: 4px 0;
-}
-
 /* ---------- AssistantMeta (kompakte Modell-/Provider-Statuszeile) ---------- */
 /* Trace line: secondary chrome under the answer (same family as Think/Steps) */
 .assistant-meta {
@@ -6544,11 +6642,20 @@ button.cal-cell {
   right: 0;
   bottom: 0;
   left: 48px;
-  z-index: 40;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   background: var(--lage-ink);
   color: color-mix(in srgb, var(--gold) 78%, #fff);
+}
+
+.lage-pending {
+  margin: auto;
+  padding: 0 1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lage-mute);
 }
 
 :root[data-theme="light"] .lage-stage {
@@ -7145,6 +7252,101 @@ button.cal-cell {
 
 .graph-ink {
   fill: color-mix(in srgb, var(--bg) 22%, #000);
+}
+
+/* Pixel glance / blink: transform only, steps (no interpolation), long idle.
+   Cheap: compositor, no JS, paused while the send-head is morphing out. */
+.graph-pupils,
+.graph-lids {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.graph-pupils {
+  animation: graph-glance 8.4s steps(1, end) infinite;
+}
+
+.graph-face--agent .graph-pupils {
+  animation-delay: -3.2s;
+}
+
+.graph-face--code .graph-pupils {
+  animation-delay: -6.1s;
+}
+
+.graph-face--agent .graph-lids,
+.graph-face--code .graph-lids {
+  animation: graph-blink 5.6s steps(1, end) infinite;
+}
+
+.graph-face--code .graph-lids {
+  animation-delay: -2.4s;
+}
+
+@keyframes graph-glance {
+  0%,
+  22% {
+    transform: translate(0, 0);
+  }
+  24%,
+  34% {
+    transform: translate(2px, 0);
+  }
+  36%,
+  54% {
+    transform: translate(0, 0);
+  }
+  56%,
+  66% {
+    transform: translate(-2px, 1px);
+  }
+  68%,
+  84% {
+    transform: translate(0, 0);
+  }
+  86%,
+  91% {
+    transform: translate(1px, -1px);
+  }
+  93%,
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes graph-blink {
+  0%,
+  86%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  88%,
+  91% {
+    transform: scaleY(0.12);
+  }
+}
+
+button.send:hover:not(:disabled):not(.send--working) .graph-pupils,
+button.send:hover:not(:disabled):not(.send--working) .send-tail-stone {
+  animation-duration: 3.2s;
+}
+
+button.send.send--working .graph-pupils,
+button.send.send--working .graph-lids,
+button.send.send--working .send-tail-stone,
+button.send.send--morph-out .graph-pupils,
+button.send.send--morph-out .graph-lids,
+button.send.send--morph-out .send-tail-stone {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-pupils,
+  .graph-lids,
+  .send-tail-stone {
+    animation: none;
+  }
 }
 
 .tablet-plate {

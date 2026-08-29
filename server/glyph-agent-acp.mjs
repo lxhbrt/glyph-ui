@@ -20,6 +20,7 @@ import { buildStepBanner, formatThinkStep } from "./stepBanner.mjs";
 import { agentVaultBodyFromMeta } from "./vaultFlags.mjs";
 import { sliceMessagesBeforeUser } from "../shared/rewind.mjs";
 import { cloneSessionStore } from "../shared/composerActions.mjs";
+import { publicAgentText } from "../shared/dsml.mjs";
 
 // glyph-agent HTTP-Dienst (Standard wie in server.py)
 const AGENT_URL = process.env.GLYPH_AGENT_URL || "http://127.0.0.1:18899";
@@ -368,15 +369,22 @@ async function streamChat(body, client, sessionId, signal, onActivity) {
           await streamStepChunk(`⏹STEP⏹${line}`, client, sessionId);
         }
       } else if (type === "draft") {
-        // Zwischen-LLM → Protokoll (nie Primärspur).
+        // Zwischen-LLM → Protokoll (nie Primärspur). DSML nie in die Lesespur.
         if (typeof ev.text === "string" && ev.text) {
-          await streamDraftChunks(ev.text, client, sessionId);
+          const visible = publicAgentText(ev.text);
+          if (visible) await streamDraftChunks(visible, client, sessionId);
         }
       } else if (type === "answer") {
         // Nur Final/Status. Replace, nicht append (ein answer pro Turn).
         if (typeof ev.text === "string" && ev.text) {
-          answerText = ev.text;
-          await streamChunks(ev.text, client, sessionId);
+          const visible = publicAgentText(
+            ev.text,
+            "Denker hat einen Tool-Call im DSML-Format geschickt, der sich nicht lesen ließ. Bitte die Anfrage nochmal senden.",
+          );
+          if (visible) {
+            answerText = visible;
+            await streamChunks(visible, client, sessionId);
+          }
         }
       } else if (type === "pending_confirmation") {
         // Live-Hinweis: Genehmigung steht an (final kommt als done).

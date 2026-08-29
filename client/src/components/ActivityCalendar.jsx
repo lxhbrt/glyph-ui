@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { seatFetch } from "../utils/seat.js";
+import { TaskEvidence } from "./TaskEvidence.jsx";
 import {
   TASK_HEADS,
   cleanArtifact,
@@ -118,10 +119,10 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
   async function markTaskDone(task) {
     let artifact = cleanArtifact(task?.artifact);
     if (!artifact) {
-      artifact = cleanArtifact(window.prompt("Artefakt — Pfad oder Ort des Ergebnisses") || "");
+      artifact = cleanArtifact(window.prompt("Pfad oder Ort des Ergebnisses") || "");
     }
     if (!artifact) {
-      setError("Fertig braucht ein Artefakt — Pfad oder Ort des Ergebnisses");
+      setError("Fertig braucht einen Pfad oder Ort");
       return;
     }
     setBusyId(`task-${task.id}`);
@@ -358,9 +359,13 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
                     <div className="cal-todo-main">
                       <span className="cal-todo-title">{task.title}</span>
                       <span className="cal-todo-meta">{formatTaskMeta(task)}</span>
-                      {task.pass ? <span className="cal-todo-preview">Fertig wenn: {task.pass}</span> : null}
+                      {task.pass ? <span className="cal-todo-preview">Zu tun: {task.pass}</span> : null}
                       {task.artifact ? <span className="cal-todo-preview">{task.artifact}</span> : null}
                       {task.summary ? <span className="cal-todo-preview">{task.summary}</span> : null}
+                      <TaskEvidence
+                        prompt={task.evidence?.prompt}
+                        answer={task.evidence?.answer}
+                      />
                     </div>
                     <div className="cal-todo-actions">
                       <label className="cal-task-assign">

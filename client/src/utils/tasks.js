@@ -22,6 +22,45 @@ export const TASK_STATUSES = {
   blocked: "blockiert",
 };
 
+const TRIVIAL_TITLE = /^(test|hi|ok|ping|hallo|hey)[\s!.]*$/i;
+const EVIDENCE_CLIP = 100;
+
+/** Aufgabe nur mit Meldung und Antwort — sonst muss der Kontext rekonstruiert werden. */
+export function hasHandoffPair({ prompt, answer } = {}) {
+  return Boolean(String(prompt || "").trim() && String(answer || "").trim());
+}
+
+export function canCreateHandoff({ title, pass, prompt, answer } = {}) {
+  return Boolean(
+    String(title || "").trim() &&
+      String(pass || "").trim() &&
+      hasHandoffPair({ prompt, answer }),
+  );
+}
+
+export function evidenceClip(text, limit = EVIDENCE_CLIP) {
+  const one = String(text || "")
+    .trim()
+    .replace(/\s+/g, " ");
+  const cap = Math.max(1, Number(limit) || EVIDENCE_CLIP);
+  if (one.length <= cap) return one;
+  return `${one.slice(0, cap - 1).trimEnd()}…`;
+}
+
+/** Titel der Übergabe: Nutzer-Prompt, nicht die Agent-Antwort. */
+export function handoffTitleFrom(userMessage, message) {
+  void message;
+  const firstLine = (value) =>
+    String(value || "")
+      .trim()
+      .split(/\n/)[0]
+      .replace(/\s+/g, " ")
+      .slice(0, 80);
+  const user = firstLine(userMessage?.text);
+  if (user && !TRIVIAL_TITLE.test(user)) return user;
+  return "Aufgabe";
+}
+
 export function headLabel(id) {
   const hit = TASK_HEADS.find(([value]) => value === id);
   if (hit) return hit[1];
@@ -47,7 +86,7 @@ export function cleanArtifact(value) {
   return String(value || "").trim().slice(0, 1000);
 }
 
-/** Fertig nur mit Artefakt. Chat-Belege zählen nicht. */
+/** Fertig nur mit Pfad oder Ort. Chat-Belege zählen nicht. */
 export function canMarkDone(task) {
   return Boolean(cleanArtifact(task?.artifact));
 }

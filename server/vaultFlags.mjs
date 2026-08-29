@@ -1,6 +1,6 @@
 /**
- * °_Agent ACP → HTTP /chat: Ordner-Suche nur bei explizitem Toggle.
- * Fehlt das Flag (oder _meta), gilt aus — kein B+-VaultFind-Precheck.
+ * °_Agent ACP → HTTP /chat: Apfel an = Arbeits-Vault-Treffer.
+ * Fehlt das Flag: vault_search false → Engine: memory-wiki + offenes Web.
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */

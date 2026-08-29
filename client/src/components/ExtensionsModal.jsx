@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { rankCatalog } from "../utils/slash.js";
+import { rankCatalog, slashItemLabel, withUiReloadCommand } from "../utils/slash.js";
 
 /**
  * @param {object} props
@@ -47,11 +47,13 @@ function ExtensionsModal({
 
   const commandItems = useMemo(
     () =>
-      (agentCommands || []).map((c) => ({
-        ...c,
-        kind: "command",
-        name: String(c.name || "").replace(/^\//, ""),
-      })),
+      withUiReloadCommand(
+        (agentCommands || []).map((c) => ({
+          ...c,
+          kind: c.kind === "ui" ? "ui" : "command",
+          name: String(c.name || "").replace(/^\//, ""),
+        })),
+      ),
     [agentCommands],
   );
 
@@ -190,9 +192,9 @@ function ExtensionsModal({
                 >
                   <div className="session-main">
                     <div className="extensions-row-title">
-                      <code>/{item.name}</code>
+                      <code>{slashItemLabel(item)}</code>
                       <span className={`slash-badge slash-badge--${item.kind}`}>
-                        {item.kind === "skill" ? "Skill" : "Agent"}
+                        {item.kind === "skill" ? "Skill" : item.kind === "ui" ? "UI" : "Agent"}
                       </span>
                       {item.source ? (
                         <span className="extensions-source">{item.source}</span>

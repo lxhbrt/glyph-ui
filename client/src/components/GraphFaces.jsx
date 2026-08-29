@@ -32,15 +32,17 @@ function Ink(props) {
   return <rect className="graph-ink" {...props} />;
 }
 
-/** Boss — sunglasses, no brow, sideways smirk. */
+/** Boss — sunglasses, no brow, sideways smirk. Highlights glance; glasses don't blink. */
 function GrokFace({ size }) {
   return (
     <Stone size={size} face="grok">
       <Ink x="1.4" y="6.2" width="9.2" height="7.2" />
       <Ink x="13.4" y="6.2" width="9.2" height="7.2" />
       <Ink x="10.2" y="8.2" width="3.6" height="2.2" />
-      <rect x="3.2" y="7.8" width="2.6" height="1.8" fill="currentColor" />
-      <rect x="15.2" y="7.8" width="2.6" height="1.8" fill="currentColor" />
+      <g className="graph-pupils">
+        <rect x="3.2" y="7.8" width="2.6" height="1.8" fill="currentColor" />
+        <rect x="15.2" y="7.8" width="2.6" height="1.8" fill="currentColor" />
+      </g>
       <Ink x="11.4" y="19.8" width="10.4" height="2.2" />
       <Ink x="19.6" y="17.6" width="2.6" height="3.4" />
     </Stone>
@@ -51,22 +53,30 @@ function GrokFace({ size }) {
 function AgentFace({ size }) {
   return (
     <Stone size={size} face="agent">
-      <Ink x="1.6" y="6.2" width="8" height="8.4" />
-      <Ink x="14.2" y="7.6" width="6.4" height="5.4" />
-      <rect x="3.4" y="8.2" width="2.4" height="2.4" fill="currentColor" />
-      <rect x="16" y="8.8" width="1.8" height="1.8" fill="currentColor" />
+      <g className="graph-lids">
+        <Ink x="1.6" y="6.2" width="8" height="8.4" />
+        <Ink x="14.2" y="7.6" width="6.4" height="5.4" />
+        <g className="graph-pupils">
+          <rect x="3.4" y="8.2" width="2.4" height="2.4" fill="currentColor" />
+          <rect x="16" y="8.8" width="1.8" height="1.8" fill="currentColor" />
+        </g>
+      </g>
       <Ink x="5" y="19.4" width="12" height="1.6" />
     </Stone>
   );
 }
 
-/** Hacker — wink, one wide eye, toothy grin. */
+/** Hacker — wink, one wide eye, toothy grin. Wink stays; open eye blinks. */
 function CodeFace({ size }) {
   return (
     <Stone size={size} face="code">
       <Ink x="2" y="7.4" width="6.4" height="1.6" />
-      <Ink x="12.4" y="6.2" width="9.4" height="8.6" />
-      <rect x="14.2" y="8" width="2.4" height="2.4" fill="currentColor" />
+      <g className="graph-lids">
+        <Ink x="12.4" y="6.2" width="9.4" height="8.6" />
+        <g className="graph-pupils">
+          <rect x="14.2" y="8" width="2.4" height="2.4" fill="currentColor" />
+        </g>
+      </g>
       <Ink x="4.4" y="20" width="15.2" height="2.4" />
       <rect x="8.4" y="20" width="1.6" height="2.4" fill="currentColor" />
       <rect x="13.2" y="20" width="1.6" height="2.4" fill="currentColor" />
@@ -78,6 +88,22 @@ export function SnakeHead({ size = 28, face = "grok" }) {
   if (face === "agent") return <AgentFace size={size} />;
   if (face === "code") return <CodeFace size={size} />;
   return <GrokFace size={size} />;
+}
+
+/** Idle send button: Graph face + short snack-stone tail. Graph itself stays head-only. */
+export function SendSnake({ size = 28, face = "grok" }) {
+  return (
+    <span className="send-snake">
+      <span className="send-snake-head">
+        <SnakeHead size={size} face={face} />
+      </span>
+      <span className="send-tail" aria-hidden="true">
+        <span className="send-tail-stone send-tail-stone--a" />
+        <span className="send-tail-stone send-tail-stone--b" />
+        <span className="send-tail-stone send-tail-stone--c" />
+      </span>
+    </span>
+  );
 }
 
 /** Idle: coin. Absorb: the arriving head. */

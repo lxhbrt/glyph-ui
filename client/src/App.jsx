@@ -9,6 +9,8 @@ import { AssistantMeta } from "./components/AssistantMeta.jsx";
 import { PlanBar } from "./components/PlanBar.jsx";
 import { ContextLvlBar } from "./components/ContextLvlBar.jsx";
 import { SnackBoard } from "./components/Snack.jsx";
+import { SendSnake } from "./components/GraphFaces.jsx";
+import { profileHeadId } from "./utils/lageLayout.js";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
 import { SlashPopup } from "./components/SlashPopup.jsx";
@@ -17,14 +19,18 @@ import { RewindPicker } from "./components/RewindPicker.jsx";
 import { SlashHighlightedText } from "./components/SlashHighlightedText.jsx";
 import { VaultSearchToggle } from "./components/VaultSearchToggle.jsx";
 import { VaultSearchHits } from "./components/VaultSearchHits.jsx";
-import { SummarizeDialog } from "./components/SummarizeDialog.jsx";
 import { TaskHandoffDialog } from "./components/TaskHandoffDialog.jsx";
 import {
   findSlashHighlightRanges,
   insertSlashCommand,
+  isHiddenAgentCommand,
+  isUiReloadItem,
+  isUiReloadSlash,
   rankCatalog,
   slashTokenAt,
+  withUiReloadCommand,
 } from "./utils/slash.js";
+import { hardReloadUi } from "./utils/reloadUi.js";
 import { applyComposerMirrorMetrics } from "./utils/composerMirror.js";
 import {
   canSwarm,
@@ -48,11 +54,9 @@ import {
   IconCopy,
   IconCheck,
   IconRefresh,
-  IconEnter,
   IconLock,
   IconLink,
   IconLinkOff,
-  IconSummarize,
   IconRewind,
 } from "./components/icons.jsx";
 import { useWorkingSeconds } from "./hooks/useWorkingSeconds.js";
@@ -69,6 +73,7 @@ import {
 } from "./utils/attachments.js";
 import { invalidateWsToken, wsUrl } from "./utils/format.js";
 import { resolveSeat, seatFetch } from "./utils/seat.js";
+import { surfaceHeaderControls } from "./utils/webSurface.js";
 import { modelHudText, shortModelLabel } from "./utils/assistantTrace.js";
 import {
   contextFillRatio,
@@ -88,6 +93,7 @@ import { GRANT_DEMO_REQ, TASK_DEMO } from "./utils/codeGrants.js";
 import {
   TRANSCRIPT_WINDOW,
   formatToolText,
+  priorUserMessage,
   transcriptWindow,
   upsertToolMessage,
 } from "./utils/messages.js";
@@ -122,14 +128,12 @@ import {
   vaultFindHttpError,
   vaultSendIntent,
 } from "./utils/vaultSearch.js";
+import { LageFallback } from "./components/LageFallback.jsx";
 import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
 import { GLYPH_BUILD, GLYPH_VERSION } from "./version.js";
 
-const CableLage = lazy(() =>
-  import("./components/CableLage.jsx").then((m) => ({ default: m.CableLage })),
-);
-const GraphGuard = lazy(() =>
-  import("./components/CableLage.jsx").then((m) => ({ default: m.GraphGuard })),
+const GraphModal = lazy(() =>
+  import("./components/CableLage.jsx").then((m) => ({ default: m.GraphModal })),
 );
 const CommandLegend = lazy(() =>
   import("./components/CommandLegend.jsx").then((m) => ({
@@ -167,7 +171,9 @@ export default function App() {
   const [sessionId, setSessionId] = useState(null);
   const [seat, setSeat] = useState(() => resolveSeat());
   const webSurface = seat === "web";
+  const headerControls = surfaceHeaderControls(seat);
   const [webUnlocked, setWebUnlocked] = useState(() => seat !== "web");
+  const [webGateHint, setWebGateHint] = useState("");
   const [webPasswordOpen, setWebPasswordOpen] = useState(false);
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -193,10 +199,20 @@ export default function App() {
       cancelled = true;
     };
   }, [seat]);
-  /** Arbeitsleiste: Session zusammenfassen ({ id, title } oder null). */
-  const [summarizeTarget, setSummarizeTarget] = useState(null);
-  /** Ausgewählter Beleg für eine gemeinsame Kopf-zu-Kopf-Aufgabe. */
-  const [taskHandoff, setTaskHandoff] = useState(null);
+  /** Ausgewählter Beleg für eine gemeinsame Kopf-zu-Kopf-Aufgabe. `?handoff=demo`. */
+  const [taskHandoff, setTaskHandoff] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return new URLSearchParams(window.location.search).get("handoff") === "demo"
+        ? {
+            message: { text: "Apfel sitzt über dem Kopf." },
+            userMessage: { text: "Bitte den Apfel-Button verschieben" },
+          }
+        : null;
+    } catch {
+      return null;
+    }
+  });
   const [cwd, setCwd] = useState("");
   /**
    * Active ACP agent + the catalog to switch between. Capabilities decide
@@ -292,6 +308,7 @@ export default function App() {
   const [vaultSearchError, setVaultSearchError] = useState("");
   const runVaultSearchRef = useRef(null);
   const vaultSearchAbortRef = useRef(null);
+  const vaultLastPickedRef = useRef([]);
   const isAgentProfile =
     agent?.id === "glyph-agent" || agent?.id === "agent";
   const isGrokProfile = agent?.id === "grok" || !agent?.id;
@@ -1178,6 +1195,7 @@ export default function App() {
   }, [tryDrainQueue]);
 
   useEffect(() => {
+    if (webSurface && !webUnlocked) return undefined;
     let closed = false;
     let retryTimer;
     let ws;
@@ -1188,12 +1206,19 @@ export default function App() {
       try {
         url = await wsUrl();
       } catch (err) {
+        setConnected(false);
+        if (err && err.gate) {
+          setWebGateHint(
+            "Die Sitzung war weg. Passwort nochmal, dann geht's weiter.",
+          );
+          setWebUnlocked(false);
+          return;
+        }
         setError(
           err instanceof Error
             ? err.message
             : "WebSocket-Token konnte nicht geladen werden",
         );
-        setConnected(false);
         if (!closed) {
           retryTimer = setTimeout(() => {
             void connect();
@@ -1425,7 +1450,7 @@ export default function App() {
           const list = Array.isArray(msg.commands) ? msg.commands : [];
           setAgentCommands(
             list
-              .filter((c) => c && c.name)
+              .filter((c) => c && c.name && !isHiddenAgentCommand(c.name))
               .map((c) => ({
                 name: String(c.name),
                 description: String(c.description || ""),
@@ -1501,6 +1526,8 @@ export default function App() {
     upsertStreaming,
     upsertStreamingDrafts,
     upsertStreamingSteps,
+    webSurface,
+    webUnlocked,
   ]);
 
   const clearPendingAttachments = useCallback(() => {
@@ -1840,6 +1867,7 @@ export default function App() {
     setVaultHits(null);
     setVaultHitOn(new Set());
     setVaultSearchError("");
+    vaultLastPickedRef.current = [];
   }, []);
 
   const runVaultSearch = useCallback(async (query) => {
@@ -1887,6 +1915,10 @@ export default function App() {
   const send = useCallback(() => {
     const text = input.trim();
     if (attachBusy) return;
+    if (text && isUiReloadSlash(text)) {
+      hardReloadUi();
+      return;
+    }
     if (!text && vaultSearchBusy && sendAction !== "fork") {
       abortVaultSearch();
       return;
@@ -1966,6 +1998,7 @@ export default function App() {
         hitsQuery: vaultHits?.query,
         hitsStatus: vaultHits?.status,
         error: vaultSearchError,
+        lastPickedCount: vaultLastPickedRef.current.length,
       });
       if (intent === "abort") {
         abortVaultSearch();
@@ -1985,9 +2018,14 @@ export default function App() {
     }
 
     const displayText = buildDisplayText(action, body, atts);
-    const picked = wantsVault
+    const livePicked = wantsVault
       ? toWireSelected(selectedHits(vaultHits?.hits || [], vaultHitOn))
       : [];
+    if (livePicked.length > 0) {
+      vaultLastPickedRef.current = livePicked;
+    }
+    const picked =
+      livePicked.length > 0 ? livePicked : wantsVault ? vaultLastPickedRef.current : [];
     const useVaultContext = picked.length > 0;
     const payload = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2090,6 +2128,7 @@ export default function App() {
       selectedHits(vaultHits?.hits || [], vaultHitOn),
     );
     if (picked.length === 0) return;
+    vaultLastPickedRef.current = picked;
     const text = String(vaultHits?.query || input.trim());
     const payload = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2503,9 +2542,6 @@ export default function App() {
   // Session-Lupe (persistent) nur bei sessionList:true (Grok); Aktivität nur bei activity:true.
   const canBrowseSessions = caps ? Boolean(caps.sessionList) : true;
   const canSeeActivity = caps ? Boolean(caps.activity) : true;
-  // Aktive-Session-Zusammenfassung: möglich, wenn Profil summarize + sessionHistory kann.
-  // Unabhängig von sessionList (gilt auch für glyph-agent ohne Lupe).
-  const canSummarize = caps ? Boolean(caps.summarize && caps.sessionHistory) : false;
   const agentLabel = agent?.label || "Agent";
   /**
    * Product line by profile (roles in server/agents.js):
@@ -2591,6 +2627,7 @@ export default function App() {
   /** Demo forces the working send face so the stuffed board is visible. */
   const showWorking = isWorking || snackDemo;
   const showStuffed = snackStuffed || snackDemo;
+  const sendHeadFace = profileHeadId(agent?.id) || "grok";
 
   // Last assistant-trace model (this session). Not the configured primary→reserve pair.
   const lastTraceModel = useMemo(() => {
@@ -2818,6 +2855,7 @@ export default function App() {
       setVaultHits(null);
       setVaultHitOn(new Set());
       setVaultSearchError("");
+      vaultLastPickedRef.current = [];
       return;
     }
     const prev = prevSessionRef.current;
@@ -2827,6 +2865,11 @@ export default function App() {
         ? migrateVaultSearchOn("new", sessionId)
         : loadVaultSearchOn(sessionId);
     setVaultSearchOn(on);
+    // Follow-up after first send: sessionId appears — keep last pick.
+    // Switching chats: new picker.
+    if (prev && sessionId && prev !== sessionId) {
+      vaultLastPickedRef.current = [];
+    }
     if (!on) {
       setVaultHits(null);
       setVaultHitOn(new Set());
@@ -2843,6 +2886,7 @@ export default function App() {
     setVaultHits(null);
     setVaultHitOn(new Set());
     setVaultSearchError("");
+    vaultLastPickedRef.current = [];
   }, [sessionId]);
   const workingSeconds = useWorkingSeconds(showWorking);
 
@@ -3007,11 +3051,13 @@ export default function App() {
 
   const commandCatalog = useMemo(
     () =>
-      (agentCommands || []).map((c) => ({
-        ...c,
-        kind: "command",
-        name: String(c.name || "").replace(/^\//, ""),
-      })),
+      withUiReloadCommand(
+        (agentCommands || []).map((c) => ({
+          ...c,
+          kind: c.kind === "ui" ? "ui" : "command",
+          name: String(c.name || "").replace(/^\//, ""),
+        })),
+      ),
     [agentCommands],
   );
 
@@ -3106,7 +3152,16 @@ export default function App() {
   }, [modeMenuOpen]);
 
   const applySlashInsert = useCallback(
-    (name) => {
+    (itemOrName) => {
+      const item =
+        itemOrName && typeof itemOrName === "object"
+          ? itemOrName
+          : { name: itemOrName };
+      const name = String(item.name || "").replace(/^\//, "");
+      if (isUiReloadItem(item) || isUiReloadSlash("/" + name)) {
+        hardReloadUi();
+        return;
+      }
       const el = composerRef.current;
       const cursor =
         el && typeof el.selectionStart === "number"
@@ -3156,7 +3211,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Keep Snack mounted briefly after work ends so ↵←Snack morph can play
+  // Keep Snack mounted briefly after work ends so Kopf←Snack morph can play
   const [snackAlive, setSnackAlive] = useState(false);
   useEffect(() => {
     if (showWorking) {
@@ -3169,7 +3224,15 @@ export default function App() {
   }, [showWorking, snackAlive]);
 
   if (webSurface && !webUnlocked) {
-    return <WebGate onUnlocked={() => setWebUnlocked(true)} />;
+    return (
+      <WebGate
+        hint={webGateHint}
+        onUnlocked={() => {
+          setWebGateHint("");
+          setWebUnlocked(true);
+        }}
+      />
+    );
   }
 
   return (
@@ -3214,6 +3277,9 @@ export default function App() {
           title="Graph — Glyph, Grok, Agent, Code"
           aria-label="Graph öffnen"
           aria-pressed={showLage}
+          onMouseEnter={() => {
+            void import("./components/CableLage.jsx");
+          }}
         >
           <IconLage />
         </button>
@@ -3271,14 +3337,9 @@ export default function App() {
         <button
           type="button"
           className="side-rail-btn"
-          onClick={() => {
-            // Cache-bust reload (ersetzt ⌘⇧R im Alltag)
-            const url = new URL(window.location.href);
-            url.searchParams.set("_r", String(Date.now()));
-            window.location.replace(url.toString());
-          }}
+          onClick={() => hardReloadUi()}
           title="UI neu laden (statt ⌘⇧R)"
-          aria-label="Refresh"
+          aria-label="UI neu laden"
         >
           <IconRefresh />
         </button>
@@ -3361,6 +3422,17 @@ export default function App() {
                 >
                   <IconLock size={18} />
                 </button>
+                {headerControls.reload ? (
+                  <button
+                    type="button"
+                    className="pill pill-btn pill-btn--icon"
+                    onClick={() => hardReloadUi()}
+                    title="UI neu laden (statt ⌘⇧R)"
+                    aria-label="UI neu laden"
+                  >
+                    <IconRefresh size={18} />
+                  </button>
+                ) : null}
               </>
             ) : null}
             {!webSurface && agents.length > 1 ? (
@@ -3428,55 +3500,40 @@ export default function App() {
                 </span>
               </button>
             ) : null}
-            <button
-              type="button"
-              className={`pill pill-btn pill-btn--icon ${
-                reconnecting ? "pending" : connected ? "ok" : "bad"
-              }`}
-              disabled={reconnecting}
-              title={
-                reconnecting
-                  ? connected
-                    ? `${agentLabel}-Agent wird beendet…`
-                    : `${agentLabel}-Agent wird gestartet…`
-                  : connected
-                    ? `${agentLabel} läuft — klicken zum Beenden (/quit)`
-                    : `${agentLabel} offline — klicken zum Verbinden`
-              }
-              aria-label={
-                reconnecting
-                  ? connected
-                    ? "Verbindung wird getrennt"
-                    : "Verbindung wird hergestellt"
-                  : connected
-                    ? "Verbunden — klicken zum Beenden"
-                    : "Offline — klicken zum Verbinden"
-              }
-              onClick={() => void toggleGrokConnection()}
-            >
-              {reconnecting ? (
-                <IconRefresh size={18} />
-              ) : connected ? (
-                <IconLink size={18} />
-              ) : (
-                <IconLinkOff size={18} />
-              )}
-            </button>
-            {canSummarize && connected && sessionId ? (
+            {headerControls.quit ? (
               <button
                 type="button"
-                className="pill pill-btn pill-btn--icon active-session-summarize"
-                title="Aktive Session zusammenfassen (Arbeitsleiste über LVL)"
-                aria-label="Session zusammenfassen"
-                onClick={() =>
-                  setSummarizeTarget((cur) =>
-                    cur?.id === sessionId
-                      ? null
-                      : { id: sessionId, title: agentLabel },
-                  )
+                className={`pill pill-btn pill-btn--icon ${
+                  reconnecting ? "pending" : connected ? "ok" : "bad"
+                }`}
+                disabled={reconnecting}
+                title={
+                  reconnecting
+                    ? connected
+                      ? `${agentLabel}-Agent wird beendet…`
+                      : `${agentLabel}-Agent wird gestartet…`
+                    : connected
+                      ? `${agentLabel} läuft — klicken zum Beenden`
+                      : `${agentLabel} offline — klicken zum Verbinden`
                 }
+                aria-label={
+                  reconnecting
+                    ? connected
+                      ? "Verbindung wird getrennt"
+                      : "Verbindung wird hergestellt"
+                    : connected
+                      ? "Verbunden — klicken zum Beenden"
+                      : "Offline — klicken zum Verbinden"
+                }
+                onClick={() => void toggleGrokConnection()}
               >
-                <IconSummarize size={18} />
+                {reconnecting ? (
+                  <IconRefresh size={18} />
+                ) : connected ? (
+                  <IconLink size={18} />
+                ) : (
+                  <IconLinkOff size={18} />
+                )}
               </button>
             ) : null}
           </div>
@@ -3601,6 +3658,10 @@ export default function App() {
                       </article>
                     );
                   }
+                  const priorUser = priorUserMessage(
+                    visibleMessages,
+                    transcript.start + messageIndex,
+                  );
                   const roleLabel =
                     m.role === "user"
                       ? "Du"
@@ -3670,18 +3731,17 @@ export default function App() {
                           <IconRewind size={18} />
                         </button>
                       ) : null}
-                      {m.role === "assistant" ? (
+                      {m.role === "assistant" && priorUser ? (
                         <button
                           type="button"
                           className="msg-action-btn msg-bottom-btn"
                           title="Antwort als Aufgabe übergeben"
                           aria-label="Als Aufgabe übergeben"
                           onClick={() => {
-                            const prior = transcript.visible
-                              .slice(0, messageIndex)
-                              .reverse()
-                              .find((row) => row.role === "user");
-                            setTaskHandoff({ message: m, userMessage: prior || null });
+                            setTaskHandoff({
+                              message: m,
+                              userMessage: priorUser,
+                            });
                           }}
                         >
                           <IconLink size={18} />
@@ -3852,14 +3912,6 @@ export default function App() {
                 setPlanCollapsed(false);
                 composerRef.current?.focus();
               }}
-            />
-          ) : null}
-          {summarizeTarget?.id ? (
-            <SummarizeDialog
-              sessionId={summarizeTarget.id}
-              sessionTitle={summarizeTarget.title}
-              profile={agent?.id || "glyph-agent"}
-              onClose={() => setSummarizeTarget(null)}
             />
           ) : null}
           {taskHandoff ? (
@@ -4048,7 +4100,7 @@ export default function App() {
                   query={slashQuery}
                   onSelectIndex={setSlashIndex}
                   onClose={() => setSlashOpen(false)}
-                  onPick={(item) => applySlashInsert(item.name)}
+                  onPick={(item) => applySlashInsert(item)}
                 />
                 <PromptHistoryPopup
                   open={historyOpen && !slashOpen}
@@ -4222,7 +4274,7 @@ export default function App() {
                       return;
                     }
                     if (e.key !== "Enter" || e.shiftKey) return;
-                    // Phone: keyboard Return = newline. Send is the ↵ button
+                    // Phone: keyboard Return = newline. Send is the head button
                     // (or ⌘/Ctrl+Enter on a hardware keyboard).
                     if (seat === "phone" && !e.metaKey && !e.ctrlKey) return;
                     e.preventDefault();
@@ -4409,9 +4461,9 @@ export default function App() {
                 }
                 aria-live={showWorking ? "polite" : undefined}
               >
-                <span className="send-face send-face--enter" aria-hidden="true">
+                <span className="send-face send-face--head" aria-hidden="true">
                   <span className="send-icon">
-                    <IconEnter size={22} />
+                    <SendSnake face={sendHeadFace} />
                   </span>
                 </span>
                 <span className="send-face send-face--snack" aria-hidden="true">
@@ -4453,16 +4505,16 @@ export default function App() {
       />
 
       {showLage && !webSurface ? (
-        <Suspense fallback={<div className="lage-stage" aria-busy="true" />}>
-          <GraphGuard onClose={() => setShowLage(false)}>
-            <CableLage
-              open={showLage}
-              onClose={() => setShowLage(false)}
-              focus={lageFocus}
-              activeProfile={agent?.id || ""}
-              working={isWorking}
-            />
-          </GraphGuard>
+        <Suspense
+          fallback={<LageFallback onClose={() => setShowLage(false)} />}
+        >
+          <GraphModal
+            open={showLage}
+            onClose={() => setShowLage(false)}
+            focus={lageFocus}
+            activeProfile={agent?.id || ""}
+            working={isWorking}
+          />
         </Suspense>
       ) : null}
       {showLegend ? (
@@ -4491,6 +4543,10 @@ export default function App() {
         loading={skillsLoading}
         error={skillsError}
         onPick={(item) => {
+          if (isUiReloadItem(item)) {
+            hardReloadUi();
+            return;
+          }
           const el = composerRef.current;
           const cursor =
             el && typeof el.selectionStart === "number"
@@ -4523,11 +4579,6 @@ export default function App() {
         open={showOverview}
         onClose={() => setShowOverview(false)}
         onOpenSession={handleOpenSession}
-        canSummarize={canSummarize}
-        onSummarizeSession={(target) => {
-          setShowOverview(false);
-          setSummarizeTarget(target);
-        }}
       />
       {showCalendar ? (
         <Suspense fallback={<div className="overview-scrim" aria-busy="true" />}>

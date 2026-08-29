@@ -295,7 +295,7 @@ Markdown (Codeblöcke, Links, …) wird vor dem TTS grob bereinigt.
 |---------|----------------|
 | Idle | Button zeigt den **Kopf** (Grok Build / °_Agent / ^_Code) → senden |
 | Arbeitet | Snack-Animation (Schlange jagt Apfel) |
-| Ordner-Suche | Snack; Composer leer, Query in der Leiste. × oder Snack = Fetch abbrechen. Vault leer: KomNet einmal, sonst DGUV |
+| Ordner-Suche | Apfel: Arbeits-Vault. Wiki, TinyFish, Exa immer. Snack; Composer leer, Query in der Leiste. × oder Snack = Fetch abbrechen. Vault leer: KomNet einmal, sonst DGUV. Ohne Apfel: allgemeine Suche, Internet, soziale Netze |
 | Text + Enter während Arbeit | Nachricht landet in der **Warteschlange** |
 | Leerer Klick / Snack während Arbeit | **Soft-Stop** (ACP-Cancel bzw. Vault-Suche). Kritische Tools können noch sauber enden |
 
@@ -369,7 +369,7 @@ Symbol: **4 Kästchen** in der linken Leiste. Zwei Tabs: **Plan** und **Aktivit�
 
 ### Tab Plan (Aufgaben + wiederkehrende To-dos)
 
-**Aufgaben:** Kette an einer Antwort → Titel, **Fertig wenn**, optionales Ziel, optionales Artefakt, Notiz. Nur diese Belege, nicht die Session. Zielkopf Default leer, später hier zuweisen. **Übernehmen** legt den Startkontext in den Composer — kein automatischer Kopfwechsel. **Fertig** nur mit Artefakt. Aufgabe ≠ Task-Freigabe.
+**Aufgaben:** Kette an einer Antwort → Arbeitsleiste: Beleg (Meldung + Antwort, aufklappbar) + Titel + **Was ist zu tun**. Ohne das Paar keine Aufgabe. Kein Sprung in die Session. Landet unter Plan & Aktivität. **Übernehmen** legt den Startkontext in den Composer — kein automatischer Kopfwechsel. **Fertig** nur mit Pfad oder Ort. Aufgabe ≠ Task-Freigabe.
 
 Täglich/wöchentlich · **Fertig wenn** · Pause · Einmal jetzt · Löschen. Nach erfolgreichem Lauf: **Fertig** löscht die To-do. Leerlauf (`LEER`) ist nicht Erfolg.
 

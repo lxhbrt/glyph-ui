@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 
-export function WebGate({ onUnlocked }) {
+export function WebGate({ onUnlocked, hint }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,7 +41,9 @@ export function WebGate({ onUnlocked }) {
       <form className="web-gate-card" onSubmit={(e) => void submit(e)}>
         <p className="web-gate-kicker">glyph-ui.com</p>
         <h1 className="web-gate-title">°_Agent</h1>
-        <p className="web-gate-copy">Web-Fläche. Schreibtisch bleibt auf dem Mac.</p>
+        <p className="web-gate-copy">
+          {hint || "Web-Fläche. Schreibtisch bleibt auf dem Mac."}
+        </p>
         <label className="web-gate-label">
           <span className="sr-only">Passwort</span>
           <input

@@ -16,7 +16,9 @@ import {
   toWireSelected,
   vaultSendIntent,
   hitKindLabel,
+  hitVaultLabel,
   vaultFindHttpError,
+  appleToggleLabel,
 } from "../../client/src/utils/vaultSearch.js";
 
 function installSessionStorage() {
@@ -57,6 +59,17 @@ describe("vaultSearch session toggle", () => {
     assert.equal(migrateVaultSearchOn("new", "sess-9"), true);
     assert.equal(loadVaultSearchOn("sess-9"), true);
     assert.equal(loadVaultSearchOn("new"), false);
+  });
+
+  it("apple off still says wiki and web run", () => {
+    const off = appleToggleLabel(false);
+    assert.match(off, /Wiki/);
+    assert.match(off, /Web/);
+    assert.match(off, /KomNet/);
+    const on = appleToggleLabel(true);
+    assert.match(on, /Arbeits-Vault/);
+    assert.match(on, /DGUV/);
+    assert.doesNotMatch(on, /soziale/);
   });
 });
 
@@ -208,6 +221,44 @@ describe("vaultSendIntent", () => {
         query: "PSA",
         hitsQuery: "PSA",
         hitsStatus: "pending",
+      }),
+      "search",
+    );
+  });
+});
+
+describe("hitVaultLabel", () => {
+  it("takes the first path segment", () => {
+    assert.equal(
+      hitVaultLabel({ kind: "file", path: "/ASI, BS. UWS, QM, EM/Schulung/x.md" }),
+      "ASI, BS. UWS, QM, EM",
+    );
+    assert.equal(
+      hitVaultLabel({ kind: "folder", path: "/HSEQ Sync/Schulung" }),
+      "HSEQ Sync",
+    );
+    assert.equal(hitVaultLabel({ kind: "web", path: "https://dguv.de/x" }), "");
+  });
+});
+
+describe("vaultSendIntent last pick", () => {
+  it("follow-up after a pick sends, does not open a second picker", () => {
+    assert.equal(
+      vaultSendIntent({
+        appleOn: true,
+        query: "016 Krane auslesen",
+        lastPickedCount: 1,
+      }),
+      "send",
+    );
+  });
+
+  it("no previous pick still searches", () => {
+    assert.equal(
+      vaultSendIntent({
+        appleOn: true,
+        query: "Krane",
+        lastPickedCount: 0,
       }),
       "search",
     );

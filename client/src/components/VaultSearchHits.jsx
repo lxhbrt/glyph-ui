@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { hitId, hitKindLabel } from "../utils/vaultSearch.js";
+import { hitId, hitKindLabel, hitVaultLabel } from "../utils/vaultSearch.js";
 import { ComposerSheet } from "./ComposerSheet.jsx";
 
 function sheetLabel(fallback, hits) {
@@ -63,6 +63,7 @@ export function VaultSearchHits({
                 <span className="vault-hit-body">
                   <span className="vault-hit-title">
                     {hitKindLabel(h)}
+                    {hitVaultLabel(h) ? ` · ${hitVaultLabel(h)}` : ""}
                     {" · "}
                     {h.title}
                   </span>
@@ -70,7 +71,9 @@ export function VaultSearchHits({
                     <span className="vault-hit-excerpt">{h.excerpt}</span>
                   ) : h.path && h.path !== h.title ? (
                     <span className="vault-hit-excerpt">{h.path}</span>
-                  ) : null}
+                  ) : (
+                    <span className="vault-hit-excerpt">leer</span>
+                  )}
                 </span>
               </button>
             </li>
@@ -93,7 +96,9 @@ export function VaultSearchHits({
         !busy && !error && n > 0 ? (
           <>
             <span className="composer-sheet-footnote">
-              {onCount > 0 ? `${onCount} aktiviert` : "Keine Treffer aktiviert"}
+              {onCount > 0
+                ? `${onCount} zum Mitnehmen`
+                : "Datei antippen. Passt der Ordner nicht: schließen und neu fragen."}
             </span>
             <button
               type="button"

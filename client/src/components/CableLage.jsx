@@ -656,6 +656,14 @@ export function CableLage({
   );
 }
 
+export function GraphModal(props) {
+  return (
+    <GraphGuard onClose={props.onClose}>
+      <CableLage {...props} />
+    </GraphGuard>
+  );
+}
+
 export class GraphGuard extends Component {
   constructor(props) {
     super(props);

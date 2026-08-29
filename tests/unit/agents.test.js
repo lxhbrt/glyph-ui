@@ -97,7 +97,6 @@ test("buildAgentProfiles", async (t) => {
       activity: false,
       sessionList: false,
       sessionHistory: true,
-      summarize: true,
     });
   });
 
@@ -108,7 +107,6 @@ test("buildAgentProfiles", async (t) => {
       activity: true,
       sessionList: true,
       sessionHistory: true,
-      summarize: true,
     });
     assert.deepEqual(findAgent(profiles, "glyph-agent").capabilities, {
       deepSearch: false,
@@ -116,7 +114,6 @@ test("buildAgentProfiles", async (t) => {
       activity: false,
       sessionList: false,
       sessionHistory: true,
-      summarize: true,
     });
     assert.equal(findAgent(profiles, "glyph-agent").env?.GLYPH_AGENT_MODE, "agent");
   });

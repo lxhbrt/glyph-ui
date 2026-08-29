@@ -38,7 +38,10 @@ async function resolveWsToken(opts = {}) {
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error(`WS-Token holen fehlgeschlagen (HTTP ${res.status})`);
+    const err = new Error(`WS-Token holen fehlgeschlagen (HTTP ${res.status})`);
+    err.status = res.status;
+    err.gate = res.status === 401;
+    throw err;
   }
   const json = await res.json();
   const token = json?.token;

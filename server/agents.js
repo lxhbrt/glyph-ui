@@ -100,13 +100,12 @@ export function resolveClaudeCommand(env = process.env) {
  * @property {string} [via]
  * @property {string} [hint]
  * @property {NodeJS.ProcessEnv | Record<string, string>} [env]
- * @property {{ deepSearch: boolean, swarm: boolean, activity: boolean, sessionList: boolean, sessionHistory: boolean, summarize: boolean }} capabilities
+ * @property {{ deepSearch: boolean, swarm: boolean, activity: boolean, sessionList: boolean, sessionHistory: boolean }} capabilities
  *   - deepSearch     : Grok-only Multi-Quellen-Recherche
  *   - swarm          : °_Agent / ^_Code — Planer+Suche+Synthese (Engine)
  *   - activity       : Aktivitäts-Kalender (liest ~/.grok/events.jsonl)
  *   - sessionList    : persistente Session-Liste (nur grok, ~/.grok/sessions)
  *   - sessionHistory : aktiver In-Memory-Verlauf der aktuellen Session (über ACP session/history)
- *   - summarize      : Session-Zusammenfassung möglich (braucht sessionHistory)
  */
 
 /**
@@ -124,7 +123,7 @@ export function buildAgentProfiles(env = process.env) {
       // Match TUI default: no --reasoning-effort override (model default).
       args: ["agent", "--always-approve", "--no-leader", "stdio"],
       via: "bin",
-      capabilities: { deepSearch: true, swarm: false, activity: true, sessionList: true, sessionHistory: true, summarize: true },
+      capabilities: { deepSearch: true, swarm: false, activity: true, sessionList: true, sessionHistory: true },
     },
     {
       id: "_code",
@@ -138,7 +137,7 @@ export function buildAgentProfiles(env = process.env) {
         GLYPH_AGENT_ACP_NAME: "^_Code",
       },
       hint: "DeepSeek V4 Flash · Grep/SearchReplace/Read/Write/Shell (Whitelist) · Roots: glyph-ui/agent/openclaw · Freigabe in Glyph",
-      capabilities: { deepSearch: false, swarm: true, activity: false, sessionList: false, sessionHistory: true, summarize: true },
+      capabilities: { deepSearch: false, swarm: true, activity: false, sessionList: false, sessionHistory: true },
     },
     {
       id: "glyph-agent",
@@ -151,8 +150,7 @@ export function buildAgentProfiles(env = process.env) {
         GLYPH_AGENT_ACP_NAME: "°_Agent",
       },
       hint: "B+: VaultFind/Wiki + Web/BrowseUrl + ReadPdf/Mail · Cloud-Antwort · kein Shell · Diff+Backup · :18899",
-      // Kein persistentes Session-Listing, aber aktiver In-Memory-Verlauf (session/history) → summarize.
-      capabilities: { deepSearch: false, swarm: true, activity: false, sessionList: false, sessionHistory: true, summarize: true },
+      capabilities: { deepSearch: false, swarm: true, activity: false, sessionList: false, sessionHistory: true },
     },
   ];
 }
@@ -224,22 +222,4 @@ export function publicAgents(profiles) {
   return profiles.map((p) => publicAgent(p)).filter(Boolean);
 }
 
-/**
- * Kanonische Einstiegs-Ableitung für Summarize (ein zentraler Ort, von App.jsx/
- * CommandOverview genutzt und hier unit-getestet).
- *
- * @param {{id:string, capabilities?:object} | null | undefined} profile
- * @returns {{ lupeSummarize: boolean, activeSession: boolean }}
- */
-export function summarizeCapabilities(profile) {
-  const c = profile?.capabilities || {};
-  const sessionHistory = Boolean(c.sessionHistory);
-  const summarize = Boolean(c.summarize);
-  const sessionList = Boolean(c.sessionList);
-  return {
-    // Lupe (persistente Session-Liste) braucht List + History + Summarize → nur Grok.
-    lupeSummarize: sessionList && sessionHistory && summarize,
-    // Aktiver In-Memory-Chat (°_Agent / ^_Code): History + Summarize, ohne List.
-    activeSession: sessionHistory && summarize,
-  };
-}
+

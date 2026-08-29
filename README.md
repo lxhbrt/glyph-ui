@@ -123,7 +123,7 @@ Auf `main` und bei Pull Requests läuft dasselbe über GitHub Actions (Node 22 �
 
 ## Nutzung
 
-1. Nachricht tippen: Desk **Enter** senden (Shift+Enter = Zeile). Handy: Tastatur-Enter = Zeile, ↵-Button = senden
+1. Nachricht tippen: Desk **Enter** senden (Shift+Enter = Zeile). Handy: Tastatur-Enter = Zeile, Kopf = senden
 2. Streaming: Antwort, Thoughts, Tool-Aufrufe
 3. Composer-Aktion wählen: **Chat** (normal), **Deep Search** (nur grok), **Fork** (Session branchen)
 4. Status-Button **verbunden** / **offline**: klicken startet den aktiven Agenten neu
@@ -230,7 +230,7 @@ Das Erscheinungsbild ist vom Grok-Chat inspiriert, gilt aber **für alle Profile
 | Chat-Fläche | Schwarz wie die Umgebung (`--bg`) |
 | Antworten | Flach, ohne Karte |
 | Prompts | Rechte Sprechblasen |
-| Composer | Bubble-Eingabe, runder **↵** / runder **Snack-Stopp** |
+| Composer | Bubble-Eingabe, runder **Kopf** / runder **Snack-Stopp** |
 
 Siehe [HANDBUCH.md §2 Design](./HANDBUCH.md#design-grok-chat-stil).
 

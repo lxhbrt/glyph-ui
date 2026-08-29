@@ -47,6 +47,14 @@ function hitId(hit) {
   return `${kind}:${hit.path || ""}`;
 }
 
+
+function hitVaultLabel(hit) {
+  if (!hit || hit.kind === "web") return "";
+  const path = String(hit.path || "").replace(/^\/+/, "");
+  if (!path || path.startsWith("http")) return "";
+  return path.split("/")[0] || "";
+}
+
 function hitKindLabel(hit) {
   if (!hit) return "Datei";
   if (hit.kind === "folder") return "Ordner";
@@ -119,7 +127,7 @@ function toWireSelected(hits) {
 }
 
 /**
- * Composer-↵ with apple on: search, send, or abort the in-flight find.
+ * Composer send (head) with apple on: search, send, or abort the in-flight find.
  * `abort-then-search` = new query while a find is running.
  */
 function vaultFindHttpError(status) {
@@ -136,6 +144,7 @@ function vaultSendIntent({
   hitsQuery,
   hitsStatus,
   error,
+  lastPickedCount = 0,
 } = {}) {
   if (!appleOn) return "send";
   const q = String(query || "").trim();
@@ -148,8 +157,19 @@ function vaultSendIntent({
   const haveHits =
     same && hitsStatus && hitsStatus !== "error" && hitsStatus !== "pending";
   const failedThis = Boolean(error) && same;
-  if (q && !haveHits && !failedThis) return "search";
+  if (q && !haveHits && !failedThis) {
+    // Follow-up after a pick: keep that context, do not open the picker again.
+    if (Number(lastPickedCount) > 0) return "send";
+    return "search";
+  }
   return "send";
+}
+
+/** Apfel: Arbeits-Vault + KomNet/DGUV. Wiki und Web laufen immer. */
+function appleToggleLabel(on) {
+  return on
+    ? "Ordner-Suche an — Arbeits-Vault, KomNet, DGUV"
+    : "Ordner-Suche aus — Wiki und Web laufen. Klick: Arbeits-Vault, KomNet, DGUV";
 }
 
 export {
@@ -160,6 +180,7 @@ export {
   migrateVaultSearchOn,
   hitId,
   hitKindLabel,
+  hitVaultLabel,
   defaultSelectedIds,
   selectedHits,
   normalizeHit,
@@ -167,4 +188,5 @@ export {
   toWireSelected,
   vaultFindHttpError,
   vaultSendIntent,
+  appleToggleLabel,
 };

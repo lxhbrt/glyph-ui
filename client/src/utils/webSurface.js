@@ -14,3 +14,12 @@ export function isWebSurfaceHost(hostname) {
     .split(":")[0];
   return DEFAULT_WEB_HOSTS.includes(h);
 }
+
+/**
+ * Limited header on Sitz `web`: Neu Laden, not Beenden.
+ * Desk/phone keep the chain (quit/connect); reload stays on the rail.
+ */
+export function surfaceHeaderControls(seat) {
+  const web = seat === "web";
+  return { reload: web, quit: !web };
+}

@@ -15,8 +15,14 @@ import {
   normalizeHostname,
   parseCookie,
   validateNewWebPassword,
+  parseStoredWebSessions,
+  serializeWebSessions,
+  WEB_SESSIONS_MAX,
 } from "../../server/webSurface.mjs";
-import { isWebSurfaceHost } from "../../client/src/utils/webSurface.js";
+import {
+  isWebSurfaceHost,
+  surfaceHeaderControls,
+} from "../../client/src/utils/webSurface.js";
 
 describe("isWebHostname", () => {
   it("allows the public domain exactly", () => {
@@ -75,7 +81,6 @@ describe("gate helpers", () => {
     assert.equal(isWebAdminApi("/api/sessions/abc/open"), true);
     assert.equal(isWebAdminApi("/api/recurring"), true);
     assert.equal(isWebAdminApi("/api/sessions/abc/history"), false);
-    assert.equal(isWebAdminApi("/api/sessions/abc/summarize/draft"), false);
     assert.equal(isWebAdminApi("/api/health"), false);
     assert.equal(isWebAdminApi("/api/vault/find"), false);
     assert.equal(isWebAdminApi("/api/web-gate/password"), false);
@@ -101,6 +106,14 @@ describe("client host helper", () => {
   });
 });
 
+describe("surfaceHeaderControls", () => {
+  it("puts Neu Laden on the web header, not Beenden", () => {
+    assert.deepEqual(surfaceHeaderControls("web"), { reload: true, quit: false });
+    assert.deepEqual(surfaceHeaderControls("desk"), { reload: false, quit: true });
+    assert.deepEqual(surfaceHeaderControls("phone"), { reload: false, quit: true });
+  });
+});
+
 describe("validateNewWebPassword", () => {
   it("requires 8–200 chars, not equal to current", () => {
     assert.equal(validateNewWebPassword("short").ok, false);
@@ -116,5 +129,40 @@ describe("normalizeHostname", () => {
   it("strips port and forwarded list", () => {
     assert.equal(normalizeHostname("glyph-ui.com:443"), "glyph-ui.com");
     assert.equal(normalizeHostname("glyph-ui.com, other"), "glyph-ui.com");
+  });
+});
+
+describe("web session persistence", () => {
+  it("keeps a fresh token and drops an expired one", () => {
+    const now = 1_800_000_000_000;
+    const fresh = { token: "aaa", iat: now - 60_000 };
+    const old = { token: "bbb", iat: now - 31 * 24 * 60 * 60 * 1000 };
+    const got = parseStoredWebSessions({ tokens: [fresh, old] }, now);
+    assert.deepEqual(got, [fresh]);
+  });
+
+  it("accepts a bare token list and de-dupes", () => {
+    const now = 1_800_000_000_000;
+    const got = parseStoredWebSessions(["same", "same"], now);
+    assert.equal(got.length, 1);
+    assert.equal(got[0].token, "same");
+    assert.equal(got[0].iat, now);
+  });
+
+  it("caps the stored set", () => {
+    const now = 1_800_000_000_000;
+    const tokens = [];
+    for (let i = 0; i < WEB_SESSIONS_MAX + 5; i += 1) {
+      tokens.push({ token: `t${i}`, iat: now - i });
+    }
+    const got = parseStoredWebSessions({ tokens }, now);
+    assert.equal(got.length, WEB_SESSIONS_MAX);
+    assert.equal(got[0].token, "t0");
+  });
+
+  it("round-trips JSON", () => {
+    const entries = [{ token: "abc", iat: 42 }];
+    const parsed = JSON.parse(serializeWebSessions(entries));
+    assert.deepEqual(parsed.tokens, entries);
   });
 });

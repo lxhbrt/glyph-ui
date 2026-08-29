@@ -36,7 +36,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Glyph · Plan & Aktivität",
         need: "optional",
-        desc: "Kalender-Icon: Tab Plan = übergebene Aufgaben (Fertig wenn, Artefakt, Zielkopf, Übernehmen) plus wiederkehrende To-dos (Fertig wenn, täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte; LEER ≠ Erfolg). Neue To-do erst 1× mit Plan-Freigabe (Skill einmal-job), dann hier. Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
+        desc: "Kalender-Icon: Tab Plan = übergebene Aufgaben (Beleg Meldung+Antwort, Was ist zu tun, Übernehmen, Fertig mit Pfad/Ort) plus wiederkehrende To-dos (Fertig wenn, täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte; LEER ≠ Erfolg). Neue To-do erst 1× mit Plan-Freigabe (Skill einmal-job), dann hier. Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
       },
       {
         cmd: "Wiki (i)",
@@ -324,8 +324,8 @@ const SHORT_HANDBOOK = [
     title: "Schreiben & senden",
     rows: [
       ["Chat", "Normale Nachricht an den aktiven Agenten"],
-      ["Apfel", "°_Agent: über dem Kopf. An = Suche beim Senden, Composer leer, Query in der Leiste. ×/Snack bricht die Suche ab. Vault leer → KomNet, sonst DGUV."],
-      ["Treffer", "Arbeitsleiste über LVL, nicht im Chat. Start aus; nur angeklickte gehen in den Kontext. Web: KomNet/DGUV."],
+      ["Apfel", "°_Agent: über dem Kopf. Wiki, TinyFish und Exa laufen immer. An = Arbeits-Vault beim Senden, Composer leer, Query in der Leiste. ×/Snack bricht ab. Vault leer → KomNet, sonst DGUV. Aus = allgemeine Suche, Internet, soziale Netze."],
+      ["Treffer", "Arbeitsleiste über LVL, nicht im Chat. Start aus; nur angeklickte Arbeits-Vault-Treffer gehen in den Kontext. Web mit Apfel: KomNet/DGUV."],
       ["Deep Search", "Grok: strukturierte Multi-Quellen-Recherche. Andere Köpfe ausgegraut."],
       ["Fork", "Session branchen; Text = optionale Directive"],
       ["Swarm", "°_Agent / ^_Code: Planer, Suche, Synthese. Grok ausgegraut."],
@@ -391,7 +391,7 @@ const SHORT_HANDBOOK = [
       "**Merken:** `/merken` → Karte zeigen → Ja. Ohne Suchwert ablehnen.",
       "**Aktivität:** Kalender → Tag → Sessions.",
       "**Neues Thema:** Stift (/new, Disk bleibt) oder Fork (Abzweig mit Verlauf).",
-      "**Aufgabe übergeben:** Kette an der Antwort → Plan. **Übernehmen** in den Composer, kein Auto-Kopfwechsel.",
+      "**Aufgabe übergeben:** Kette an der Antwort → Beleg hängt (Meldung + Antwort). **Was ist zu tun** = Korrektur. **Übernehmen** in den Composer, kein Auto-Kopfwechsel.",
     ],
   },
   {
@@ -400,7 +400,7 @@ const SHORT_HANDBOOK = [
     body: [
       "`r+w` heißt Workspace beschreibbar — nicht dauerhaft schreiben ohne Nachfrage.",
       "Dialog: **Einmal** · **Für Auftrag** · **Für Task**. Kein „immer“, kein „Für diese Session“. Elevated Shell nur Einmal/Ablehnen.",
-      "**Aktiver Task** in der Arbeitsleiste: Name, Pfade, Restzeit, **Widerrufen**. Preview: `?grant=demo` · `?task=demo`.",
+      "**Aktiver Task** in der Arbeitsleiste: Name, Pfade, Restzeit, **Widerrufen**. Preview: `?grant=demo` · `?task=demo` · `?handoff=demo`.",
       "Tool-Karte: *Warum erlaubt?* — einmal, Auftrag oder Task-Name.",
     ],
   },
@@ -408,8 +408,8 @@ const SHORT_HANDBOOK = [
     id: "aufgaben",
     title: "Aufgaben (Übergabe)",
     body: [
-      "Kette an einer Antwort: Titel, **Fertig wenn**, optionales Ziel, optionales Artefakt, Notiz. Nur diese Belege — nie die ganze Session.",
-      "Liegt unter **Plan**. Zielkopf Default leer, später zuweisen. **Übernehmen** → Composer. **Fertig** nur mit Artefakt.",
+      "Kette an einer Antwort: Arbeitsleiste, Beleg (Meldung + Antwort, aufklappbar) + Titel + **Was ist zu tun**. Ohne das Paar keine Aufgabe. Kein Session-Sprung.",
+      "Liegt unter **Plan & Aktivität**. **Übernehmen** → Composer. **Fertig** nur mit Pfad oder Ort.",
       "Aufgabe ≠ Task-Freigabe, ≠ wiederkehrendes To-do.",
     ],
   },

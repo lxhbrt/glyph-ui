@@ -1,5 +1,5 @@
 /**
- * Docked sheet above the LVL bar — Plan, Ordner-Suche, Zusammenfassen.
+ * Docked sheet above the LVL bar — Plan, Ordner-Suche, Aktiver Task.
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */

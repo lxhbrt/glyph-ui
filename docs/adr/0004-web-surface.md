@@ -16,3 +16,5 @@ glyph-ui.com ist die öffentliche Fläche für den Arbeits-PC: Sitz `web`, nur �
 - Origin-Allowlist exakt, kein Substring (`glyph-ui.com.evil…`).
 - Cloudflare Access kann zusätzlich vor dem Tunnel sitzen.
 - Kein Tailscale Serve für Glyph. Admin-Fläche nur Loopback.
+- Vault-Wachstum (Themen/Wiki) gilt auch hinter der Domain; Löschen bleibt tot (glyph-agent ADR 0002).
+- Begrenztes Chrome: **UI neu laden** statt **Beenden**. Kette (Agent aus) bleibt Mac.

@@ -20,7 +20,7 @@ function normalizeText(text) {
 export function isLocalSlashCommand(text) {
   const t = normalizeText(text);
   if (!t.startsWith("/")) return false;
-  return /^(?:rewind|undo|rename|title)(?:\s|$)/i.test(t.slice(1));
+  return /^(?:rewind|undo|rename|title|quit|exit)(?:\s|$)/i.test(t.slice(1));
 }
 
 export function loadPromptHistory(profile) {

@@ -143,3 +143,40 @@ export function isWebOrigin(origin, extra = process.env.GLYPH_WEB_HOSTS) {
     return false;
   }
 }
+
+/** Cookie Max-Age (30 Tage). Sitzungen auf Disk nutzen dasselbe Fenster. */
+export const WEB_SESSION_TTL_S = 2592000;
+/** Harte Kappe, damit die Datei nicht unbegrenzt wächst. */
+export const WEB_SESSIONS_MAX = 40;
+
+/**
+ * Lesbare Sitzungsliste aus web-sessions.json.
+ * Akzeptiert `{tokens:[{token,iat}]}` oder ein nacktes Array.
+ */
+export function parseStoredWebSessions(raw, now = Date.now()) {
+  const ttlMs = WEB_SESSION_TTL_S * 1000;
+  let list = [];
+  if (Array.isArray(raw?.tokens)) list = raw.tokens;
+  else if (Array.isArray(raw)) list = raw;
+  const out = [];
+  const seen = new Set();
+  for (const row of list) {
+    const token = typeof row === "string" ? row : String(row?.token || "");
+    if (!token || seen.has(token)) continue;
+    const iat = typeof row === "string" ? now : Number(row?.iat);
+    const issued = Number.isFinite(iat) && iat > 0 ? iat : now;
+    if (now - issued >= ttlMs) continue;
+    seen.add(token);
+    out.push({ token, iat: issued });
+  }
+  if (out.length > WEB_SESSIONS_MAX) {
+    out.sort((a, b) => b.iat - a.iat);
+    return out.slice(0, WEB_SESSIONS_MAX);
+  }
+  return out;
+}
+
+export function serializeWebSessions(entries) {
+  const tokens = Array.isArray(entries) ? entries : [];
+  return `${JSON.stringify({ tokens }, null, 2)}\n`;
+}

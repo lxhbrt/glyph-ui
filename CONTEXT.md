@@ -18,8 +18,8 @@ Browser-UI für mehrere lokale und Cloud-Agenten über ACP (Agent Client Protoco
 | **LVL-Bar** | Kontext-Jagd: grau = Füllung, gold = Leseposition; Klick öffnet Legende. Über Soft-Cap (Grok): **Zusammenpressen** → `/compact`. | `ContextLvlBar.jsx` | Client-Shell |
 | **Arbeitsleiste** | Angedockte Fläche über der LVL-Leiste: Plan, Ordner-Suche, **Aktiver Task**. Gleiches Chrome (Label · Zähler · ×). Kein Mitte-Modal. | `ComposerSheet.jsx`, `PlanBar.jsx`, `VaultSearchHits.jsx` | Client-Shell |
 | **Tool-Karte** | Aufklappbare ACP-Toolzeile (Verb + Ziel, Diff/Ausgabe nach Klick). ^_Code: *Warum erlaubt?* | `client/src/components/ToolCard.jsx`, `client/src/utils/toolCard.js`, `server/toolTitle.mjs` | Bridge `type: tool` |
-| **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen. Idle-Senden = Graph-Kopf (Grok Build / °_Agent / ^_Code); Arbeit = Snack. Modus **Chat · Deep Search · Fork · Swarm**: Fork = `x.ai/session/fork` dann ACP `session/fork`; Deep Search = Grok `/deep-research` (andere Köpfe ausgegraut); Swarm = °_Agent/^_Code `POST /chat` `swarm: true`. | `client/src/App.jsx`, `client/src/components/GraphFaces.jsx`, `shared/composerActions.mjs`, `server/glyph-agent-acp.mjs` | Bridge |
-| **Ordner-Suche** | °_Agent: Pixel-Apfel über dem Kopf (rot, ohne extra Höhe). Aus = keine Vault-Suche. An → `/api/vault/find`, Treffer in der Arbeitsleiste, Default aus, nur aktivierte in den Kontext. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
+| **Composer / Slash** | Eingabe, Slash-Popup, Skills/Commands einfügen. Idle-Senden = Graph-Kopf (Grok Build / °_Agent / ^_Code) mittig 50 %, Stein-Schwanz 8-6-4 nach rechts; Arbeit = Snack. Modus **Chat · Deep Search · Fork · Swarm**: Fork = `x.ai/session/fork` dann ACP `session/fork`; Deep Search = Grok `/deep-research` (andere Köpfe ausgegraut); Swarm = °_Agent/^_Code `POST /chat` `swarm: true`. | `client/src/App.jsx`, `client/src/components/GraphFaces.jsx`, `shared/composerActions.mjs`, `server/glyph-agent-acp.mjs` | Bridge |
+| **Ordner-Suche** | °_Agent: Pixel-Apfel über dem Kopf (rot, ohne extra Höhe). Wiki + TinyFish/Exa immer. Aus = offenes Web. An → `/api/vault/find` Arbeits-Vault, Treffer in der Arbeitsleiste, Default aus, nur aktivierte in den Kontext; leer → KomNet, sonst DGUV. | `VaultSearchToggle.jsx`, `VaultSearchHits.jsx`, `utils/vaultSearch.js`, `server/vaultFlags.mjs` | glyph-agent `POST /vault/find`, `/chat` `vault_search` / `vault_selected` |
 | **Sessions** | Session-Liste, Überblick, **Name** (`/rename`) | `server/sessions.js`, `client/…/CommandOverview.jsx` | Bridge |
 | **Rewind** | Nutzer-Turn und alles danach aus dem Verlauf. Esc Esc, `/rewind`, ↺ an der Nachricht. Dateien bleiben. | `shared/rewind.mjs`, `RewindPicker.jsx`, Bridge `type: rewind` | Sessions, Bridge |
 | **Prompt-History** | ↑ auf leerem Composer: letzte Prompts (lokal, pro Profil) | `utils/promptHistory.js`, `PromptHistoryPopup.jsx` | Composer |
@@ -80,8 +80,8 @@ Eine aufklappbare Zeile im Chat für einen ACP-Tool-Aufruf: Verb + Ziel in der Z
 _Avoid_: Tool-Card (EN), Paper-Card, grok-build-web Disclosure; erlaubtes Tool ohne Scope-Hinweis
 
 **Ordner-Suche**:
-Manueller Vault-Zugriff im Profil **°_Agent**. Pixel-Apfel **über dem Senden-Button** (nicht zwischen + und Chat), ohne die Composer-Höhe zu erhöhen. Minecraft: roter Körper, brauner Stiel, grünes Blatt; inaktiv abgedunkelt; an = Gold-Outline + Puls. Standard aus — Agent antwortet ohne VaultFind/ListVaultDir. An: nächste Sendung sucht, Treffer in der **Arbeitsleiste** über der LVL-Leiste (nicht als Overlay über der Eingabe), nie im Chat-Verlauf, jedes Ergebnis startet aus; nur explizit an = in den Agent-Kontext. Zustand pro Session (`sessionStorage`). Jobs/Engine ohne Flag bleiben beim B+-Precheck. ACP sendet `vault_search` nur wenn mindestens ein Treffer aktiv ist. Vault leer → **KomNet** (`komnet.nrw.de`) einmal via Exa+TinyFish; ohne Treffer **DGUV** (`dguv.de`) ebenso. Kein HTML-Scrape, kein offenes Web.
-_Avoid_: automatische Vault-Suche bei jeder °_Agent-Nachricht; Apfel zwischen + und Chat; Lupe (Sessions); Treffer als Chat-Nachrichten; Gold-gefüllter Apfel; Treffer-Popup über der Composer-Box; KomNet-HTML direkt; KomNet und DGUV parallel; allgemeine Websuche als Apfel-Fallback
+Manueller Zugriff auf den **Arbeits-Vault** im Profil **°_Agent**. Pixel-Apfel **über dem Senden-Button** (nicht zwischen + und Chat), ohne die Composer-Höhe zu erhöhen. Minecraft: roter Körper, brauner Stiel, grünes Blatt; inaktiv abgedunkelt; an = Gold-Outline + Puls. **Immer** (Apfel an oder aus): memory-wiki, TinyFish, Exa. Apfel aus: dazu allgemeine Suche, Internet, soziale Netze — nicht KomNet/DGUV. Apfel an: nächste Sendung sucht den Arbeits-Vault, Treffer in der **Arbeitsleiste** über der LVL-Leiste, nie im Chat-Verlauf, jedes Ergebnis startet aus; nur explizit an = Arbeits-Vault in den Kontext; Vault leer → **KomNet** (`komnet.nrw.de`) einmal via Exa+TinyFish; ohne Treffer **DGUV** (`dguv.de`) ebenso. Zustand pro Session (`sessionStorage`). Jobs/Engine ohne Flag bleiben beim B+-Precheck. ACP `vault_search=false` = Wiki + offenes Web; mit Auswahl = Arbeits-Vault-Treffer + Wiki. Kein HTML-Scrape.
+_Avoid_: Arbeits-Vault ohne Apfel; KomNet/DGUV ohne Apfel; memory-wiki hinter den Apfel legen; Apfel zwischen + und Chat; Lupe (Sessions); Treffer als Chat-Nachrichten; Gold-gefüllter Apfel; Treffer-Popup über der Composer-Box; KomNet-HTML direkt; KomNet und DGUV parallel; allgemeine Websuche als Apfel-Fallback
 
 **Rewind**:
 Einen Nutzer-Turn und alles danach aus dem Chat-Verlauf nehmen. Dateien auf Disk bleiben (wie TUI `/rewind`). Einstiege: Esc Esc (idle, leerer Composer), `/rewind` / `/undo`, ↺ an der Nutzer-Nachricht. °_Agent/^_Code: Adapter `session.rewind`. Grok: ACP `x.ai/rewind*` oder Disk-Schnitt + `session/load`.
@@ -96,8 +96,8 @@ Manueller Name einer Grok-Disk-Session (`title_is_manual`). Lupe: Button **Name*
 _Avoid_: Auto-Titel überschreiben ohne Flag
 
 **Arbeitsleiste**:
-Angedockte Fläche über der LVL-Leiste für laufende Arbeit am Composer: **Plan**, **Ordner-Suche**, **Aktiver Task**. Ein Chrome (Gold-Rand, Label, Zähler, ×, optionale Primäraktion). Nicht Bildschirmmitte, nicht zweites Overlay-System. Freigabe-Dialog (^_Code) bleibt eigenes Blocking-Modal.
-_Avoid_: Ordner-Suche als schwebendes Overlay; Freigabe als Leisten-Fläche; zweite Bildsprache für diese Flächen; Session-Zusammenfassen in der Leiste
+Angedockte Fläche über der LVL-Leiste für laufende Arbeit am Composer: **Plan**, **Ordner-Suche**, **Aktiver Task**, **Aufgabe-Übergabe**. Ein Chrome (Gold-Rand, Label, Zähler, ×, optionale Primäraktion). Nicht Bildschirmmitte, nicht zweites Overlay-System. Freigabe-Dialog (^_Code) bleibt eigenes Blocking-Modal.
+_Avoid_: Ordner-Suche als schwebendes Overlay; Freigabe als Leisten-Fläche; zweite Bildsprache für diese Flächen; Session-Zusammenfassen in der Leiste; Aufgabe-Übergabe als Mitte-Modal
 
 **Plan-Freigabe**:
 Aktionen an der Plan-Leiste (Arbeitsleiste), solange jeder Eintrag `pending` ist: **Umsetzen** sendet den Auftrag, **Ändern** fokussiert den Composer. Kein TUI-Plan-Modus (`plan.md` / Approve-Preview).
@@ -112,7 +112,7 @@ _Avoid_: Grok Bot; Cloud-VM; Chat-Cron; `recurring.json` per Hand patchen; Timeo
 _Avoid_: Compact für °_Agent/^_Code; Compact-Button immer sichtbar
 
 **Multiline (Composer)**:
-Desk: Enter = senden, Shift+Enter = Zeile. Phone: Tastatur-Enter = Zeile; der runde **Kopf** sendet (⌘/Ctrl+Enter ebenfalls). Erster Tap auf den Kopf sendet — die Tastatur darf den Klick nicht schlucken. Idle-Kopf = Graph-Pixel (Grok Build · °_Agent · ^_Code), gleicher `SnakeHead` wie im Graph. Klick startet Snack wie bisher. Slash-Popup: Enter = auswählen, beide Sitze. Kein globaler Multiline-Toggle.
+Desk: Enter = senden, Shift+Enter = Zeile. Phone: Tastatur-Enter = Zeile; der runde **Kopf** sendet (⌘/Ctrl+Enter ebenfalls). Erster Tap auf den Kopf sendet — die Tastatur darf den Klick nicht schlucken. Idle-Kopf = Graph-Pixel (Grok Build · °_Agent · ^_Code), gleicher `SnakeHead` wie im Graph, mittig 50 %, plus Stein-Schwanz 8-6-4 px an der Unterkante nach rechts (Blick-Takt). Klick startet Snack wie bisher. Slash-Popup: Enter = auswählen, beide Sitze. Kein globaler Multiline-Toggle.
 _Avoid_: textarea rows (nur visuelle Höhe); erster Tap schließt nur die Tastatur; ↵-Glyph als Send-Icon
 
 **Agent-Command**:
@@ -196,8 +196,12 @@ Explizit benannte Arbeit („Baue die Codex-Bridge ein“), nicht die Chat-Sessi
 _Avoid_: Session-Freigabe; Chat-weit; Immer; Recurring-To-do; Prompt-Themenklassifikation; mit **Aufgabe** (Übergabe) verwechseln
 
 **Aufgabe**:
-Manuell übergebene Arbeit zwischen Köpfen. Kette an einer Antwort → Titel, **Fertig wenn** (`pass`, Pflicht), optionales Ziel, optionales Artefakt, Notiz. Glyph speichert nur die gewählten Belege (Meldung, Antwort, kompakter Trace, Anhang-Pfade) in `~/.glyph/tasks.json` — nie die ganze Session, nie Vault-Inhalt. Zielkopf Default leer; später im Plan zuweisen. **Übernehmen** legt den Startkontext in den Composer. **Fertig** nur mit Artefakt (Pfad oder Ort) — Chat-Belege sind Kontext, kein Ergebnis. Kein automatischer Kopfwechsel.
-_Avoid_: Analyse als Kopf; ganze Session übertragen; Recurring-To-do; Task-Freigabe; Auto-Switch des Profils; Fertig ohne Artefakt; „done“ im Chat als Abschluss
+Manuell übergebene Arbeit. Entsteht nur mit **Beleg** (Meldung + Antwort). Kette an einer Antwort öffnet die **Arbeitsleiste**: Titel + **Was ist zu tun** (`pass`). Landet unter **Plan & Aktivität**. Zielkopf und Artefakt nicht beim Anlegen. **Übernehmen** legt den Startkontext in den Composer. **Fertig** im Plan nur mit Pfad oder Ort — Chat-Belege sind Kontext, kein Ergebnis.
+_Avoid_: Aufgabe ohne Meldung; Session-Sprung; ganze Session übertragen; Recurring-To-do; Task-Freigabe; Auto-Switch des Profils; Fertig ohne Pfad/Ort; Mitte-Modal
+
+**Beleg**:
+Snapshot von Meldung und Antwort an der Aufgabe (plus kompakter Trace, Anhang-Pfade) in `~/.glyph/tasks.json`. Aufklappbar in Leiste und Plan. Kein Zeiger in eine Session — °_Agent speichert keine.
+_Avoid_: Session-Link; Chat-Sprung; ganze Session; Vault-Inhalt
 
 **Aktiver Task**:
 Feld in der Arbeitsleiste: Name, Workspace, Restzeit, erlaubte Pfade/Aktionen, **Widerrufen**. Zeigt den stehenden Scope; ersetzt nicht den Freigabe-Dialog. Preview: `?task=demo`.
@@ -266,11 +270,12 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 ### Ordner-Suche (2026-08-15)
 
 - °_Agent-Composer: Pixel-Apfel (Minecraft: rot / Stiel braun / Blatt grün) **über dem Kopf**, außerhalb des Flow — Composer-Höhe unverändert. Standard **aus**. An = Gold-Outline + Puls, nicht goldene Füllung.
-- An: Suche erst beim Senden; Treffer in der Arbeitsleiste über der LVL-Leiste, nie im Chat-Verlauf. Default **aus**; nur explizit aktivierte Treffer gehen in den Agent-Kontext (`vault_search` + `vault_selected`). Ohne Auswahl: normale Nachricht, kein Vault.
+- Immer: memory-wiki, TinyFish, Exa — auch bei Apfel aus.
+- An: Suche erst beim Senden; Treffer in der Arbeitsleiste über der LVL-Leiste, nie im Chat-Verlauf. Default **aus**; nur explizit aktivierte Treffer gehen als Arbeits-Vault in den Kontext (`vault_search` + `vault_selected`); Wiki läuft extra. Ohne Auswahl: Wiki + offenes Web, kein Arbeits-Vault.
 - Erster Kopf-Klick startet die Suche und **leert den Composer**; Query steht in der Leiste. Weiterer Prompt sofort tippbar.
 - Suche abbrechen: × in der Leiste, Snack, oder Kopf ohne neuen Text. Fetch bricht ab — Leiste zu ≠ Suche läuft weiter.
 - Toggle-Zustand pro Session, nicht global.
-- Interaktives ACP: `vault_search` nur bei mindestens einem aktivierten Treffer. Fehlt/aus = kein VaultFind. Jobs/`/chat` ohne Flag: B+ unverändert.
+- Interaktives ACP: `vault_search` + Auswahl = Arbeits-Vault-Treffer. Fehlt/aus = memory-wiki + offenes Web, kein Arbeits-Vault, kein KomNet/DGUV-Pfad. Jobs/`/chat` ohne Flag: B+ unverändert.
 - Suchfehler (404 etc.) rot in der Arbeitsleiste; Chat bleibt sendbar.
 - Treffer: Ordner- und Dateinamen auf Disk (nicht nur Index-Eltern). Gleichnamige Ordner in HSEQ Sync und Hauptarchiv beide listen.
 - Vault leer: Exa+TinyFish auf KomNet; 0 Treffer → dieselben auf DGUV. Gleiche Leiste, Label **KOMNET** / **DGUV**, `kind: web`. Nur aktivierte URLs in den Kontext — nicht als Vault-Pfad.
@@ -326,7 +331,9 @@ _Avoid_: OpenRouter-Antwort in UI-Strings
 - Aufgabe ≠ Task-Freigabe, ≠ Recurring-To-do.
 - SoT `~/.glyph/tasks.json` (glyph-agent `/tasks`, UI-Proxy `/api/tasks`).
 - Zielkopf optional; Default leer. Köpfe: Grok Build, ^_Code, °_Agent, Codex Build. **Kein** Kopf Analyse — Analyse bleibt Status.
-- Neu: **Fertig wenn** Pflicht; **Fertig** nur mit Artefakt. Chat-Belege bleiben Kontext.
-- Ketten-Button an der Antwort: speichern, dann Übernehmen in den Composer oder später im Plan zuweisen.
+- Neu: **Was ist zu tun** Pflicht (`pass`); **Fertig** im Plan nur mit Pfad oder Ort. Chat-Belege bleiben Kontext.
+- Neu braucht **Meldung und Antwort** (Beleg-Snapshot). Ohne Paar keine Aufgabe.
+- Beleg in Übergabe-Leiste und Plan aufklappbar. Kein Sprung in die Original-Session (°_Agent speichert keine).
+- Ketten-Button nur mit vorangehender Nutzer-Meldung. Arbeitsleiste: Beleg + Titel + Was ist zu tun. Zielkopf und Artefakt nicht dort. Übernehmen in den Composer oder später im Plan. Preview: `?handoff=demo`.
 - MVP: kein automatischer Kopfwechsel, kein autonomes Weiterarbeiten.
 - Belege ohne Blobs/Preview-URLs. Stale Engine (404 `/tasks`) → Hinweis, glyph-agent neu zu starten.
