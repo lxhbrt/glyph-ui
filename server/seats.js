@@ -14,6 +14,23 @@ export function parseSeat(raw) {
   return SEAT_IDS.includes(s) ? s : "desk";
 }
 
+/**
+ * Seat-Key für Web-Clients: pro Session-Token ein eigener Chat.
+ * desk/phone bleiben fest; web wird zu web:<token>, damit jedes Gerät
+ * (Cookie) seine eigene Session hat statt alle denselben web-Chat.
+ */
+export function webSeatKey(token) {
+  const t = String(token || "").trim();
+  if (!t) return "web";
+  // Token kürzen, damit Logs/Keys handlich bleiben (Voll-Token im Cookie).
+  return `web:${t.slice(0, 12)}`;
+}
+
+export function isWebSeatKey(key) {
+  const k = String(key || "");
+  return k === "web" || k.startsWith("web:");
+}
+
 export class SeatHub {
   /**
    * @param {(seat: string) => object} createBridge
@@ -24,7 +41,9 @@ export class SeatHub {
   }
 
   get(id) {
-    const seat = parseSeat(id);
+    // web:<token>-Seats akzeptieren; desk/phone/web normalisieren.
+    const raw = String(id || "").trim().toLowerCase();
+    const seat = raw.startsWith("web:") ? raw : parseSeat(raw);
     let b = this._map.get(seat);
     if (!b) {
       b = this._create(seat);

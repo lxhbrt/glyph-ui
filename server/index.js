@@ -45,7 +45,7 @@ import { Readable, Writable } from "node:stream";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { parseSeat, SeatHub } from "./seats.js";
+import { parseSeat, SeatHub, webSeatKey, isWebSeatKey } from "./seats.js";
 import {
   WEB_AGENT_ID,
   WEB_COOKIE,
@@ -561,7 +561,11 @@ const httpServer = createServer(app);
 /** Filled after GrokBridge is defined. */
 let seats;
 function seatFromReq(req) {
-  if (isWebRequest(req)) return WEB_SEAT;
+  if (isWebRequest(req)) {
+    // Web: pro Session-Token ein eigener Chat (Gerät getrennt).
+    const token = webSessionToken(req);
+    return webSeatKey(token);
+  }
   return parseSeat(req.get("x-glyph-seat") || req.query?.seat);
 }
 function live(req) {
@@ -733,7 +737,9 @@ async function saveAttachmentFile({ name, mimeType, dataBase64 }) {
 // API routes are registered below BEFORE static — do not move static above them.
 app.get("/api/health", (req, res) => {
   const b = seats ? live(req) : null;
-  const web = Boolean(b?.seat === WEB_SEAT || isWebRequest(req));
+  const web = Boolean(
+    (b && isWebSeatKey(b.seat)) || isWebRequest(req),
+  );
   const agent = publicAgent(b?.agentProfile?.() || null);
   const allAgents = publicAgents(AGENT_PROFILES);
   const agents = web
@@ -748,7 +754,7 @@ app.get("/api/health", (req, res) => {
     connected: Boolean(b?.connected),
     reconnecting: Boolean(b?.starting),
     sessionId: b?.sessionId || null,
-    seat: b?.seat || (web ? WEB_SEAT : "desk"),
+    seat: b ? (isWebSeatKey(b.seat) ? WEB_SEAT : b.seat) : web ? WEB_SEAT : "desk",
     surface: web ? "web" : "admin",
     cwd: web ? "" : WORK_CWD,
     agent: web && agent && !agentAllowedOnSeat(WEB_SEAT, agent.id)
@@ -2050,7 +2056,10 @@ function extractPermissionPreview(toolCall) {
 
 class GrokBridge {
   constructor(opts = {}) {
-    this.seat = parseSeat(opts.seat);
+    // web:<token>-Seats (Geräte-Sessions) behalten ihren Key — parseSeat
+    // würde sie auf 'desk' normalisieren. Nur desk/phone/web normalisieren.
+    const rawSeat = String(opts.seat || "").trim().toLowerCase();
+    this.seat = rawSeat.startsWith("web:") ? rawSeat : parseSeat(rawSeat);
     this.connected = false;
     this.sessionId = null;
     /**
@@ -3322,18 +3331,18 @@ wss.on("connection", (ws, req) => {
   let seat = "desk";
   try {
     if (isWebRequest(req)) {
-      seat = WEB_SEAT;
+      seat = webSeatKey(webSessionToken(req));
     } else {
       const host = req?.headers?.host || `127.0.0.1:${PORT}`;
       const url = new URL(req.url || "/ws", `http://${host}`);
       seat = parseSeat(url.searchParams.get("seat"));
     }
   } catch {
-    seat = isWebRequest(req) ? WEB_SEAT : "desk";
+    seat = isWebRequest(req) ? webSeatKey(webSessionToken(req)) : "desk";
   }
   const b = seats.get(seat);
   if (
-    (seat === "phone" || seat === WEB_SEAT) &&
+    (seat === "phone" || isWebSeatKey(seat)) &&
     !b.connected &&
     !b.starting &&
     !b.process

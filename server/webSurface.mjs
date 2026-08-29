@@ -48,13 +48,16 @@ export function isWebRequest(req) {
 }
 
 export function defaultAgentIdForSeat(seat, envAgent) {
-  if (seat === WEB_SEAT) return WEB_AGENT_ID;
+  const s = String(seat || "").trim().toLowerCase();
+  if (s === WEB_SEAT || s.startsWith(`${WEB_SEAT}:`)) return WEB_AGENT_ID;
   const id = String(envAgent || "").trim();
   return id || "grok";
 }
 
 export function agentAllowedOnSeat(seat, agentId) {
-  if (seat !== WEB_SEAT) return true;
+  // web:<token>-Seats (Geräte-Sessions) sind Web-Surface → nur °_Agent.
+  const s = String(seat || "").trim().toLowerCase();
+  if (s !== WEB_SEAT && !s.startsWith(`${WEB_SEAT}:`)) return true;
   const id = String(agentId || "");
   return id === WEB_AGENT_ID || id === "agent";
 }
