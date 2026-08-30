@@ -1404,8 +1404,11 @@ button.send:disabled:not(.send--working) .send-face--head .graph-face {
   color: color-mix(in srgb, var(--gold) 45%, var(--muted));
 }
 
+/* Disabled (leerer Input): Kopf + Schwanz gleichermaßen sichtbar halten —
+   nur leicht gedimmt. Vorher 0.45: auf dunklem Grund wirkte der Schwanz
+   wie verschwunden („Kopf ohne Schwanz“). */
 button.send:disabled:not(.send--working) .send-tail {
-  opacity: 0.45;
+  opacity: 0.7;
 }
 
 button.send .send-face--snack {
