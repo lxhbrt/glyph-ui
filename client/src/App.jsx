@@ -130,7 +130,7 @@ import {
   vaultSendIntent,
 } from "./utils/vaultSearch.js";
 import { LageFallback } from "./components/LageFallback.jsx";
-import { pickRecorderMime, textForSpeech } from "./utils/voice.js";
+import { pickRecorderMime, textForSpeech, speakWithBrowser } from "./utils/voice.js";
 import {
   GLYPH_BUILD,
   GLYPH_BUILD_LABEL,
@@ -603,6 +603,12 @@ export default function App() {
       URL.revokeObjectURL(ttsUrlRef.current);
       ttsUrlRef.current = null;
     }
+    // Browser-Speech-Fallback stoppen
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      /* ignore */
+    }
     setSpeakingId(null);
     setTtsBusyId(null);
   }, []);
@@ -721,6 +727,14 @@ export default function App() {
         setTtsBusyId(null);
         await audio.play();
       } catch (err) {
+        // Browser-Speech-Fallback: Wenn der Server kein Audio liefern kann
+        // (kein Key, macOS nicht erreichbar — z. B. Handy), liest der Browser
+        // selbst vor (Web Speech API). Offline, kostenlos, sofort.
+        if (speakWithBrowser(spoken, () => stopTts())) {
+          setSpeakingId(id);
+          setTtsBusyId(null);
+          return;
+        }
         setTtsBusyId(null);
         setSpeakingId(null);
         setError(err instanceof Error ? err.message : String(err));
@@ -3809,7 +3823,7 @@ export default function App() {
                               : ttsBusyId === m.id
                                 ? "Erzeuge Sprache…"
                                 : voiceAvailable
-                                  ? "Mit Grok TTS vorlesen"
+                                  ? "Antwort vorlesen (TTS)"
                                   : voiceHint || "TTS: XAI- oder OpenRouter-Key"
                           }
                           aria-label={
@@ -4420,11 +4434,11 @@ export default function App() {
                 }`}
                 title={
                   recording
-                    ? "Aufnahme stoppen (Grok STT)"
+                    ? "Aufnahme stoppen (STT)"
                     : sttBusy
                       ? "Transkript wird erstellt…"
                       : voiceAvailable
-                        ? "Diktieren mit Grok STT"
+                        ? "Diktieren (STT)"
                         : voiceHint || "STT: XAI- oder OpenRouter-Key"
                 }
                 aria-label={recording ? "Aufnahme stoppen" : "Diktieren"}

@@ -4,7 +4,7 @@
  */
 
 /**
- * Voice API proxy: xAI primary, OpenRouter fallback.
+ * Voice API proxy: xAI primary, OpenRouter fallback, macOS local TTS.
  *
  * xAI:
  *   STT POST https://api.x.ai/v1/stt
@@ -14,19 +14,30 @@
  *   STT POST https://openrouter.ai/api/v1/audio/transcriptions
  *   TTS POST https://openrouter.ai/api/v1/audio/speech
  *
+ * macOS (VOICE_PROVIDER=mac, oder Auto-Fallback wenn xAI/OpenRouter fehlen):
+ *   TTS lokal via /usr/bin/say → AIFF (encode: afconvert → m4a)
+ *   STT: nicht verfügbar (Browser/whisper.cpp später)
+ *
  * Provider resolution (first hit wins):
+ *   0. VOICE_PROVIDER=mac|xai|openrouter erzwingt (mac = macOS-say)
  *   1. XAI_API_KEY / GROK_API_KEY / ~/.grok/auth.json → xai
  *   2. OPENROUTER_API_KEY → openrouter
+ *   3. macOS (say) als kostenloser Fallback, falls vorhanden
  */
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { execFile } from "node:child_process";
 
 const XAI_BASE = "https://api.x.ai/v1";
 const OR_BASE = "https://openrouter.ai/api/v1";
 const GROK_HOME = process.env.GROK_HOME || path.join(os.homedir(), ".grok");
 const AUTH_PATH = path.join(GROK_HOME, "auth.json");
+
+const SAY_BIN = process.env.MAC_TTS_BIN || "/usr/bin/say";
+// Default-Stimme: Helena (de, Enhanced) wenn installiert, sonst Anna.
+const MAC_DEFAULT_VOICE = process.env.MAC_TTS_VOICE || ""; // leer = Auto
 
 const DEFAULT_VOICE = process.env.GROK_TTS_VOICE || "eve";
 const DEFAULT_STT_LANG = process.env.GROK_STT_LANGUAGE || "de";
@@ -55,6 +66,93 @@ const OR_VOICES = [
   { voice_id: "shimmer", name: "Shimmer" },
 ];
 
+/** @type {null | { ok: boolean, voice?: string }} */
+let macSayProbe = null;
+
+/** say vorhanden + deutsche Stimme ermitteln (einmalig). */
+async function probeMacSay() {
+  if (macSayProbe) return macSayProbe;
+  try {
+    const out = await new Promise((resolve, reject) => {
+      execFile(SAY_BIN, ["-v", "?"], { timeout: 4000, maxBuffer: 1 << 20 }, (err, stdout) => {
+        if (err) return reject(err);
+        resolve(String(stdout || ""));
+      });
+    });
+    const de = out
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => /\bde[_-](DE|AT|CH)\b/i.test(l))
+      .map((l) => l.split(/\s{2,}/)[0].trim());
+    // Bevorzugt Helena (Enhanced) → Anna; sonst erste de-Stimme.
+    const voice =
+      MAC_DEFAULT_VOICE ||
+      de.find((v) => /helena/i.test(v)) ||
+      de.find((v) => /anna/i.test(v)) ||
+      de[0] ||
+      "";
+    macSayProbe = { ok: Boolean(voice), voice };
+  } catch {
+    macSayProbe = { ok: false, voice: "" };
+  }
+  return macSayProbe;
+}
+
+/**
+ * macOS-TTS: say → AIFF, dann afconvert → m4a (klein, browserfreundlich).
+ * @param {string} clean
+ * @param {{ voiceId?: string, speed?: number }} opts
+ * @returns {Promise<{ buffer: Buffer, contentType: string, provider: "mac" }>}
+ */
+async function textToSpeechMac(clean, opts = {}) {
+  const { ok, voice } = await probeMacSay();
+  if (!ok) {
+    const err = new Error("macOS TTS nicht verfügbar (/usr/bin/say fehlt)");
+    err.status = 503;
+    throw err;
+  }
+  const tmp = path.join(
+    os.tmpdir(),
+    `glyph-tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  const aiff = `${tmp}.aiff`;
+  const m4a = `${tmp}.m4a`;
+  // Rate: say erwartet Wörter/min; 1.0 ≙ ~185, 1.5 ≙ ~260, 0.7 ≙ ~130.
+  const rate = Math.min(260, Math.max(120, Math.round(185 * (Number(opts.speed) || 1))));
+  // say liest Text aus Datei, damit Sonderzeichen sauber ankommen.
+  const textFile = `${tmp}.txt`;
+  await fs.writeFile(textFile, clean, "utf8");
+  try {
+    await new Promise((resolve, reject) => {
+      execFile(SAY_BIN, ["-v", opts.voiceId || voice, "-r", String(rate), "-f", textFile, "-o", aiff], { timeout: 60_000, maxBuffer: 1 << 20 }, (err) => (err ? reject(err) : resolve()));
+    });
+    // AIFF → m4a (AAC), kleiner für den Browser. Bitrate-Flag ist
+    // systemsprachabhängig — ohne -b ist aac-Default zuverlässig.
+    await new Promise((resolve) => {
+      execFile(
+        "/usr/bin/afconvert",
+        ["-f", "m4af", "-d", "aac", aiff, m4a],
+        { timeout: 10000 },
+        () => resolve(), // bei Fehler bleibt die AIFF-Ausgabe
+      );
+    });
+    let buf;
+    let contentType;
+    try {
+      buf = await fs.readFile(m4a);
+      contentType = "audio/mp4";
+    } catch {
+      buf = await fs.readFile(aiff);
+      contentType = "audio/aiff";
+    }
+    return { buffer: buf, contentType, provider: "mac" };
+  } finally {
+    for (const f of [aiff, m4a, textFile]) {
+      await fs.rm(f, { force: true }).catch(() => {});
+    }
+  }
+}
+
 /** @type {{ key: string, source: string, provider: "xai" | "openrouter" } | null} */
 let cachedAuth = null;
 
@@ -67,6 +165,12 @@ export function clearApiKeyCache() {
  */
 export async function resolveVoiceAuth() {
   if (cachedAuth?.key) return cachedAuth;
+
+  // VOICE_PROVIDER=mac erzwingt lokales macOS-TTS (kein Cloud-Key nötig).
+  if (String(process.env.VOICE_PROVIDER || "").toLowerCase() === "mac") {
+    cachedAuth = { key: "local", source: "VOICE_PROVIDER=mac", provider: "mac" };
+    return cachedAuth;
+  }
 
   const xaiEnv =
     (process.env.XAI_API_KEY || "").trim() ||
@@ -134,9 +238,11 @@ export async function resolveApiKey() {
 export async function voiceStatus() {
   const auth = await resolveVoiceAuth();
   const provider = auth?.provider || null;
+  const mac = await probeMacSay();
   return {
-    available: Boolean(auth?.key),
+    available: Boolean(auth?.key) || mac.ok,
     provider,
+    mac: { available: mac.ok, voice: mac.voice || null },
     source: auth?.source || null,
     defaults: {
       voiceId: provider === "openrouter" ? OR_DEFAULT_VOICE : DEFAULT_VOICE,
@@ -147,7 +253,9 @@ export async function voiceStatus() {
     },
     hint: auth?.key
       ? null
-      : "Kein Voice-Key. XAI_API_KEY (console.x.ai) oder OPENROUTER_API_KEY (openrouter.ai) setzen.",
+      : mac.ok
+        ? null // macOS-Fallback aktiv — kein Key nötig
+        : "Kein Voice-Key. XAI_API_KEY (console.x.ai) oder OPENROUTER_API_KEY (openrouter.ai) setzen.",
   };
 }
 
@@ -310,15 +418,6 @@ async function speechToTextOpenRouter(audioBuffer, opts, auth) {
  * @returns {Promise<{ buffer: Buffer, contentType: string, provider?: string }>}
  */
 export async function textToSpeech(text, opts = {}) {
-  const auth = await resolveVoiceAuth();
-  if (!auth?.key) {
-    const err = new Error(
-      "Kein Voice-Key — XAI_API_KEY oder OPENROUTER_API_KEY setzen",
-    );
-    err.status = 503;
-    throw err;
-  }
-
   const clean = String(text || "").trim();
   if (!clean) {
     const err = new Error("Kein Text für TTS");
@@ -326,10 +425,41 @@ export async function textToSpeech(text, opts = {}) {
     throw err;
   }
 
-  if (auth.provider === "openrouter") {
-    return textToSpeechOpenRouter(clean, opts, auth);
+  const auth = await resolveVoiceAuth();
+  if (auth?.key) {
+    try {
+      if (auth.provider === "openrouter") {
+        return await textToSpeechOpenRouter(clean, opts, auth);
+      }
+      if (auth.provider === "mac") {
+        return await textToSpeechMac(clean, opts);
+      }
+      return await textToSpeechXai(clean, opts, auth);
+    } catch (err) {
+      // Auto-Fallback: Cloud schlägt fehl (Guthaben/Rate/etc.) → macOS versuchen.
+      const mac = await probeMacSay();
+      if (!mac.ok) throw err;
+      const detail = String(err?.detail || err?.message || "").toLowerCase();
+      const recoverable =
+        [401, 403, 404, 429, 500, 502, 503, 504].includes(Number(err?.status)) ||
+        detail.includes("credits") ||
+        detail.includes("spending limit") ||
+        detail.includes("billing") ||
+        detail.includes("fetch failed") ||
+        detail.includes("timeout");
+      if (!recoverable) throw err;
+      return textToSpeechMac(clean, opts);
+    }
   }
-  return textToSpeechXai(clean, opts, auth);
+
+  // Kein Cloud-Key: macOS ist jetzt die TTS (kostenlos, lokal).
+  const mac = await probeMacSay();
+  if (mac.ok) return textToSpeechMac(clean, opts);
+  const err = new Error(
+    "Kein Voice-Key — XAI_API_KEY oder OPENROUTER_API_KEY setzen",
+  );
+  err.status = 503;
+  throw err;
 }
 
 /**
@@ -448,17 +578,32 @@ async function textToSpeechOpenRouter(clean, opts, auth) {
   };
 }
 
+const MAC_VOICES = [
+  { voice_id: "Helena", name: "Helena (Enhanced, falls installiert)" },
+  { voice_id: "Anna", name: "Anna" },
+  { voice_id: "Shelley", name: "Shelley" },
+  { voice_id: "Eddy (Deutsch (Deutschland))", name: "Eddy" },
+  { voice_id: "Flo (Deutsch (Deutschland))", name: "Flo" },
+  { voice_id: "Reed (Deutsch (Deutschland))", name: "Reed" },
+  { voice_id: "Rocko (Deutsch (Deutschland))", name: "Rocko" },
+  { voice_id: "Sandy (Deutsch (Deutschland))", name: "Sandy" },
+];
+
 /**
  * @returns {Promise<{ voices: Array<{ voice_id: string, name?: string }>, provider?: string, fallback?: boolean }>}
  */
 export async function listVoices() {
   const auth = await resolveVoiceAuth();
-  if (!auth?.key) {
-    const err = new Error(
-      "Kein Voice-Key — XAI_API_KEY oder OPENROUTER_API_KEY setzen",
-    );
-    err.status = 503;
-    throw err;
+  if (auth?.provider === "mac" || !auth?.key) {
+    const mac = await probeMacSay();
+    if (mac.ok) return { voices: MAC_VOICES, provider: "mac", fallback: !auth?.key };
+    if (!auth?.key) {
+      const err = new Error(
+        "Kein Voice-Key — XAI_API_KEY oder OPENROUTER_API_KEY setzen",
+      );
+      err.status = 503;
+      throw err;
+    }
   }
 
   if (auth.provider === "openrouter") {
@@ -470,6 +615,11 @@ export async function listVoices() {
   });
 
   if (!res.ok) {
+    // xAI-Schaden (Guthaben/Rechte) → mac-Stimmen als Fallback.
+    const mac = await probeMacSay();
+    if (mac.ok) {
+      return { voices: MAC_VOICES, provider: "mac", fallback: true };
+    }
     if (res.status === 404 || res.status >= 500) {
       return { voices: XAI_VOICES, fallback: true, provider: "xai" };
     }
