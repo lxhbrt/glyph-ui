@@ -38,6 +38,15 @@ const AUTH_PATH = path.join(GROK_HOME, "auth.json");
 const SAY_BIN = process.env.MAC_TTS_BIN || "/usr/bin/say";
 // Default-Stimme: Helena (de, Enhanced) wenn installiert, sonst Anna.
 const MAC_DEFAULT_VOICE = process.env.MAC_TTS_VOICE || ""; // leer = Auto
+// Edge-Neuralstimmen (inoffiziell, kostenlos): Katja = de weiblich,
+// Conrad = de männlich. MS_EDGE_TTS_VOICE überschreibt.
+const EDGE_DEFAULT_VOICE = process.env.EDGE_TTS_VOICE || "de-DE-KatjaNeural";
+
+// whisper.cpp (lokal, kostenlos) für STT-Fallback, wenn Cloud-STT ablehnt.
+const WHISPER_BIN = process.env.WHISPER_BIN || "/opt/homebrew/bin/whisper-cli";
+const WHISPER_MODEL =
+  process.env.WHISPER_MODEL ||
+  path.join(os.homedir(), ".glyph", "whisper", "ggml-small.bin");
 
 const DEFAULT_VOICE = process.env.GROK_TTS_VOICE || "eve";
 const DEFAULT_STT_LANG = process.env.GROK_STT_LANGUAGE || "de";
@@ -155,6 +164,55 @@ async function textToSpeechMac(clean, opts = {}) {
 
 /** @type {{ key: string, source: string, provider: "xai" | "openrouter" } | null} */
 let cachedAuth = null;
+
+/** msedge-tts-Modul lazy (verhindert Start-Blockade, wenn Paket fehlt). */
+async function loadEdgeTts() {
+  try {
+    return await import("msedge-tts");
+  } catch {
+    return null;
+  }
+}
+
+const EDGE_VOICES = [
+  { voice_id: "de-DE-KatjaNeural", name: "Katja (Neural, de)" },
+  { voice_id: "de-DE-ConradNeural", name: "Conrad (Neural, de)" },
+  { voice_id: "de-DE-AmalaNeural", name: "Amala (Neural, de)" },
+  { voice_id: "de-DE-KillianNeural", name: "Killian (Neural, de)" },
+  { voice_id: "de-AT-JonasNeural", name: "Jonas (Neural, österr.)" },
+  { voice_id: "de-CH-LeniNeural", name: "Leni (Neural, schweiz.)" },
+];
+
+/**
+ * Edge-Neural-TTS: kostenlos, kein Key (inoffizielle Microsoft-Endpoint).
+ * @param {string} clean
+ * @param {{ voiceId?: string, speed?: number }} opts
+ * @returns {Promise<{ buffer: Buffer, contentType: string, provider: "edge" }>}
+ */
+async function textToSpeechEdge(clean, opts = {}) {
+  const mod = await loadEdgeTts();
+  if (!mod?.MsEdgeTTS) {
+    const err = new Error("msedge-tts nicht installiert (npm i msedge-tts)");
+    err.status = 503;
+    throw err;
+  }
+  const { MsEdgeTTS, OUTPUT_FORMAT } = mod;
+  const tts = new MsEdgeTTS();
+  await tts.setMetadata(
+    opts.voiceId && /Neural$/.test(opts.voiceId) ? opts.voiceId : EDGE_DEFAULT_VOICE,
+    OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3,
+  );
+  const r = await tts.toStream(clean);
+  const chunks = [];
+  for await (const c of r.audioStream) chunks.push(c);
+  const buf = Buffer.concat(chunks);
+  if (!buf.length) {
+    const err = new Error("Edge-TTS lieferte leeres Audio");
+    err.status = 502;
+    throw err;
+  }
+  return { buffer: buf, contentType: "audio/mpeg", provider: "edge" };
+}
 
 export function clearApiKeyCache() {
   cachedAuth = null;
@@ -298,18 +356,93 @@ function audioFormatFrom(mimeType, filename) {
  */
 export async function speechToText(audioBuffer, opts = {}) {
   const auth = await resolveVoiceAuth();
-  if (!auth?.key) {
+  // mac-Provider (TTS-forced) hat keinen echten Cloud-STT — direkt whisper.
+  if (!auth?.key || auth.provider === "mac") {
+    return speechToTextWhisper(audioBuffer, opts);
+  }
+  try {
+    if (auth.provider === "openrouter") {
+      return await speechToTextOpenRouter(audioBuffer, opts, auth);
+    }
+    return await speechToTextXai(audioBuffer, opts, auth);
+  } catch (err) {
+    // Cloud-STT ablehnt (Guthaben/Rechte/Rate) → whisper.cpp lokal.
+    const detail = String(err?.detail || err?.message || "").toLowerCase();
+    const recoverable =
+      [400, 401, 403, 404, 429, 500, 502, 503, 504].includes(Number(err?.status)) ||
+      detail.includes("credits") ||
+      detail.includes("spending limit") ||
+      detail.includes("billing") ||
+      detail.includes("fetch failed") ||
+      detail.includes("timeout") ||
+      detail.includes("api key");
+    if (!recoverable) throw err;
+    return speechToTextWhisper(audioBuffer, opts);
+  }
+}
+
+/**
+ * whisper.cpp lokal: Audio → 16 kHz WAV → Transkript. Kein Key, kein Cloud.
+ * @param {Buffer} audioBuffer
+ * @param {{ language?: string, mimeType?: string }} opts
+ */
+async function speechToTextWhisper(audioBuffer, opts = {}) {
+  try {
+    await fs.access(WHISPER_BIN);
+  } catch {
     const err = new Error(
-      "Kein Voice-Key — XAI_API_KEY oder OPENROUTER_API_KEY setzen",
+      "Kein Cloud-STT und whisper.cpp nicht installiert (brew install whisper-cpp)",
     );
     err.status = 503;
     throw err;
   }
-
-  if (auth.provider === "openrouter") {
-    return speechToTextOpenRouter(audioBuffer, opts, auth);
+  const language = opts.language || DEFAULT_STT_LANG;
+  const mimeType = opts.mimeType || "audio/webm";
+  const filename = audioFilename(mimeType, opts.filename);
+  const tmp = path.join(
+    os.tmpdir(),
+    `glyph-stt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  const src = `${tmp}-${filename}`;
+  // whisper-cli braucht 16 kHz WAV — ffmpeg dekodiert alles (webm/mp4/ogg…).
+  const wav = `${tmp}.wav`;
+  try {
+    await fs.writeFile(src, audioBuffer);
+    await new Promise((resolve, reject) => {
+      execFile(
+        "/opt/homebrew/bin/ffmpeg",
+        ["-y", "-i", src, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav],
+        { timeout: 30_000 },
+        (err) => (err ? reject(err) : resolve()),
+      );
+    });
+    const out = await new Promise((resolve, reject) => {
+      execFile(
+        WHISPER_BIN,
+        [
+          "-m", WHISPER_MODEL,
+          "-l", language === "auto" ? "auto" : language.slice(0, 2),
+          "-nt", // kein Timestamps im Text
+          "-np", // kein Log-Rauschen
+          "-f", wav,
+        ],
+        { timeout: 120_000, maxBuffer: 4 << 20 },
+        (err, stdout) => (err ? reject(err) : resolve(String(stdout || "")))
+      );
+    });
+    // stdout enthält Transkript + vielleicht Logs; Textzeilen ohne []-Präfix sammeln.
+    const text = out
+      .split("\n")
+      .filter((l) => !l.startsWith("[") && !/whisper_|system_info|load_|_/i.test(l))
+      .join(" ")
+      .replace(/\[[^\]]*]/g, "")
+      .trim();
+    return { text, language, duration: null, words: [], provider: "whisper-local" };
+  } finally {
+    for (const f of [src, wav]) {
+      await fs.rm(f, { force: true }).catch(() => {});
+    }
   }
-  return speechToTextXai(audioBuffer, opts, auth);
 }
 
 /**
@@ -426,35 +559,45 @@ export async function textToSpeech(text, opts = {}) {
   }
 
   const auth = await resolveVoiceAuth();
+  if (auth?.key && auth.provider === "mac") {
+    return textToSpeechMac(clean, opts);
+  }
+  // 1. Cloud (wenn Key da), 2. Edge-Neural, 3. macOS-say.
   if (auth?.key) {
     try {
       if (auth.provider === "openrouter") {
         return await textToSpeechOpenRouter(clean, opts, auth);
       }
-      if (auth.provider === "mac") {
-        return await textToSpeechMac(clean, opts);
-      }
       return await textToSpeechXai(clean, opts, auth);
     } catch (err) {
-      // Auto-Fallback: Cloud schlägt fehl (Guthaben/Rate/etc.) → macOS versuchen.
-      const mac = await probeMacSay();
-      if (!mac.ok) throw err;
       const detail = String(err?.detail || err?.message || "").toLowerCase();
       const recoverable =
-        [401, 403, 404, 429, 500, 502, 503, 504].includes(Number(err?.status)) ||
+        [400, 401, 403, 404, 429, 500, 502, 503, 504].includes(Number(err?.status)) ||
         detail.includes("credits") ||
         detail.includes("spending limit") ||
         detail.includes("billing") ||
         detail.includes("fetch failed") ||
-        detail.includes("timeout");
+        detail.includes("timeout") ||
+        detail.includes("api key");
       if (!recoverable) throw err;
-      return textToSpeechMac(clean, opts);
+      // Cloud-Fehler → Edge-Neural, dann mac.
+      try {
+        return await textToSpeechEdge(clean, opts);
+      } catch {
+        const mac = await probeMacSay();
+        if (!mac.ok) throw err;
+        return textToSpeechMac(clean, opts);
+      }
     }
   }
 
-  // Kein Cloud-Key: macOS ist jetzt die TTS (kostenlos, lokal).
-  const mac = await probeMacSay();
-  if (mac.ok) return textToSpeechMac(clean, opts);
+  // Kein Cloud-Key: Edge-Neural (kostenlos) → macOS-say.
+  try {
+    return await textToSpeechEdge(clean, opts);
+  } catch {
+    const mac = await probeMacSay();
+    if (mac.ok) return textToSpeechMac(clean, opts);
+  }
   const err = new Error(
     "Kein Voice-Key — XAI_API_KEY oder OPENROUTER_API_KEY setzen",
   );
@@ -578,32 +721,13 @@ async function textToSpeechOpenRouter(clean, opts, auth) {
   };
 }
 
-const MAC_VOICES = [
-  { voice_id: "Helena", name: "Helena (Enhanced, falls installiert)" },
-  { voice_id: "Anna", name: "Anna" },
-  { voice_id: "Shelley", name: "Shelley" },
-  { voice_id: "Eddy (Deutsch (Deutschland))", name: "Eddy" },
-  { voice_id: "Flo (Deutsch (Deutschland))", name: "Flo" },
-  { voice_id: "Reed (Deutsch (Deutschland))", name: "Reed" },
-  { voice_id: "Rocko (Deutsch (Deutschland))", name: "Rocko" },
-  { voice_id: "Sandy (Deutsch (Deutschland))", name: "Sandy" },
-];
-
 /**
  * @returns {Promise<{ voices: Array<{ voice_id: string, name?: string }>, provider?: string, fallback?: boolean }>}
  */
 export async function listVoices() {
   const auth = await resolveVoiceAuth();
   if (auth?.provider === "mac" || !auth?.key) {
-    const mac = await probeMacSay();
-    if (mac.ok) return { voices: MAC_VOICES, provider: "mac", fallback: !auth?.key };
-    if (!auth?.key) {
-      const err = new Error(
-        "Kein Voice-Key — XAI_API_KEY oder OPENROUTER_API_KEY setzen",
-      );
-      err.status = 503;
-      throw err;
-    }
+    return { voices: EDGE_VOICES, provider: "edge", fallback: !auth?.key };
   }
 
   if (auth.provider === "openrouter") {
@@ -615,10 +739,9 @@ export async function listVoices() {
   });
 
   if (!res.ok) {
-    // xAI-Schaden (Guthaben/Rechte) → mac-Stimmen als Fallback.
-    const mac = await probeMacSay();
-    if (mac.ok) {
-      return { voices: MAC_VOICES, provider: "mac", fallback: true };
+    // xAI-Schaden (Guthaben/Rechte) → Edge-Neural-Stimmen als Fallback.
+    if (res.status === 401 || res.status === 403 || res.status === 429) {
+      return { voices: EDGE_VOICES, provider: "edge", fallback: true };
     }
     if (res.status === 404 || res.status >= 500) {
       return { voices: XAI_VOICES, fallback: true, provider: "xai" };
