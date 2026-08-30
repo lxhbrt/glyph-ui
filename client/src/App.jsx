@@ -431,9 +431,9 @@ export default function App() {
   const [voiceHint, setVoiceHint] = useState("");
   const [voiceId, setVoiceId] = useState(() => {
     try {
-      return localStorage.getItem("gbt-voice-id") || "eve";
+      return localStorage.getItem("gbt-voice-id") || "de-DE-KatjaNeural";
     } catch {
-      return "eve";
+      return "de-DE-KatjaNeural";
     }
   });
   const [sttLanguage] = useState(() => {
