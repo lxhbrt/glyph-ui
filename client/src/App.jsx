@@ -431,9 +431,9 @@ export default function App() {
   const [voiceHint, setVoiceHint] = useState("");
   const [voiceId, setVoiceId] = useState(() => {
     try {
-      return localStorage.getItem("gbt-voice-id") || "de-DE-KatjaNeural";
+      return localStorage.getItem("gbt-voice-id") || "de-DE-ConradNeural";
     } catch {
-      return "de-DE-KatjaNeural";
+      return "de-DE-ConradNeural";
     }
   });
   const [sttLanguage] = useState(() => {
@@ -532,6 +532,15 @@ export default function App() {
         );
         if (j.available) {
           try {
+            // Migration (2026-08-30): alte Defaults (eve/Katja) → Conrad.
+            try {
+              const cur = localStorage.getItem("gbt-voice-id");
+              if (cur === "eve" || cur === "de-DE-KatjaNeural") {
+                localStorage.setItem("gbt-voice-id", "de-DE-ConradNeural");
+              }
+            } catch {
+              /* ignore */
+            }
             const vr = await fetch("/api/tts/voices");
             const vj = await vr.json();
             if (!cancelled && Array.isArray(vj.voices) && vj.voices.length) {

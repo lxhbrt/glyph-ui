@@ -39,8 +39,8 @@ const SAY_BIN = process.env.MAC_TTS_BIN || "/usr/bin/say";
 // Default-Stimme: Helena (de, Enhanced) wenn installiert, sonst Anna.
 const MAC_DEFAULT_VOICE = process.env.MAC_TTS_VOICE || ""; // leer = Auto
 // Edge-Neuralstimmen (inoffiziell, kostenlos): Katja = de weiblich,
-// Conrad = de männlich. MS_EDGE_TTS_VOICE überschreibt.
-const EDGE_DEFAULT_VOICE = process.env.EDGE_TTS_VOICE || "de-DE-KatjaNeural";
+// Conrad = de männlich (USER-DEFAULT seit 2026-08-30). MS_EDGE_TTS_VOICE überschreibt.
+const EDGE_DEFAULT_VOICE = process.env.EDGE_TTS_VOICE || "de-DE-ConradNeural";
 
 // whisper.cpp (lokal, kostenlos) für STT-Fallback, wenn Cloud-STT ablehnt.
 const WHISPER_BIN = process.env.WHISPER_BIN || "/opt/homebrew/bin/whisper-cli";
