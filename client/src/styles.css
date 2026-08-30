@@ -7517,8 +7517,9 @@ button.send.send--morph-out .send-tail-stone {
   height: 12px;
   z-index: 90;
   background:
-    /* Stiel */ linear-gradient(#7cb342, #7cb34f) 5px 0 / 2px 3px no-repeat,
-    /* Fruchtkörper */ var(--snack-snake-head, #d4af37) 0 2px/12px 9px no-repeat;
+    /* Stiel */ linear-gradient(#7a5230, #7a5230) 5px 0 / 2px 3px no-repeat,
+    /* Blatt */ linear-gradient(#5e9c3f, #5e9c3f) 7px 0 / 2px 2px no-repeat,
+    /* Fruchtkörper (rot) */ var(--snack-stop, #d94a4a) 0 2px/12px 10px no-repeat;
   border-radius: 2px;
   image-rendering: pixelated;
   animation: apple-fly-to-send 0.55s cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
@@ -7546,38 +7547,20 @@ button.send.send--morph-out .send-tail-stone {
 }
 
 .send-spit-apple {
-  position: absolute;
-  top: var(--send-chin);
-  left: var(--send-head-right);
+  position: fixed;
   width: 12px;
   height: 12px;
-  z-index: 3;
+  z-index: 90;
   pointer-events: none;
   background:
-    /* Stiel */ linear-gradient(#7cb342, #689f38) 5px 0/2px 3px no-repeat,
-    /* Frucht */ var(--snack-snake-head, #d4af37) 0 2px/12px 10px no-repeat;
+    /* Stiel */ linear-gradient(#7a5230, #7a5230) 5px 0 / 2px 3px no-repeat,
+    /* Blatt */ linear-gradient(#5e9c3f, #5e9c3f) 7px 0 / 2px 2px no-repeat,
+    /* Frucht (rot) */ var(--snack-stop, #d94a4a) 0 2px/12px 10px no-repeat;
   image-rendering: pixelated;
   animation: apple-spit 0.9s steps(6, end) forwards;
 }
 
 /* --- 3) Charakter-Momente --- */
-/* Gähnen: Kopf dehnt sich bei langer Wartezeit (Klasse via JS nach 20s). */
-@keyframes snake-yawn {
-  0%,
-  100% {
-    transform: scaleY(1);
-  }
-  30%,
-  55% {
-    transform: scaleY(1.35) translateY(-1px);
-  }
-}
-
-button.send .send-snake-head .graph-face--yawn {
-  transform-origin: center bottom;
-  animation: snake-yawn 1.6s steps(1, end) 1;
-}
-
 /* Fehler: Augen weg (nach links-unten), kurz */
 @keyframes snake-eyes-away {
   0%,
@@ -7612,7 +7595,6 @@ button.send.send-eyes-away .graph-pupils {
   97% {
     transform: scaleY(0.12);
   }
-  animation: snake-yawn 1.6s steps(1, end) 1;
 }
 
 .tablet-plate {

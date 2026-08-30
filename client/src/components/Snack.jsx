@@ -23,12 +23,23 @@ function snackDrawSquare(ctx, x, y, fill) {
 }
 
 function snackDrawApple(ctx, x, y, stop, stopInner) {
+  // Pixel-Apfel (8px): Fruchtkörper mit abgerundeten Ecken, Glanzpunkt,
+  // brauner Stiel, grünes Blatt — liest sich als Apfel, nicht als Ball.
   const ix = Math.round(x);
   const iy = Math.round(y);
+  // Fruchtkörper: Ecken oben/unten abgeschnitten → runde Frucht-Silhouette
   ctx.fillStyle = stop;
-  ctx.fillRect(ix, iy, SNACK_PIXEL, SNACK_PIXEL);
+  ctx.fillRect(ix + 1, iy, SNACK_PIXEL - 2, SNACK_PIXEL); // Kern (6×8)
+  ctx.fillRect(ix, iy + 2, SNACK_PIXEL, SNACK_PIXEL - 2); // Mitte (8×6)
+  // Glanzpunkt (links oben)
   ctx.fillStyle = stopInner;
-  ctx.fillRect(ix + 3, iy + 3, 2, 2);
+  ctx.fillRect(ix + 1, iy + 2, 2, 1);
+  // Stiel (braun, mittig oben)
+  ctx.fillStyle = "#7a5230";
+  ctx.fillRect(ix + 3, iy - 2, 1, 2);
+  // Blatt (grün, rechts vom Stiel)
+  ctx.fillStyle = "#5e9c3f";
+  ctx.fillRect(ix + 4, iy - 2, 2, 1);
 }
 
 /** Head travel range so snout touches apple at destination. */
@@ -386,17 +397,22 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       const s = Math.max(SNACK_PIXEL, Math.round(size));
       const ix = Math.round(x);
       const iy = Math.round(y);
+      // Fruchtkörper mit abgeschrägten oberen Ecken (runde Frucht-Form)
+      const corner = Math.max(1, Math.floor(s * 0.18));
       ctx.fillStyle = palette.stop;
-      ctx.fillRect(ix, iy, s, s);
-      // same inset highlight idea as drawApple / stopInner
-      const pad = Math.max(1, Math.floor(s * 0.22));
-      const inner = Math.max(2, s - pad * 2);
+      ctx.fillRect(ix + corner, iy + corner, s - corner * 2, s - corner); // Kern
+      ctx.fillRect(ix, iy + corner, s, s - corner); // volle Breite unter den Ecken
+      // Glanzpunkt
+      const pad = Math.max(1, Math.floor(s * 0.2));
       ctx.fillStyle = palette.stopInner;
-      ctx.fillRect(ix + pad, iy + pad, inner, inner);
-      // leaf nub (matches snack “food” readability at head scale)
+      ctx.fillRect(ix + pad, iy + pad + 1, Math.max(1, Math.floor(s * 0.22)), Math.max(1, Math.floor(s * 0.14)));
+      // Stiel (braun)
+      ctx.fillStyle = "#7a5230";
+      ctx.fillRect(ix + Math.floor(s / 2), iy - Math.max(1, Math.floor(s * 0.22)), Math.max(1, Math.floor(s * 0.14)), Math.max(2, Math.floor(s * 0.25)));
+      // Blatt (grün, rechts vom Stiel)
       if (s >= 6) {
         ctx.fillStyle = palette.leaf;
-        ctx.fillRect(ix + s - Math.max(2, Math.floor(s * 0.28)), iy - 1, Math.max(2, Math.floor(s * 0.28)), 2);
+        ctx.fillRect(ix + Math.floor(s / 2) + 1, iy - Math.max(1, Math.floor(s * 0.22)), Math.max(2, Math.floor(s * 0.3)), Math.max(1, Math.floor(s * 0.15)));
       }
     };
 

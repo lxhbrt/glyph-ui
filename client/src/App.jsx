@@ -3307,8 +3307,9 @@ export default function App() {
   flyAppleRef.current = flyAppleTo;
 
   // Ausspucken: Nach dem Working (Apfel hüpft vom Kopf in den Chat) — nur wenn
-  // VORHER wirklich gearbeitet wurde (nicht beim Mount).
-  const [appleSpit, setAppleSpit] = useState(false);
+  // VORHER wirklich gearbeitet wurde (nicht beim Mount). Fixed overlay (Button
+  // clippt mit overflow:hidden — innerhalb wäre der Apfel unsichtbar).
+  const [appleSpit, setAppleSpit] = useState(null); // {x, y} — Start am Send-Kopf
   const wasWorkingRef = useRef(false);
   useEffect(() => {
     if (showWorking) {
@@ -3317,19 +3318,14 @@ export default function App() {
     }
     if (!wasWorkingRef.current) return undefined;
     wasWorkingRef.current = false;
-    setAppleSpit(true);
-    const t = setTimeout(() => setAppleSpit(false), 950);
-    return () => clearTimeout(t);
-  }, [showWorking]);
-
-  // Gähnen: Working > 20s → Snake gähnt alle ~8s.
-  const [snakeYawn, setSnakeYawn] = useState(false);
-  useEffect(() => {
-    if (!showWorking) {
-      setSnakeYawn(false);
-      return undefined;
+    const sendRect = document.querySelector("button.send")?.getBoundingClientRect();
+    if (sendRect) {
+      setAppleSpit({
+        x: sendRect.left + sendRect.width * 0.72,
+        y: sendRect.top + sendRect.height * 0.75,
+      });
     }
-    const t = setTimeout(() => setSnakeYawn(true), 20000);
+    const t = setTimeout(() => setAppleSpit(null), 950);
     return () => clearTimeout(t);
   }, [showWorking]);
 
@@ -4030,8 +4026,8 @@ export default function App() {
               className="apple-fly"
               aria-hidden="true"
               style={{
-                left: appleFly.startX ?? 0,
-                top: appleFly.startY ?? 0,
+                left: `${appleFly.startX ?? 0}px`,
+                top: `${appleFly.startY ?? 0}px`,
                 "--apple-fly-x": `${appleFly.x}px`,
                 "--apple-fly-y": `${appleFly.y}px`,
               }}
@@ -4534,13 +4530,20 @@ export default function App() {
                 <IconMic size={18} />
               </button>
               <div className="composer-send-stack">
+              {appleSpit ? (
+                <span
+                  className="send-spit-apple"
+                  aria-hidden="true"
+                  style={{ left: `${appleSpit.x}px`, top: `${appleSpit.y}px` }}
+                />
+              ) : null}
               <button
                 type="button"
                 className={`send${showWorking ? " send--working" : " send--idle"}${
                   snackAlive && !showWorking ? " send--morph-out" : ""
                 }${showStuffed ? " send--stuffed" : ""}${
-                  snakeYawn ? " send-snake-yawn" : ""
-                }${snakeEyesAway ? " send-eyes-away" : ""}`}
+                  snakeEyesAway ? " send-eyes-away" : ""
+                }`}
                 onPointerDown={(e) => {
                   if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
                   // Keep composer focused so iOS doesn't drop the tap; click may not follow.
@@ -4617,8 +4620,6 @@ export default function App() {
                     <SendSnake face={sendHeadFace} />
                   </span>
                 </span>
-                {appleSpit ? <span className="send-spit-apple" aria-hidden="true" /> : null}
-                {appleSpit ? <span className="send-spit-apple" aria-hidden="true" /> : null}
                 <span className="send-face send-face--snack" aria-hidden="true">
                   {(showWorking || snackAlive) && (
                     <span className="send-snack">
