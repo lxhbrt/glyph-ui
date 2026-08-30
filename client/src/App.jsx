@@ -1941,7 +1941,18 @@ export default function App() {
   }, []);
   runVaultSearchRef.current = runVaultSearch;
 
+  runVaultSearchRef.current = runVaultSearch;
+
+  // Glyph-Momente: Apfel-Flug-Trigger (Ref, weil send() früher definiert ist als flyAppleTo)
+  const flyAppleRef = useRef(null);
+
   const send = useCallback(() => {
+    // Apfel fliegt beim echten Senden vom Composer zum Send-Kopf.
+    const composerEl = document.querySelector(".composer textarea, .composer [contenteditable='true']");
+    if (composerEl && typeof flyAppleRef.current === "function") {
+      const r = composerEl.getBoundingClientRect();
+      flyAppleRef.current(r.left + r.width / 2 - 6, r.top + r.height / 2 - 6);
+    }
     const text = input.trim();
     if (attachBusy) return;
     if (text && isUiReloadSlash(text)) {
@@ -3283,6 +3294,59 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showWorking, snackAlive]);
 
+  // Glyph-Momente (2026-08-30): Prompt-Apfel fliegt beim Senden zum Kopf.
+  const [appleFly, setAppleFly] = useState(null); // {x, y} Endpoint-Offset (dx,dy)
+  const flyAppleTo = useCallback((fromX, fromY) => {
+    const sendRect = document.querySelector("button.send")?.getBoundingClientRect();
+    if (!sendRect) return;
+    const dx = sendRect.left + sendRect.width / 2 - (fromX + 6);
+    const dy = sendRect.top + sendRect.height / 2 - (fromY + 6);
+    setAppleFly({ x: dx, y: dy, startX: fromX, startY: fromY });
+    setTimeout(() => setAppleFly(null), 600);
+  }, []);
+  flyAppleRef.current = flyAppleTo;
+
+  // Ausspucken: Nach dem Working (Apfel hüpft vom Kopf in den Chat) — nur wenn
+  // VORHER wirklich gearbeitet wurde (nicht beim Mount).
+  const [appleSpit, setAppleSpit] = useState(false);
+  const wasWorkingRef = useRef(false);
+  useEffect(() => {
+    if (showWorking) {
+      wasWorkingRef.current = true;
+      return undefined;
+    }
+    if (!wasWorkingRef.current) return undefined;
+    wasWorkingRef.current = false;
+    setAppleSpit(true);
+    const t = setTimeout(() => setAppleSpit(false), 950);
+    return () => clearTimeout(t);
+  }, [showWorking]);
+
+  // Gähnen: Working > 20s → Snake gähnt alle ~8s.
+  const [snakeYawn, setSnakeYawn] = useState(false);
+  useEffect(() => {
+    if (!showWorking) {
+      setSnakeYawn(false);
+      return undefined;
+    }
+    const t = setTimeout(() => setSnakeYawn(true), 20000);
+    return () => clearTimeout(t);
+  }, [showWorking]);
+
+  // Fehler: Augen weg — App.setError kennt der Snake nicht, also über error-State.
+  const errorSeenRef = useRef("");
+  const [snakeEyesAway, setSnakeEyesAway] = useState(false);
+  useEffect(() => {
+    if (error && error !== errorSeenRef.current && !showWorking) {
+      errorSeenRef.current = error;
+      setSnakeEyesAway(true);
+      const t = setTimeout(() => setSnakeEyesAway(false), 1600);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [error, showWorking]);
+
+
   if (webSurface && !webUnlocked) {
     return (
       <WebGate
@@ -3961,6 +4025,18 @@ export default function App() {
         </div>
 
         <footer className="composer composer--grok">
+          {appleFly ? (
+            <span
+              className="apple-fly"
+              aria-hidden="true"
+              style={{
+                left: appleFly.startX ?? 0,
+                top: appleFly.startY ?? 0,
+                "--apple-fly-x": `${appleFly.x}px`,
+                "--apple-fly-y": `${appleFly.y}px`,
+              }}
+            />
+          ) : null}
           {activeTask &&
           (agent?.id === "_code" || agent?.id === "code" || activeTask.grant_id === "demo") ? (
             <ActiveTaskBar
@@ -4462,7 +4538,9 @@ export default function App() {
                 type="button"
                 className={`send${showWorking ? " send--working" : " send--idle"}${
                   snackAlive && !showWorking ? " send--morph-out" : ""
-                }${showStuffed ? " send--stuffed" : ""}`}
+                }${showStuffed ? " send--stuffed" : ""}${
+                  snakeYawn ? " send-snake-yawn" : ""
+                }${snakeEyesAway ? " send-eyes-away" : ""}`}
                 onPointerDown={(e) => {
                   if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
                   // Keep composer focused so iOS doesn't drop the tap; click may not follow.
@@ -4539,6 +4617,8 @@ export default function App() {
                     <SendSnake face={sendHeadFace} />
                   </span>
                 </span>
+                {appleSpit ? <span className="send-spit-apple" aria-hidden="true" /> : null}
+                {appleSpit ? <span className="send-spit-apple" aria-hidden="true" /> : null}
                 <span className="send-face send-face--snack" aria-hidden="true">
                   {(showWorking || snackAlive) && (
                     <span className="send-snack">
