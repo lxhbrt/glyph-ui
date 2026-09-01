@@ -3519,8 +3519,8 @@ export default function App() {
                   type="button"
                   className="pill pill-btn pill-btn--icon"
                   onClick={() => setShowExtensions(true)}
-                  title="Befehle & Skills (⌘/Ctrl+K)"
-                  aria-label="Befehle und Skills"
+                  title="Befehle & Skills"
+                  aria-label="Befehle & Skills"
                 >
                   <IconCommands size={18} />
                 </button>
@@ -3528,8 +3528,8 @@ export default function App() {
                   type="button"
                   className="pill pill-btn pill-btn--icon"
                   onClick={toggleTheme}
-                  title={theme === "dark" ? "Theme: Hell" : "Theme: Dunkel"}
-                  aria-label="Theme umschalten"
+                  title="Theme"
+                  aria-label="Theme"
                 >
                   <IconTheme size={18} />
                 </button>
@@ -3537,8 +3537,8 @@ export default function App() {
                   type="button"
                   className="pill pill-btn pill-btn--icon"
                   onClick={() => setWebPasswordOpen(true)}
-                  title="Passwort ändern"
-                  aria-label="Passwort ändern"
+                  title="Passwort"
+                  aria-label="Passwort"
                 >
                   <IconLock size={18} />
                 </button>
@@ -3547,7 +3547,7 @@ export default function App() {
                     type="button"
                     className="pill pill-btn pill-btn--icon"
                     onClick={() => hardReloadUi()}
-                    title="UI neu laden (statt ⌘⇧R)"
+                    title="UI neu laden"
                     aria-label="UI neu laden"
                   >
                     <IconRefresh size={18} />
