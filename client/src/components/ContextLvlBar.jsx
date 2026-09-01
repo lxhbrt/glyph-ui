@@ -83,8 +83,12 @@ export function ContextLvlBar({
   });
 
   const pct = Math.round(Math.min(1, Math.max(0, contextFill)) * 100);
-  /* Compact on-bar label; full used/window lives in title/aria tooltip only */
+  /* Compact on-bar value; LVL tag stays separate. Hover gets a short German hint. */
   const label = `${estimated ? "~" : ""}${pct}%`;
+  const shortHint =
+    pct <= 0
+      ? "LVL — Kontext noch leer. Tippen für Legende."
+      : `LVL ${estimated ? "~" : ""}${pct}% Kontext belegt. Tippen für Legende.`;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -245,9 +249,9 @@ export function ContextLvlBar({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={pct}
-      aria-valuetext={tooltip}
+      aria-valuetext={`${shortHint} ${tooltip}`}
       aria-expanded={open}
-      title={tooltip}
+      title={`${shortHint} · ${tooltip}`}
       onClick={toggleOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {

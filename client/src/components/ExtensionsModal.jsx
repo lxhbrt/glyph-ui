@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { rankCatalog, slashItemLabel, withUiReloadCommand } from "../utils/slash.js";
+import { rankCatalog, slashItemLabel, withoutHiddenAgentCommands } from "../utils/slash.js";
 
 /**
  * @param {object} props
@@ -47,13 +47,13 @@ function ExtensionsModal({
 
   const commandItems = useMemo(
     () =>
-      withUiReloadCommand(
+      withoutHiddenAgentCommands(
         (agentCommands || []).map((c) => ({
           ...c,
           kind: c.kind === "ui" ? "ui" : "command",
           name: String(c.name || "").replace(/^\//, ""),
         })),
-      ),
+      ).filter((c) => c.kind !== "ui" && c.action !== "reload"),
     [agentCommands],
   );
 
