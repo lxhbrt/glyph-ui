@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { rankCatalog } from "../utils/slash.js";
+import { rankCatalog, slashItemLabel, withUiReloadCommand } from "../utils/slash.js";
 
 /**
  * @param {object} props
@@ -47,11 +47,13 @@ function ExtensionsModal({
 
   const commandItems = useMemo(
     () =>
-      (agentCommands || []).map((c) => ({
-        ...c,
-        kind: "command",
-        name: String(c.name || "").replace(/^\//, ""),
-      })),
+      withUiReloadCommand(
+        (agentCommands || []).map((c) => ({
+          ...c,
+          kind: c.kind === "ui" ? "ui" : "command",
+          name: String(c.name || "").replace(/^\//, ""),
+        })),
+      ),
     [agentCommands],
   );
 
@@ -129,7 +131,8 @@ function ExtensionsModal({
             <h2>Befehle &amp; Skills</h2>
             <p className="overview-meta">
               {profileLabel ? `Profil: ${profileLabel} · ` : ""}
-              Auswahl fügt den Befehl in den Composer ein — sendet nicht.
+              Ausführbare Liste (Skills + Agent-Commands). Auswahl fügt{" "}
+              <code>/name</code> in den Composer ein — sendet nicht.
             </p>
           </div>
           <div className="overview-head-actions">
@@ -139,14 +142,20 @@ function ExtensionsModal({
           </div>
         </header>
 
+        <p className="overview-hint">
+          Hier: filtern und auswählen. Slash <code>/</code> im Composer öffnet dasselbe
+          (Popup). UI-Bedienung (Lupe, Queue, …) steht im <strong>Buch → Legende</strong>,
+          nicht hier.
+        </p>
+
         <input
           ref={searchRef}
           className="overview-search"
           type="search"
-          placeholder="Filtern…"
+          placeholder="Skills und Agent-Commands filtern…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          aria-label="Befehle filtern"
+          aria-label="Befehle und Skills filtern"
         />
 
         {error ? <p className="overview-hint overview-hint--error">{error}</p> : null}
@@ -183,9 +192,9 @@ function ExtensionsModal({
                 >
                   <div className="session-main">
                     <div className="extensions-row-title">
-                      <code>/{item.name}</code>
+                      <code>{slashItemLabel(item)}</code>
                       <span className={`slash-badge slash-badge--${item.kind}`}>
-                        {item.kind === "skill" ? "Skill" : "Agent"}
+                        {item.kind === "skill" ? "Skill" : item.kind === "ui" ? "UI" : "Agent"}
                       </span>
                       {item.source ? (
                         <span className="extensions-source">{item.source}</span>

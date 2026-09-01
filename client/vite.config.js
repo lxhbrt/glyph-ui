@@ -22,6 +22,8 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    allowedHosts: true,
+    fs: { allow: [path.join(__dirname, "..")] },
     proxy: {
       "/ws": {
         target: "ws://127.0.0.1:5174",
@@ -35,5 +37,20 @@ export default defineConfig({
   build: {
     outDir: path.join(__dirname, "dist"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (
+            id.includes("/react-dom/") ||
+            id.includes("/react/") ||
+            id.includes("/scheduler/")
+          ) {
+            return "react";
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

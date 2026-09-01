@@ -5,13 +5,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  catalogNameKey,
   findSlashHighlightRanges,
   fuzzyScore,
   highlightSlashSegments,
   insertSlashCommand,
+  isUiReloadItem,
+  isUiReloadSlash,
   isValidSlashCommand,
   rankCatalog,
+  slashItemLabel,
   slashTokenAt,
+  withUiReloadCommand,
 } from "../../client/src/utils/slash.js";
 
 describe("slashTokenAt", () => {
@@ -108,5 +113,31 @@ describe("isValidSlashCommand / highlight", () => {
     assert.equal(segs[0].text, "/compact");
     assert.equal(segs[1].highlight, false);
     assert.match(segs[1].text, /keep/);
+  });
+});
+
+describe("UI neu laden catalog", () => {
+  it("replaces quit/exit with UI neu laden and no slash label", () => {
+    const catalog = withUiReloadCommand([
+      { name: "quit", description: "Exit", kind: "command" },
+      { name: "compact", description: "Compress", kind: "command" },
+    ]);
+    assert.equal(catalog.some((c) => catalogNameKey(c.name) === "quit"), false);
+    assert.equal(catalog.some((c) => catalogNameKey(c.name) === "exit"), false);
+    const reload = catalog.find(isUiReloadItem);
+    assert.ok(reload);
+    assert.equal(reload.name, "UI neu laden");
+    assert.equal(slashItemLabel(reload), "UI neu laden");
+    assert.notEqual(slashItemLabel(reload)[0], "/");
+    assert.equal(slashItemLabel({ name: "compact", kind: "command" }), "/compact");
+  });
+
+  it("ranks alias quit onto UI neu laden", () => {
+    const ranked = rankCatalog([], withUiReloadCommand([]), "quit");
+    assert.equal(ranked[0].name, "UI neu laden");
+    assert.equal(isValidSlashCommand("quit", [], withUiReloadCommand([])), true);
+    assert.equal(isUiReloadSlash("/quit"), true);
+    assert.equal(isUiReloadSlash("/exit"), true);
+    assert.equal(isUiReloadSlash("/compact"), false);
   });
 });

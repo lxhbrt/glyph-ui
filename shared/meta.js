@@ -1,5 +1,6 @@
 /**
  * Shared Glyph version + build metadata (package.json + git commit count).
+ * Visible mark: 90 → #0.9.0.
  * Used by the bridge at startup and by Vite at client build/dev time.
  *
  * Copyright (c) 2026 Alexander Hubert
@@ -10,6 +11,8 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+export { formatBuildMark, glyphBuildLabel } from "./buildMark.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
