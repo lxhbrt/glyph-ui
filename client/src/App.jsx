@@ -1990,14 +1990,18 @@ export default function App() {
   // Glyph-Momente: Apfel-Flug-Trigger (Ref, weil send() früher definiert ist als flyAppleTo)
   const flyAppleRef = useRef(null);
 
-  const send = useCallback(() => {
+  const send = useCallback((explicitText) => {
     // Apfel fliegt beim echten Senden vom Composer zum Send-Kopf.
     const composerEl = document.querySelector(".composer textarea, .composer [contenteditable='true']");
     if (composerEl && typeof flyAppleRef.current === "function") {
       const r = composerEl.getBoundingClientRect();
       flyAppleRef.current(r.left + r.width / 2 - 6, r.top + r.height / 2 - 6);
     }
-    const text = input.trim();
+    // Optional explicit text avoids stale closure when callers setInput then send
+    // in the same tick (e.g. empty-state starter chips).
+    const text = (
+      typeof explicitText === "string" ? explicitText : input
+    ).trim();
     if (attachBusy) return;
     if (text && isUiReloadSlash(text)) {
       hardReloadUi();
@@ -3872,17 +3876,35 @@ export default function App() {
                       type="button"
                       className="empty-starter-chip"
                       onClick={() => {
-                        setInput("Erklär das kurz und klar: ");
-                        requestAnimationFrame(() => {
-                          const ta = composerRef.current;
-                          if (!ta) return;
-                          ta.focus();
-                          const n = ta.value.length;
-                          ta.setSelectionRange(n, n);
-                        });
+                        // One-click send: pass text into send() — setInput+send would be stale.
+                        const prompt =
+                          "Was ist Glyph? Erklär kurz und klar auf Nutzerebene: Web-Fläche glyph-ui.com (°_Agent) und dass der Schreibtisch auf dem Mac bleibt. Keine Ports, Pfade, Auth- oder Technik-Internals.";
+                        send(prompt);
                       }}
                     >
                       Kurz erklären
+                    </button>
+                    <button
+                      type="button"
+                      className="empty-starter-chip"
+                      onClick={() => {
+                        const prompt =
+                          "Erklär die Chat-Modi Deep Search, Fork und Swarm auf Nutzerebene für die aktuelle Nutzung auf glyph-ui.com / °_Agent: Warum Deep Search hier ausgegraut bzw. nur im grok-Profil ist; dass °_Agent anders recherchiert (normale Chat-Recherche/Web); wann Fork sinnvoll ist; dass Swarm bei °_Agent nutzbar ist (bei grok ausgegraut). Nutze Wiki-Konzepte falls vorhanden. Keine Ports, Pfade, Auth- oder Technik-Internals.";
+                        send(prompt);
+                      }}
+                    >
+                      Chat-Modi
+                    </button>
+                    <button
+                      type="button"
+                      className="empty-starter-chip"
+                      onClick={() => {
+                        const prompt =
+                          "Erklär Apfel und Skills/Befehle auf Nutzerebene: Apfel über dem Senden-Kopf bei °_Agent — aus = allgemeine Suche/Web, an = nächste Frage sucht im Arbeits-Ordner/Vault, Treffer in der Leiste zum Anklicken (nicht automatisch alles in den Kontext), Wiki läuft ohnehin mit; höchstens Fachquellen wenn Ordner leer. Skills & Befehle: Menü „Befehle und Skills“ / Slash /, Auswahl fügt /name in den Composer (sendet nicht allein); Buch → Legende erklärt UI. Nutze Wiki-Konzepte falls vorhanden. Keine Ports, Pfade, Auth-, Endpoint- oder Technik-Internals.";
+                        send(prompt);
+                      }}
+                    >
+                      Apfel & Skills
                     </button>
                   </div>
                 </div>
