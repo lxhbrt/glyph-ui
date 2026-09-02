@@ -3884,6 +3884,28 @@ export default function App() {
                     >
                       Kurz erklären
                     </button>
+                    <button
+                      type="button"
+                      className="empty-starter-chip"
+                      onClick={() => {
+                        const prompt =
+                          "Erklär die Chat-Modi Deep Search, Fork und Swarm auf Nutzerebene für die aktuelle Nutzung auf glyph-ui.com / °_Agent: Warum Deep Search hier ausgegraut bzw. nur im grok-Profil ist; dass °_Agent anders recherchiert (normale Chat-Recherche/Web); wann Fork sinnvoll ist; dass Swarm bei °_Agent nutzbar ist (bei grok ausgegraut). Nutze Wiki-Konzepte falls vorhanden. Keine Ports, Pfade, Auth- oder Technik-Internals.";
+                        send(prompt);
+                      }}
+                    >
+                      Chat-Modi
+                    </button>
+                    <button
+                      type="button"
+                      className="empty-starter-chip"
+                      onClick={() => {
+                        const prompt =
+                          "Erklär Apfel und Skills/Befehle auf Nutzerebene: Apfel über dem Senden-Kopf bei °_Agent — aus = allgemeine Suche/Web, an = nächste Frage sucht im Arbeits-Ordner/Vault, Treffer in der Leiste zum Anklicken (nicht automatisch alles in den Kontext), Wiki läuft ohnehin mit; höchstens Fachquellen wenn Ordner leer. Skills & Befehle: Menü „Befehle und Skills“ / Slash /, Auswahl fügt /name in den Composer (sendet nicht allein); Buch → Legende erklärt UI. Nutze Wiki-Konzepte falls vorhanden. Keine Ports, Pfade, Auth-, Endpoint- oder Technik-Internals.";
+                        send(prompt);
+                      }}
+                    >
+                      Apfel & Skills
+                    </button>
                   </div>
                 </div>
               ) : (
