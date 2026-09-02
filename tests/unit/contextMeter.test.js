@@ -33,6 +33,20 @@ describe("resolveContextWindow", () => {
     );
   });
 
+  it("maps deepseek-v4-flash-vision-exp to 1M on Agent and Code", () => {
+    const agent = resolveContextWindow(
+      "deepseek-v4-flash-vision-exp",
+      "glyph-agent",
+    );
+    assert.equal(agent.window, 1_000_000);
+    assert.equal(agent.source, "map");
+    assert.equal(agent.matchedKey, "deepseek-v4-flash-vision-exp");
+    assert.equal(
+      resolveContextWindow("deepseek-v4-flash-vision-exp", "_code").window,
+      1_000_000,
+    );
+  });
+
   it("maps deepseek-reasoner to 1M", () => {
     assert.equal(
       resolveContextWindow("deepseek-reasoner", "glyph-agent").window,

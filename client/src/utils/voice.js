@@ -38,4 +38,29 @@ function textForSpeech(raw) {
   return t.trim();
 }
 
-export { pickRecorderMime, textForSpeech };
+/**
+ * Browser-TTS (Web Speech API) — letzter Fallback, wenn der Server kein
+ * Audio liefern kann. Gibt true zurück, wenn das Sprechen startete.
+ * Kriterien: speechSynthesis vorhanden + mindestens eine Stimme.
+ */
+function speakWithBrowser(text, onEnd) {
+  try {
+    if (typeof window === "undefined" || !window.speechSynthesis) return false;
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "de-DE";
+    u.rate = 1.0;
+    const voices = synth.getVoices() || [];
+    const de = voices.find((v) => (v.lang || "").toLowerCase().startsWith("de"));
+    if (de) u.voice = de;
+    u.onend = () => onEnd?.();
+    u.onerror = () => onEnd();
+    synth.speak(u);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export { pickRecorderMime, textForSpeech, speakWithBrowser };

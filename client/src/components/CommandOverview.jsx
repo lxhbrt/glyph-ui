@@ -4,9 +4,16 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatWhen } from "../utils/format.js";
-import { SummarizeDialog } from "./SummarizeDialog.jsx";
+import { seatFetch } from "../utils/seat.js";
+import { SideDrawer } from "./SideDrawer.jsx";
 
-function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, profile = "grok" }) {
+function CommandOverview({
+  open,
+  onClose,
+  onOpenSession,
+  side = "right",
+  mode = "overlay",
+}) {
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
@@ -15,8 +22,10 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
   const [closingId, setClosingId] = useState(null);
   const [lastResult, setLastResult] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
-  /** Aktive Session, deren Zusammenfassungs-Dialog geöffnet ist. */
-  const [summaryTarget, setSummaryTarget] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const renameRef = useRef(null);
   /** Cursor in the list — NOT the live agent session. */
   const [selectedIndex, setSelectedIndex] = useState(0);
   const panelRef = useRef(null);
@@ -28,7 +37,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/sessions");
+      const res = await seatFetch("/api/sessions");
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Laden fehlgeschlagen");
       setData(json);
@@ -43,6 +52,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
     if (open) {
       setLastResult(null);
       setConfirmId(null);
+      setRenamingId(null);
       setSelectedIndex(0);
       void load();
       // Lupe opens sessions + search together — focus filter field
@@ -79,12 +89,12 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
   }, [selectedIndex, filtered]);
 
   const closeSession = useCallback(
-    async (id, { writeWiki = true, deleteDisk = true } = {}) => {
+    async (id, { writeWiki = false, deleteDisk = true } = {}) => {
       setClosingId(id);
       setError("");
       setLastResult(null);
       try {
-        const res = await fetch(`/api/sessions/${id}/close`, {
+        const res = await seatFetch(`/api/sessions/${id}/close`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ writeWiki, deleteDisk }),
@@ -109,7 +119,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
       setOpening(true);
       setError("");
       try {
-        const res = await fetch(`/api/sessions/${id}/open`, { method: "POST" });
+        const res = await seatFetch(`/api/sessions/${id}/open`, { method: "POST" });
         const json = await res.json();
         if (!res.ok) {
           throw new Error(json.error || "Session konnte nicht geladen werden");
@@ -125,6 +135,41 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
     [opening, onOpenSession, onClose],
   );
 
+  const saveRename = useCallback(
+    async (id, title) => {
+      const t = String(title || "").trim();
+      if (!id || !t) {
+        setRenamingId(null);
+        return;
+      }
+      setRenameBusy(true);
+      setError("");
+      try {
+        const res = await seatFetch(`/api/sessions/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: t }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Umbenennen fehlgeschlagen");
+        setRenamingId(null);
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setRenameBusy(false);
+      }
+    },
+    [load],
+  );
+
+  const startRename = useCallback((s) => {
+    if (!s) return;
+    setRenamingId(s.id);
+    setRenameValue(s.title || "");
+    requestAnimationFrame(() => renameRef.current?.select());
+  }, []);
+
   const openSelected = useCallback(async () => {
     const s = filtered[selectedIndex];
     if (!s) return;
@@ -136,6 +181,17 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
       // Don't steal keys while typing in search or confirming close buttons
       const tag = e.target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") {
+        if (e.target?.dataset?.rename === "1") {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void saveRename(renamingId, renameValue);
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setRenamingId(null);
+          }
+          return;
+        }
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
           // leave search and navigate list
           e.preventDefault();
@@ -166,59 +222,63 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
       } else if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         void openSelected();
-      } else if (e.key === "Escape") {
+      } else if (e.key === "r" || e.key === "R") {
         e.preventDefault();
-        if (confirmId) setConfirmId(null);
-        else onClose();
+        const s = filtered[selectedIndex];
+        if (s) startRename(s);
+      } else if (e.key === "Escape") {
+        if (confirmId) {
+          e.preventDefault();
+          setConfirmId(null);
+        }
+        /* else: SideDrawer closes on Esc */
       }
     },
-    [filtered.length, openSelected, onClose, confirmId],
+    [
+      filtered,
+      openSelected,
+      onClose,
+      confirmId,
+      renamingId,
+      renameValue,
+      saveRename,
+      startRename,
+      selectedIndex,
+    ],
   );
 
-  if (!open) return null;
+  const metaNode = data
+    ? `${data.count} on record · ${data.totalLabel} lokal`
+    : "…";
 
   return (
-    <div className="overview-scrim" role="presentation" onClick={onClose}>
-      <section
-        ref={panelRef}
-        className="overview-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command Overview"
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={onPanelKeyDown}
-      >
-        <header className="overview-head">
-          <div>
-            <p className="overview-kicker">Suche &amp; Sessions</p>
-            <h2>Sessions</h2>
-            <p className="overview-meta">
-              {data
-                ? `${data.count} on record · ${data.totalLabel} lokal`
-                : "…"}
-              {data?.wikiRoot ? (
-                <>
-                  <br />
-                  <span className="muted-path">Wiki → sources/grok-sessions</span>
-                </>
-              ) : null}
-            </p>
-          </div>
-          <div className="overview-head-actions">
-            <button type="button" onClick={() => void load()} disabled={loading}>
-              {loading ? "…" : "Aktualisieren"}
-            </button>
-            <button type="button" className="ghost" onClick={onClose}>
-              Schließen
-            </button>
-          </div>
-        </header>
-
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      kicker="Suche & Sessions"
+      title="Sessions"
+      meta={metaNode}
+      className="app-drawer--search"
+      ariaLabel="Suche und Sessions"
+      initialFocusRef={searchRef}
+      side={side}
+      mode={mode}
+      headExtra={
+        <button type="button" onClick={() => void load()} disabled={loading}>
+          {loading ? "…" : "Aktualisieren"}
+        </button>
+      }
+    >
+        <div
+          ref={panelRef}
+          className="app-drawer-search-inner"
+          tabIndex={-1}
+          onKeyDown={onPanelKeyDown}
+        >
         <p className="overview-hint">
           <strong>Auswählen:</strong> Klick oder ↑↓ — Markierung (nicht „aktiv“).{" "}
           <strong>Laden:</strong> Enter oder Doppelklick (Verlauf öffnen).{" "}
-          <strong>Schließen:</strong> Ja + Wiki · Löschen (/delete) · Abbrechen.
+          <strong>Name:</strong> r · <strong>Schließen:</strong> Session-Ordner löschen · Abbrechen. Wissen: <code>/merken</code>.
           Disk: <code>~/.grok/sessions</code>.
         </p>
 
@@ -240,11 +300,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
         ) : null}
         {lastResult ? (
           <div className="banner ok-banner">
-            {lastResult.wikiWritten
-              ? "Ja + Wiki: "
-              : lastResult.diskDeleted
-                ? "Gelöscht (/delete): "
-                : "Geschlossen: "}
+            Geschlossen:{" "}
             {lastResult.session?.title || lastResult.session?.id}
             {lastResult.freedLabel ? ` · freigegeben ${lastResult.freedLabel}` : ""}
             {lastResult.wikiPath ? (
@@ -299,7 +355,21 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                 >
                   <div className="session-main">
                     <div className="session-title-row">
-                      <strong>{s.title}</strong>
+                      {renamingId === s.id ? (
+                        <input
+                          ref={renameRef}
+                          className="session-rename"
+                          data-rename="1"
+                          value={renameValue}
+                          disabled={renameBusy}
+                          maxLength={120}
+                          aria-label="Session-Titel"
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <strong>{s.title}</strong>
+                      )}
                       {isActive ? <span className="tag">aktiv</span> : null}
                       {isSelected && !isActive ? (
                         <span className="tag muted">markiert</span>
@@ -327,23 +397,9 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                       <>
                         <button
                           type="button"
-                          className="primary"
-                          disabled={closingId === s.id || isActive || opening}
-                          title="Zusammenfassen → Wiki → dann Session-Ordner löschen"
-                          onClick={() =>
-                            void closeSession(s.id, {
-                              writeWiki: true,
-                              deleteDisk: true,
-                            })
-                          }
-                        >
-                          {closingId === s.id ? "…" : "Ja + Wiki"}
-                        </button>
-                        <button
-                          type="button"
                           className="danger"
                           disabled={closingId === s.id || isActive || opening}
-                          title="TUI /delete — Session-Historie endgültig löschen (ohne Wiki)"
+                          title="Session-Ordner auf Disk löschen. Wissen: /merken"
                           onClick={() =>
                             void closeSession(s.id, {
                               writeWiki: false,
@@ -351,7 +407,7 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                             })
                           }
                         >
-                          {closingId === s.id ? "…" : "Löschen"}
+                          {closingId === s.id ? "…" : "Schließen"}
                         </button>
                         <button
                           type="button"
@@ -364,6 +420,26 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                       </>
                     ) : (
                       <>
+                        {renamingId === s.id ? (
+                          <>
+                            <button
+                              type="button"
+                              className="primary"
+                              disabled={renameBusy || !renameValue.trim()}
+                              onClick={() => void saveRename(s.id, renameValue)}
+                            >
+                              {renameBusy ? "…" : "Speichern"}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost"
+                              disabled={renameBusy}
+                              onClick={() => setRenamingId(null)}
+                            >
+                              Abbrechen
+                            </button>
+                          </>
+                        ) : (
                         <button
                           type="button"
                           className="primary"
@@ -376,34 +452,36 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
                         >
                           Öffnen
                         </button>
-                        {canSummarize && (
-                          <button
-                            type="button"
-                            disabled={opening || isActive || s.empty || !s.chatMessages}
-                            title={
-                              s.empty || !s.chatMessages
-                                ? "Session ohne Nachrichten — Zusammenfassung nicht möglich"
-                                : isActive
-                                  ? "Aktive Session geschützt — erst Stift (Neuer Chat)"
-                                  : "Session zusammenfassen (Vorschau → Bestätigen)"
-                            }
-                            onClick={() => setSummaryTarget({ id: s.id, title: s.title || "Session" })}
-                          >
-                            Zusammenfassen
-                          </button>
                         )}
+                        {renamingId === s.id ? null : (
+                        <button
+                          type="button"
+                          disabled={opening || renameBusy}
+                          title="Titel setzen (r) — TUI /rename"
+                          onClick={() => {
+                            setSelectedIndex(index);
+                            startRename(s);
+                          }}
+                        >
+                          Name
+                        </button>
+                        )}
+                        {renamingId === s.id ? null : (
+                          <>
                         <button
                           type="button"
                           disabled={closingId === s.id || isActive || opening}
                           title={
                             isActive
                               ? "Aktive Chat-Session geschützt — zuerst Stift (Neuer Chat /new)"
-                              : "Ja + Wiki · Löschen (/delete) · Abbrechen"
+                              : "Session-Ordner löschen · Abbrechen. Wissen: /merken"
                           }
                           onClick={() => setConfirmId(s.id)}
                         >
                           Schließen
                         </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -412,18 +490,8 @@ function CommandOverview({ open, onClose, onOpenSession, canSummarize = false, p
             })
           )}
         </div>
-      </section>
-
-      {summaryTarget && (
-        <SummarizeDialog
-          sessionId={summaryTarget.id}
-          sessionTitle={summaryTarget.title}
-          profile={profile}
-          onClose={() => setSummaryTarget(null)}
-          onSaved={() => void load()}
-        />
-      )}
-    </div>
+        </div>
+    </SideDrawer>
   );
 }
 

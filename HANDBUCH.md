@@ -5,7 +5,7 @@
 deiner Wahl (Standard: **grok**).
 
 **Entwicklung:** Glyph startete als reine Grok-Oberfläche („Build Term for Grok“) und hat sich
-zu einer **offenen Multi-Agenten-UI** entwickelt (grok · claude · glyph-agent).
+zu einer **offenen Multi-Agenten-UI** entwickelt (grok · ^_Code · °_Agent).
 Daher nennen manche Kapitel noch „Grok“ — die Bedienung gilt aber für **alle** Profile gleich;
 wo ein Bereich nur für ein bestimmtes Profil gilt (z. B. Voice = nur grok), ist es markiert.
 
@@ -14,16 +14,16 @@ wo ein Bereich nur für ein bestimmtes Profil gilt (z. B. Voice = nur grok), ist
 
 ```
 Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►  Agent-Profil
-                                                              (grok | claude | glyph-agent)
+                                                              (grok | ^_Code | °_Agent)
 ```
 
 ### Agent-Profile im Überblick
 
 | Profil | Typ | Auth | Fähigkeiten (in Glyph) |
 |--------|-----|------|-------------------------|
-| **grok** (Standard) | Cloud | OAuth | Sessions ✅ · Deep Search ✅ · Aktivität ✅ · Voice ✅ |
-| **claude** | Cloud | OAuth | Chat (Sessions liegen unter `~/.claude/projects`, nicht in Glyph gelistet) |
-| **glyph-agent** | Lokal + Cloud-Antwort | — | VaultFind, Web-Recherche, Cloud-Antwort (Engine); Trace/Steps in der UI |
+| **grok** (Standard) | Cloud | OAuth | Sessions ✅ · Deep Search ✅ · Swarm ✗ · Aktivität ✅ · Voice ✅ |
+| **^_Code** | Lokal + Cloud (Direct Vision-Exp) | Direct + OpenRouter-Reserve | Read/Write/Shell mit Freigabe (Einmal / Auftrag / Task) · Swarm ✅ |
+| **°_Agent** (id `glyph-agent`) | Lokal + Cloud-Antwort | — | VaultFind, Web-Recherche, Cloud-Antwort (Engine); Swarm ✅; Deep Search ✗ |
 
 > 📊 Grafische Abläufe (warum + wie jedes Profil): `docs/glyph-profile-diagrams.html`
 > · Volltext der Bedienung unten; die Kapitel dieses Handbuchs gelten profilunabhängig,
@@ -33,16 +33,59 @@ Browser (React)  ──WebSocket──►  Node-Bridge  ──stdio ACP──►
 
 ## 1. Voraussetzungen & Start
 
+### Was Glyph ist (und nicht ist)
+
+**Glyph ist keine KI.** Es ist eine Browser-Hülle (ACP-Client) für Agenten, die du selbst mitbringst:
+Grok (OAuth/CLI), **^_Code** und **°_Agent** (lokale Engine + Keys). Chat, Streaming und Tools
+laufen in Glyph — die „Intelligenz“ steckt im gewählten Agenten.
+
+Für Power-User mit lokalem Zugriff auf eigene Dateien (z. B. Mac Mini). Kein Cloud-Hosting von Glyph.
+
+In der App: **Buch** → Tabs **Handbuch** · **Befehle** · **Anbindung** (kein extra Leisten-Icon).
+
+**Seitenpanel:** Befehle & Skills, Plan & Aktivität, Buch, Suche & Sessions — Desk links an der Rail, Web Overlay rechts; Chat-Breite bleibt. **Graph** = Vollfläche (Ausnahme). `/` im Composer öffnet dasselbe Skills-Panel. Nur ein Inhalts-Panel zugleich.
+
 ### Brauchst du
 
-- **Node.js 22+**
+- **Node.js 22+** (Mac, Windows, Linux)
 - Mindestens **ein** Agent-Profil (Standard `grok` unten). Weitere Profile sind optional.
 
 | Profil | Voraussetzung |
 |--------|---------------|
 | **grok** (Default) | `grok` im PATH + eingeloggt (`grok login` / `~/.grok/auth.json`) |
-| **claude** | `claude` CLI mit OAuth-Login (`~/.claude`); ACP-Adapter via `npx` (auto) oder global `npm i -g @agentclientprotocol/claude-agent-acp` |
-| **glyph-agent** | Lokaler Dienst `server.py` auf `127.0.0.1:18899` (`~/glyph-agent`) |
+| **^_Code** | `OPENROUTER_API_KEY` + glyph-agent-Dienst (`:18899`) |
+| **°_Agent** | Lokaler Dienst `server.py` auf `127.0.0.1:18899` (`~/glyph-agent`); OpenRouter für Cloud-Antwort |
+
+### Erster Start (Mac & Windows)
+
+```bash
+git clone https://github.com/lxhbrt/glyph-ui.git
+cd glyph-ui
+npm install
+npm run build
+npm start
+```
+
+Browser: **http://127.0.0.1:5174**
+
+1. **Buch → Anbindung**: Status der Profile, Keys speichern.
+2. **Grok:** im Terminal `grok login` (OAuth — nicht in der Maske).
+3. **^_Code / °_Agent:** OpenRouter-Key im Tab Anbindung (oder `.env`); Engine starten.
+4. Header: Profil wählen → **Kette** verbinden → chatten.
+
+**Windows:** gleich mit Node + npm. macOS-only: LaunchAgent, Dock-Icon, `Open Glyph.command` — weglassen.
+Firewall: localhost/Node erlauben, falls der Browser die UI nicht erreicht.
+
+### Anbindung (Keys & OAuth)
+
+| Was | Wo |
+|-----|-----|
+| Status Grok / Code / Agent | UI **Buch → Anbindung** |
+| `OPENROUTER_API_KEY`, `XAI_API_KEY` | Tab Anbindung speichert unter `~/.glyph-ui/bindings.json` (lokal, mode 0600) |
+| Grok OAuth | nur Terminal: `grok login` → `~/.grok/auth.json` |
+| Alternativ Keys | Repo-`.env` (siehe `.env.example`) — hat Vorrang vor leerem Store beim Start |
+
+API: `GET/PUT /api/bindings` (loopback). Rohe Secrets werden **nie** im GET zurückgegeben (nur maskiert).
 
 ### Entwicklung starten
 
@@ -76,6 +119,28 @@ npm run build
 npm start                 # UI + Bridge auf Port 5174
 ```
 
+### Remote
+
+Nach draußen nur **glyph-ui.com**. Bridge bleibt `127.0.0.1:5174`. Kein Tailscale Serve.
+
+#### glyph-ui.com (Arbeits-PC) — Web-Fläche
+
+Öffentliche Domain über Cloudflare-Tunnel. **Sitz `web`**, nur **°_Agent**, maximierter Chat. Spiegelt nicht den Schreibtisch. Grok Build und ^_Code nur auf dem Mac.
+
+| Schicht | Rolle |
+|---------|--------|
+| Glyph | `127.0.0.1:5174` |
+| Cloudflare Tunnel | `https://glyph-ui.com` → Loopback |
+| Web-Tor | Passwort vor der Fläche (`~/.glyph-ui/web-password` oder `GLYPH_WEB_PASSWORD`) |
+
+Nach dem ersten Start: einmal das generierte Passwort aus `~/.glyph-ui/web-password` (Mac). Danach in der Web-UI **Schloss → Passwort ändern**. Andere Geräte müssen sich neu anmelden. Optional zusätzlich [Cloudflare Access](https://one.dash.cloudflare.com/) (E-Mail-PIN) vor den Tunnel.
+
+Stift = neuer Chat (eigene ACP-Session auf dem Web-Sitz). Verlauf des Macs bleibt unberührt.
+
+Header (begrenzt): Stift · Befehle · Theme · Schloss · **UI neu laden**. Kein Ketten-Icon / **Beenden** — auf der Domain startet der Sitz von selbst; Tab zu = Browser, nicht Agent. Hängt die Fläche: **UI neu laden** (Anmeldung bleibt).
+
+**Nicht v1:** native iOS-App, WhatsApp-Anbindung an Glyph.
+
 ---
 
 ## 2. Oberfläche auf einen Blick
@@ -91,7 +156,7 @@ npm start                 # UI + Bridge auf Port 5174
 │ Ordn.│                    │ (Schlange / Apfel)    │
 │ ☀/🌙 │────────────────────────────────────────────│
 │ ↻    │  [WARTE-Warteschlange, falls gefüllt]      │
-│      │  Composer-Bubble · Aktionen · ↵ / Snack ○  │
+│      │  Composer-Bubble · Aktionen · Kopf / Snack ○│
 └──────┴────────────────────────────────────────────┘
 ```
 
@@ -106,7 +171,7 @@ Chat und Composer folgen der **Grok Chat App**-Ästhetik: schwarze Fläche, Prom
 | **Deine Prompts** | Rechte **Sprechblase** (Fill `--user`, abgerundet) |
 | **Thinking / Tool / System** | Transparent; System mit feinem Gold-Strich links |
 | **Composer** | Bubble-Shell (gleiche Fill-Familie wie Prompts), großer Radius, weicher Schatten |
-| **Senden ↵** | **Runder** Button |
+| **Senden (Kopf)** | **Runder** Button: Graph-Pixel Grok Build / °_Agent / ^_Code |
 | **Snack / Stopp** | Derselbe **Kreis** während der Arbeit; Stopp-Ziel = roter **Punkt** (nicht Rechteck); Arena 4×4, rund geclippt |
 | **Theme** | Hell/Dunkel; Light: hellere Bubble, Antworten weiter flach |
 
@@ -118,27 +183,30 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 
 | Symbol | Name | Funktion |
 |--------|------|----------|
-| **Lupe** | Sessions | Suche, öffnen; Schließen: Ja + Wiki · Löschen (`/delete`) |
+| **Lupe** | Sessions | Suche, öffnen; Schließen löscht den Disk-Ordner. Wissen: `/merken` |
+| **Graph** | Graph | Köpfe um Glyph; Vaults/Roots als Punkte. Direkt unter der Lupe |
 | **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
-| **Buch** (unten) | Handbuch | Kurzhandbuch ganz unten in der Leiste |
-| **4 Kästchen** | Kalender | Aktivitäts-Heatmap (wann / woran gearbeitet) |
+| **Buch** (unten) | Handbuch | Seitenpanel: Kurzhandbuch · Legende (Desk an der Rail / Web Overlay) |
+| **4 Kästchen** | Kalender | **Seitenpanel** Plan/Aktivität (Desk Rail / Web Overlay; Chat steht) · Graph = Vollfläche |
 | **Wiki (i)** | Wiki | Öffnet den Wiki-Index (`.md`) in Obsidian / Standard-App |
 | **Workspace** | Ordner | Öffnet den aktuellen Arbeitsordner (`cwd`) im Finder |
 | **Theme** | Hell/Dunkel | Darstellung umschalten |
-| **Refresh** | Neu laden | UI neu laden (Ersatz für ⌘⇧R) |
+| **UI neu laden** | Neu laden | Web-UI neu laden (Ersatz für ⌘⇧R; Session bleibt) |
 
 ---
 
 ## 4. Verbinden & Status
 
-Oben rechts:
+Oben rechts (Schreibtisch / Handy):
 
 | Anzeige | Bedeutung | Klick |
 |---------|-----------|--------|
-| **verbunden** (gold) | Agent läuft | Beenden (wie `/quit`) |
+| **verbunden** (gold) | Agent läuft | Beenden (Ketten-Icon) |
 | **offline** | kein Agent | Starten / neu verbinden |
 | **verbindet… / trennt…** | gerade umschalten | warten |
+
+**glyph-ui.com:** keine Kette. Stattdessen **UI neu laden** im Header.
 
 Ohne **verbunden** ist das Eingabefeld deaktiviert.
 
@@ -150,8 +218,9 @@ Ohne **verbunden** ist das Eingabefeld deaktiviert.
 
 1. Status **verbunden** sicherstellen.
 2. Nachricht tippen (Pfad, Fehler, Ziel — je klarer, desto besser).
-3. **Enter** senden · **Shift+Enter** = neue Zeile. Der runde Button zeigt idle **↵**, während der
-   Agent arbeitet **Snack** (Klick / leerer Enter = Stopp).
+3. **Desk:** Enter senden · Shift+Enter = neue Zeile. **Handy:** Tastatur-Enter = neue Zeile;
+   der runde **Kopf** sendet (erster Tap). Während der Agent arbeitet oder die Ordner-Suche
+   läuft: **Snack** (Klick = Stopp / Suche abbrechen).
 4. Antwort streamt live flach im Chat; dein Prompt erscheint als Bubble. Rollen: **Agent** (der
    aktive Name, z. B. Grok), **Thinking**, **Tool**, **System** (Prompts ohne „Du“-Label).
 
@@ -226,10 +295,11 @@ Markdown (Codeblöcke, Links, …) wird vor dem TTS grob bereinigt.
 
 | Zustand | Was passiert |
 |---------|----------------|
-| Idle | Button zeigt **↵** (Enter) → senden |
+| Idle | Button zeigt den **Kopf** (Grok Build / °_Agent / ^_Code) → senden |
 | Arbeitet | Snack-Animation (Schlange jagt Apfel) |
+| Ordner-Suche | Apfel: Arbeits-Vault. Wiki, TinyFish, Exa immer. Snack; Composer leer, Query in der Leiste. × oder Snack = Fetch abbrechen. Vault leer: KomNet einmal, sonst DGUV. Ohne Apfel: allgemeine Suche, Internet, soziale Netze |
 | Text + Enter während Arbeit | Nachricht landet in der **Warteschlange** |
-| Leerer Klick / Snack während Arbeit | **Soft-Stop** (ACP-Cancel). Kritische Tools können noch sauber enden |
+| Leerer Klick / Snack während Arbeit | **Soft-Stop** (ACP-Cancel bzw. Vault-Suche). Kritische Tools können noch sauber enden |
 
 ### Warteschlange (WARTE)
 
@@ -268,27 +338,48 @@ Aktive Chat-Session ist **geschützt** (nicht schließbar) — zuerst **Stift** 
 
 | Option | Wirkung | TUI-Äquivalent |
 |--------|---------|----------------|
-| **Ja + Wiki** | Transcript-Auszug → Wiki, dann Session-Ordner löschen | (UI-Erweiterung) |
-| **Löschen** | Session-Historie endgültig von Disk entfernen, ohne Wiki | **`/delete`** (bzw. `/resume` → `d` → `y`) |
+| **Schließen** | Session-Ordner von Disk entfernen. Kein Wiki-Dump. | **`/delete`** (bzw. `/resume` → `d` → `y`) |
 | **Abbrechen** | Nichts | — |
 
 **Wichtig:** Nur „archiviert“ markieren spart **keinen** Speicher. Erst das **Löschen des Session-Ordners** entlastet die Disk (Sessions können hunderte MB sein). **Stift** (`/new`) leert nur den Chat — die alte Session bleibt auf Disk, bis du sie in der Lupe schließt.
 
-### Wiki-Ziel
+### Merken
 
-Standard:
+Kein Header-Button. Slash **`/merken`** (Befehle / Skills). Der Agent zeigt die Karte, du sagst **Ja**, dann wird geschrieben.
+
+Wiki nur nach Vorlage — sonst ablehnen:
 
 ```
-~/.glyph-ui/wiki/sources/grok-sessions/
+# <Aufgabe>
+- Aufgabe: …
+- Lösung: …          (gilt ohne den Chat)
+- Datei: `pfad` oder Beleg: `Wiki-Seite`
+- Suchbegriffe: wort1, wort2, wort3
 ```
 
-Mit `OPENCLAW_WIKI_PATH` auf einen beliebigen Ordner umleiten (z. B. Obsidian-Vault). Seiten sind als Rohquellen markiert und haben einen eigenen Index in diesem Ordner (OpenClaw-Hauptindex bleibt unberührt).
+Gleiches Thema → bestehende Seite. Test-Pings und Nacherzählung: nichts schreiben. Regeln/Lektionen gehen nach MEMORY / CONTEXT / pending, nicht ins Wiki.
+
+### Session schließen
+
+Schließen löscht den Ordner unter `~/.grok/sessions`. Ins Wiki schreibt das nicht — Persistenz nur **`/merken`**.
 
 ---
 
 ## 8. Aktivitäts-Kalender
 
-Symbol: **4 Kästchen** in der linken Leiste.
+Symbol: **4 Kästchen** in der linken Leiste. Öffnet ein **Seitenpanel** (Desk an der Rail links / Web Overlay rechts; Chat bleibt sichtbar; Composer nutzbar). Esc / Schließen. Zwei Tabs: **Plan** und **Aktivität**.
+
+**Ausnahme:** Der **Graph** bleibt Vollfläche (nicht Seitenpanel) — öffnet den Graph, schließt jedes Seitenpanel.
+
+### Tab Plan (Aufgaben + wiederkehrende To-dos)
+
+**Aufgaben:** Kette an einer Antwort → Arbeitsleiste: Beleg (Meldung + Antwort, aufklappbar) + Titel + **Was ist zu tun**. Ohne das Paar keine Aufgabe. Kein Sprung in die Session. Landet unter Plan & Aktivität. **Übernehmen** legt den Startkontext in den Composer — kein automatischer Kopfwechsel. **Fertig** nur mit Pfad oder Ort. Aufgabe ≠ Task-Freigabe.
+
+Täglich/wöchentlich · **Fertig wenn** · Pause · Einmal jetzt · Löschen. Nach erfolgreichem Lauf: **Fertig** löscht die To-do. Leerlauf (`LEER`) ist nicht Erfolg.
+
+Neue wiederkehrende Arbeit nicht jeden Morgen im Chat erklären. Skill **`einmal-job`**: erst 1× mit Plan→Ja in der Session, dann hier **Neu**. Irreversibles (löschen, senden, buchen, kündigen) wartet auf Ja. Leben-Admin nicht in den Vault.
+
+### Heatmap (Tab Aktivität, Grok)
 
 | Kästchen im Icon | Bedeutung |
 |------------------|-----------|
@@ -296,8 +387,6 @@ Symbol: **4 Kästchen** in der linken Leiste.
 | Dunkel + Punkt | Kopf / Peak-Tag |
 | Gold | mittlere Aktivität |
 | Hellgold | leichte Aktivität |
-
-### Heatmap
 
 - **Gelb/Gold** = aktiver Tag  
 - **Heller** = weniger Events · **Dunkler** = mehr Events  
@@ -329,17 +418,21 @@ Workspace steuert, wo der Agent Dateien liest/schreibt (Standard oft Home oder `
 
 ## 10. Was der Agent in dieser UI kann
 
-Gilt für alle Profile; **grok** hat als einziges alle Fähigkeiten (Sessions, Deep Search, Aktivität).
+**Nicht alle Fähigkeiten gelten für alle Profile.** **grok** hat als einziges Sessions-Liste, Deep Search und Aktivitäts-Kalender. Terminal/Shell und Workspace-Schreiben sind **nicht** bei °_Agent.
+
+**^_Code Freigabe:** `r+w` = Workspace beschreibbar, nicht Auto-Write. Dialog **Einmal** · **Für Auftrag** · **Für Task** — kein „immer“, kein „Für diese Session“. Aktiver Task in der Arbeitsleiste, **Widerrufen** dort. Tool-Karte: *Warum erlaubt?*
 
 | Bereich | Beispiele | Profile |
 |---------|-----------|---------|
-| Code & Dateien | Lesen, schreiben, refaktorieren im Workspace | alle |
-| Terminal | Shell, Builds, Tests, Git | alle |
-| Recherche | Web/Docs; Deep Search für tiefergehende Quellenarbeit | **grok** (Deep Search); Recherche-Tools auch glyph-agent |
+| Code & Dateien | Lesen, schreiben, refaktorieren im Workspace (Grep/SearchReplace/…) | **grok**, **^_Code** (nur `CODE_WORKSPACE_ROOTS`) |
+| Terminal / Shell | Builds, Tests, Git (Whitelist bei ^_Code; kein `rm`/`push`) | **grok**, **^_Code** — **nicht** °_Agent |
+| Recherche | Web/Docs; Deep Search für tiefergehende Quellenarbeit | **grok** (Deep Search); **°_Agent** (Exa/TinyFish/BrowseUrl) |
 | Medien | Bilder/Video oft als Freitext; TUI: `/imagine`, `/imagine-video` | **grok** |
-| Erweiterungen | Skills, Workflows, Subagents, MCPs (je nach Installation) | grok · claude |
-| Vault & Notizen | Obsidian-Vault-Suche, Notizen lesen/bearbeiten (Diff+Backup) | **glyph-agent** |
-| Cloud-Modelle | viele Modelle zum Testen/Anbinden über eine API 
+| Erweiterungen | Skills, Workflows, Subagents, MCPs (je nach Installation) | **grok** |
+| Vault & Notizen | Obsidian-Vault-Suche, Wiki-Aliase, PDF, Mail, Diff+Backup | **°_Agent** |
+| Merken | Slash `/merken`: Erkenntnis nach Vorlage, Chat-Ja; Ablehnen ohne Suchwert | alle |
+| Cloud-Modelle | viele Modelle zum Testen/Anbinden über eine API | **grok** |
+
 ---
 
 ## 11. Slash-Befehle (Überblick)
@@ -355,6 +448,7 @@ Viele `/Befehle` sind **TUI-Builtins**. Im Browser reichen oft **Freitext** + di
 | `/compact [notiz]` | Kontext komprimieren |
 | `/context` · `/session-info` | Status / Context |
 | `/plan` · `/view-plan` | Erst planen, dann umsetzen |
+| `/einmal-job` | Wiederkehrendes 1× mit Ja, dann Kalender → Plan |
 | `/effort low\|medium\|high\|xhigh` | Reasoning-Tiefe (TUI) |
 | `/model <name>` | Modell (TUI) |
 | `/deep-research <query>` | Recherche (UI: Deep Search) |
@@ -364,7 +458,7 @@ Viele `/Befehle` sind **TUI-Builtins**. Im Browser reichen oft **Freitext** + di
 | `/remember` · `/memory` | Memory (teilw. experimentell) |
 | `/copy` · `/export` | Antwort / Gespräch exportieren |
 | `/doctor` · `/docs` · `/login` | Diagnose, Doku, Auth |
-| `/quit` · `/exit` | Agent beenden (UI: Status-Pill) |
+| **UI neu laden** | Web-UI neu laden, Anmeldung bleibt (Menü Befehle / Slash; auf glyph-ui.com die Header-Taste). Mac: Ketten-Icon = Beenden |
 
 Vollständige Liste im TUI: **`/docs`**  
 Datei: `~/.grok/docs/user-guide/04-slash-commands.md`
@@ -382,11 +476,14 @@ In der App: Symbol **Befehle** (filterbare Legende).
 | `GLYPH_UI_CWD` | Startverzeichnis | Workspace für neue Sessions |
 | `GROK_BIN` | `grok` | Pfad zur CLI |
 | `GROK_HOME` | `~/.grok` | Sessions & Auth |
-| `GLYPH_AGENT` | `grok` | Agent-Profil beim Start (grok \| claude \| glyph-agent) |
-| `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil glyph-agent) |
-| `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für glyph-agent-Antwort |
-| `OPENCLAW_WIKI_PATH` | `~/.glyph-ui/wiki` | Wiki-Archiv (optional Obsidian-Vault o. Ä.) |
-| `GLYPH_UI_STATE_DIR` | `~/.glyph-ui` | UI-State (z. B. Closed-Log) |
+| `GLYPH_AGENT` | `grok` | Agent-Profil beim Start (grok \| _code \| glyph-agent) |
+| `GLYPH_AGENT_URL` | `http://127.0.0.1:18899` | glyph-agent-HTTP-Dienst (nur Profil °_Agent) |
+| `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für °_Agent-Antwort |
+| `WIKI_PATH` | `~/.glyph-ui/wiki` | Wiki-Archiv (optional Obsidian-Vault o. Ä.) |
+| `OPENCLAW_WIKI_PATH` | — | Alias für `WIKI_PATH` |
+| `GLYPH_UI_STATE_DIR` | `~/.glyph-ui` | UI-State (z. B. Closed-Log, Web-Passwort) |
+| `GLYPH_WEB_PASSWORD` | Datei `~/.glyph-ui/web-password` | Web-Tor für glyph-ui.com |
+| `GLYPH_WEB_HOSTS` | `glyph-ui.com,www.glyph-ui.com` | Extra-Hostnames für die Web-Fläche |
 
 Beispiel:
 
@@ -411,8 +508,8 @@ GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 
 ### C) Platz freimachen, Wissen behalten
 
-1. **Lupe** → Session **Schließen** → **Ja + Wiki**  
-2. Optional im Vault nachlesen  
+1. **Lupe** → Session **Schließen** (Disk-Ordner weg)  
+2. Was bleiben soll: **`/merken`**  
 
 ### D) Sehen, wann du gearbeitet hast
 
@@ -433,7 +530,7 @@ GLYPH_UI_CWD="$HOME/mein-projekt" npm run dev
 | **offline** bleibt | Status klicken; `grok` im PATH? `grok login`? Bridge-Log / `npm run service:status` |
 | Eingabe grau | Erst verbinden |
 | Agent „hängt“ | Leerer Snack-Klick = Stop; sonst Refresh + neu verbinden |
-| Disk voll | Lupe → Schließen → Ja + Wiki oder Löschen (`/delete`); große Ordner unter `~/.grok/sessions` |
+| Disk voll | Lupe → Schließen; große Ordner unter `~/.grok/sessions`. Wissen: `/merken` |
 | UI wirkt veraltet | **Refresh** in der Leiste |
 | Slash tut „nichts“ | Viele Befehle sind TUI-only — Freitext formulieren oder Deep Search/Fork/Lupe nutzen |
 
@@ -447,10 +544,10 @@ Diagnose im TUI: **`/doctor`**.
 |------|--------|
 | `client/` | React-UI (Vite) |
 | `server/index.js` | Express + WebSocket, spawnt das aktive Agent-Profil … stdio, ACP-Bridge |
-| `server/agents.js` | Agent-Profile (grok, claude, glyph-agent) + Auflösung |
+| `server/agents.js` | Agent-Profile (grok, ^_Code, °_Agent) + Auflösung |
 | `server/sessions.js` | Session-Liste, Close, Transcript |
 | `server/activity.js` | Heatmap aus `events.jsonl` |
-| `server/wiki-archive.js` | Wiki-Seiten beim Schließen |
+| `server/wiki-archive.js` | Wiki-Root (kein Session-Dump mehr) |
 
 Glyph ist ein **ACP-Client**, kein Modell-Client: Ein Profil zu wechseln bedeutet, ein anderes
 Binary/den anderen Adapter zu spawnen (nicht auf eine andere API zu zeigen). Alles, was über ACP
@@ -460,7 +557,7 @@ Laufzeit zu scheitern.
 
 ---
 
-## 15b. Agent-Profile & glyph-agent
+## 15b. Agent-Profile & °_Agent
 
 Glyph kennt mehrere **Agent-Profile** (Auswahl üblicherweise oben in der Status-/Header-Zeile).
 Aktives Profil wird beim Start aus `GLYPH_AGENT` übernommen (Default: `grok`).
@@ -468,24 +565,24 @@ Aktives Profil wird beim Start aus `GLYPH_AGENT` übernommen (Default: `grok`).
 | Profil | Spawnt | Hinweis |
 |--------|--------|---------|
 | **grok** (Default) | `grok agent --always-approve --no-leader stdio` | `GROK_BIN`; volle Fähigkeiten (Sessions, Deep Search, Aktivität) |
-| **claude** | `claude-agent-acp` (oder `npx -y @agentclientprotocol/claude-agent-acp`) | `GLYPH_CLAUDE_BIN`/`GLYPH_CLAUDE_ARGS`; Sessions liegen unter `~/.claude/projects` (in Glyph nicht gelistet) |
-| **glyph-agent** | `node server/glyph-agent-acp.mjs` | Lokaler Agent (glyph-agent); Dünne ACP-Brücke zum lokalen Dienst auf `127.0.0.1:18899` |
+| **^_Code** (id `_code`) | `node server/glyph-agent-acp.mjs` + `GLYPH_AGENT_MODE=code` | Workspace-Tools, Write/Shell mit Freigabe (Einmal / Auftrag / Task); Modell aus Graph/Anbindung |
+| **°_Agent** (id `glyph-agent`) | `node server/glyph-agent-acp.mjs` | Vault/Tools + Cloud-Antwort; dünne ACP-Brücke zum lokalen Dienst auf `127.0.0.1:18899` |
 
-### glyph-agent (Vault/Tools + Cloud-Antwort)
+### °_Agent (Vault/Tools + Cloud-Antwort)
 
 > 📊 **Diagramme:** `docs/glyph-profile-diagrams.html` zeigt für jedes Profil ein
 grafisches Ablauf-/Architektur-Diagramm (*warum hinzugefügt* + *wie es funktioniert*).
 > Im Browser öffnen oder direkt in die App einbetten.
 
-Das Profil **glyph-agent** verbindet Glyph mit der separaten **glyph-agent**-Codebasis
-(`~/glyph-agent/`): ein lokaler HTTP-Dienst (`server.py`, Port **18899**, localhost-only) mit
-kontrolliertem Tool-Loop (**B+**). Lokal: VaultFind (Embedding + Keyword) und Tools;
-Web nur bei Bedarf; die **Cloud-Antwort** formuliert der Cloud-Denker in der Engine
+Das Profil **°_Agent** (interne id `glyph-agent`) verbindet Glyph mit der separaten
+**glyph-agent**-Engine (`~/glyph-agent/`): ein lokaler HTTP-Dienst (`server.py`, Port **18899**,
+localhost-only) mit kontrolliertem Tool-Loop (**B+**). Lokal: VaultFind (Embedding + Keyword)
+und Tools; Web nur bei Bedarf; die **Cloud-Antwort** formuliert der Cloud-Denker in der Engine
 (Technik-Provider nur in Config/CONSTITUTION — kein separates UI-Profil).
 
 Dünne Brücke (`glyph-agent-acp.mjs`) — **keine Agentenlogik**: Sie übersetzt ACP ↔ HTTP und
 streamt die Antwort als Text-Chunks zurück an Glyph. Tool-Schicht und Cloud-Antwort bleiben in
-`glyph-agent` gekapselt.
+der Engine gekapselt.
 
 **Fähigkeiten (Tool-Schicht):**
 
@@ -514,8 +611,8 @@ Nur localhost gebunden; keine Internet-Exposition. Die UI zeigt Trace/Steps (z.�
 | `GLYPH_AGENT_TIMEOUT` | `300000` | Timeout (ms) für die Antwort |
 
 **Warum die Mischung:** Drei unabhängige Bestandsquellen, damit kein einzelner Anbieter zum
-Blockierer wird. Vault/Recherche → **glyph-agent**; breite Kontextarbeit/Sessions → **grok**
-oder **claude**. Grafische Abläufe: `docs/glyph-profile-diagrams.html`.
+Blockierer wird. Vault/Recherche → **°_Agent**; breite Kontextarbeit/Sessions → **grok**
+oder **^_Code**. Grafische Abläufe: `docs/glyph-profile-diagrams.html`.
 
 ---
 
@@ -526,18 +623,18 @@ je nach Profil verarbeitet:
 
 | Profil | Textanhänge | Bilder |
 |--------|-------------|--------|
-| **glyph-agent** | ✅ | ❌ (Stufe-1-Hinweis) |
+| **°_Agent** | ✅ | ✅ Direct Vision-Exp |
+| **^_Code** | ✅ | ✅ Direct Vision-Exp |
 | **grok** | ✅ | ✅ native ACP |
 
 - **Textformate:** `.txt` `.md` `.csv` `.json` `.xml` `.yaml` `.log` `.html` · max. **2 MiB**
-- **Bildformate (grok u. a., nicht glyph-agent):** PNG, JPEG, WebP, GIF · max. **4 MiB**
+- **Bildformate:** PNG, JPEG, WebP, GIF · max. **4 MiB** (°_Agent / ^_Code: `image_url` an Vision-Exp)
 - **Limit:** max. **8 Anhänge** / max. **12 MiB** pro Datei
 - **Fehler:** ungültiger Typ / kaputtes Base64 / zu groß → blockiert mit klarer Meldung,
   nie still verworfen und nie an das Modell gesendet.
-- **glyph-agent + Bild:** wird **nicht** an das Modell übertragen → sichtbarer Hinweis.
-- **Datenschutz:** Bilder können den Rechner verlassen (Cloud-Profile). Keys nur in
-  geschützten Env/.env (gitignored), nie in Dateien/Logs/Commits. Sensible Uploads nicht
-  ungeprüft an externe Modelle; dafür bleibt `glyph-agent` (lokal).
+- **Anderes Direct-Modell (Flash/Pro ohne Vision) + Bild:** API 400.
+- **Datenschutz:** Bilder verlassen den Rechner (Direct/OpenRouter, auch °_Agent/^_Code).
+  Keys nur in geschützten Env/.env (gitignored), nie in Dateien/Logs/Commits.
 
 Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
 
@@ -548,10 +645,10 @@ Volle Details + Beispiele: siehe README → „Anhänge & Uploads".
 - [ ] Mindestens ein Profil verfügbar (Default `grok` eingeloggt)  
 - [ ] UI offen, Status **verbunden**  
 - [ ] Aktives Profil passt (Header / `GLYPH_AGENT`)  
-- [ ] glyph-agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
-- [ ] glyph-agent Cloud-Antwort: `OPENROUTER_API_KEY` in der glyph-agent-Umgebung (Technik)  
-- [ ] Workspace passt (Header-Pfad / `GLYPH_UI_CWD`)  
-- [ ] Enter = senden, Shift+Enter = Zeile  
+- [ ] °_Agent-Profil: lokaler Dienst läuft (`server.py` auf 18899, `curl /health` = ok)  
+- [ ] °_Agent Cloud-Antwort: `OPENROUTER_API_KEY` in der glyph-agent-Umgebung (Technik)  
+- [ ] Workspace passt (Tooltip auf Glyph #0.9.0 / Workspace-Button / `GLYPH_UI_CWD`)  
+- [ ] Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, Kopf = senden 
 - [ ] Während Arbeit: Text → Queue, leer → Stop  
 - [ ] Sessions: Lupe · Aktivität: Kalender · Wissen: Wiki  
 - [ ] Sprache (nur grok): `XAI_API_KEY` (falls nötig) · Mic diktieren · Lautsprecher vorlesen  

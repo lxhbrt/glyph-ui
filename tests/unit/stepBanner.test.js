@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildStepBanner } from "../../server/stepBanner.mjs";
+import { buildStepBanner, formatThinkStep } from "../../server/stepBanner.mjs";
 
 test("buildStepBanner", async (t) => {
   await t.test("leerer Banner ohne Schritte", () => {
@@ -78,5 +78,18 @@ test("buildStepBanner", async (t) => {
       },
     });
     assert.match(banner, /grob\/exa · 5 Treffer/);
+  });
+});
+
+test("formatThinkStep", async (t) => {
+  await t.test("Code mit Live-Detail, kein DeepSeek-Hardcode", () => {
+    const line = formatThinkStep("^_Code denkt (Gemini 3.7 flash)", { isCode: true });
+    assert.equal(line, "Think · ^_Code denkt (Gemini 3.7 flash)");
+    assert.doesNotMatch(line, /DeepSeek CODE/);
+  });
+
+  await t.test("ohne Detail: Profilname, nicht Provider-Marke", () => {
+    assert.equal(formatThinkStep("", { isCode: true }), "Think · ^_Code");
+    assert.equal(formatThinkStep(null, { isCode: false }), "Think · Cloud-Denker");
   });
 });

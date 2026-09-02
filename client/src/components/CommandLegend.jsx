@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SideDrawer } from "./SideDrawer.jsx";
 
 const COMMAND_LEGEND = [
   {
@@ -11,7 +12,12 @@ const COMMAND_LEGEND = [
       {
         cmd: "Lupe",
         need: "empfohlen",
-        desc: "Sessions suchen/öffnen; Schließen: Ja + Wiki oder Löschen (/delete).",
+        desc: "Suche & Sessions als Seitenpanel (Desk an der Rail / Web Overlay). Schließen löscht den Disk-Ordner. Wissen: /merken.",
+      },
+      {
+        cmd: "Graph",
+        need: "empfohlen",
+        desc: "Direkt unter der Lupe. Köpfe um Glyph. Punkt klicken → Legende.",
       },
       {
         cmd: "Stift · Neuer Chat",
@@ -19,19 +25,19 @@ const COMMAND_LEGEND = [
         desc: "Neue ACP-Session, Chat leeren. Entspricht TUI /new (Disk bleibt).",
       },
       {
-        cmd: "Befehle",
+        cmd: "Befehle und Skills",
         need: "optional",
-        desc: "Extensions-Modal: Skills + Agent-Commands. ⌘/Ctrl+K. Auswahl fügt /name in den Composer ein (sendet nicht).",
+        desc: "Seitenpanel an der Rail (Desk links) bzw. Overlay rechts (Web); Chat bleibt in der Breite. Leisten-Button / ⌘/Ctrl+K / `/` im Composer: Skills + Agent-Commands. Auswahl fügt /name ein — sendet nicht; Panel bleibt offen (Einfügen & zu / Esc schließt). Live-Katalog.",
       },
       {
-        cmd: "Buch · Handbuch",
+        cmd: "Buch · Handbuch / Legende",
         need: "optional",
-        desc: "Kurzhandbuch und Befehls-Legende (Doku) ganz unten in der Leiste.",
+        desc: "Kurzhandbuch und UI-Legende als Seitenpanel (Desk an der Rail / Web Overlay). Tab Legende = Bedienung erklären; Skills/Agent-Commands ausführen nur unter „Befehle und Skills“.",
       },
       {
-        cmd: "Kalender",
+        cmd: "Glyph · Plan & Aktivität",
         need: "optional",
-        desc: "Aktivitäts-Heatmap (gelb = aktiv, dunkler = häufiger, Peak mit Auge). Klick → Sessions des Tages.",
+        desc: "Kalender-Icon → Seitenpanel (Desk links an der Rail / Web Overlay rechts; Chat bleibt; Graph = Vollfläche-Ausnahme). Tab Plan = Aufgaben + To-dos (Übernehmen → Composer, Panel darf offen bleiben). Tab Aktivität = Heatmap (Grok). ACP-Session-Plan = Leiste über dem Composer.",
       },
       {
         cmd: "Wiki (i)",
@@ -49,7 +55,7 @@ const COMMAND_LEGEND = [
         desc: "Hell / Dunkel umschalten.",
       },
       {
-        cmd: "Refresh",
+        cmd: "UI neu laden",
         need: "optional",
         desc: "UI neu laden (statt ⌘⇧R).",
       },
@@ -61,12 +67,12 @@ const COMMAND_LEGEND = [
       {
         cmd: "Enter",
         need: "normal",
-        desc: "Senden (ohne Shift). Shift+Enter = neue Zeile. Slash-Popup offen: Enter = auswählen. Während der Agent arbeitet → Warteschlange.",
+        desc: "Desk: Senden (ohne Shift), Shift+Enter = Zeile. Handy: Tastatur-Enter = Zeile, Kopf sendet beim ersten Tap. Slash-Popup: Enter = auswählen. Agent arbeitet → Warteschlange.",
       },
       {
-        cmd: "/ · Slash-Popup",
+        cmd: "/ · Skills-Seitenpanel",
         need: "empfohlen",
-        desc: "/ am Zeilenanfang oder nach Leerzeichen → Skills & Agent-Commands. ↑↓ Enter, Esc. Fügt /name ein, sendet nicht.",
+        desc: "Öffnet dasselbe Skills-Seitenpanel wie der Leisten-Button (Desk links / Web rechts Overlay). Filter, Einfügen, Esc.",
       },
       {
         cmd: "Warteschlange",
@@ -74,19 +80,39 @@ const COMMAND_LEGEND = [
         desc: "Follow-ups parken während der Antwort (wie TUI). Danach automatisch senden. × / Leeren.",
       },
       {
-        cmd: "↵ / Snack · Stopp",
+        cmd: "↑ · Prompt-History",
+        need: "empfohlen",
+        desc: "Leerer Composer: letzte Prompts durchblättern (wie TUI). ↓ schließt. Esc stellt den Entwurf wieder her.",
+      },
+      {
+        cmd: "Rewind",
+        need: "empfohlen",
+        desc: "Letzten Nutzer-Turn und alles danach aus dem Verlauf nehmen. Esc Esc, /rewind, oder ↺ an der Nachricht. Dateien bleiben.",
+      },
+      {
+        cmd: "Kopf / Snack · Stopp",
         need: "auto",
-        desc: "Runder Button: idle = ↵. Während Arbeit: Text+Enter = Queue; leerer Klick/Snack (runder Stopp-Punkt) = Soft-Abbruch (ACP). Kritische Tools laufen sicher zu Ende mit Hinweis.",
+        desc: "Runder Button: idle = Graph-Kopf (Grok Build · °_Agent · ^_Code; Handy: erster Tap sendet). Während Arbeit oder Vault-Suche: Text = Queue/neue Suche; leerer Klick/Snack = Stopp (ACP bzw. Fetch-Abbruch). Kritische Tools laufen sicher zu Ende mit Hinweis.",
       },
       {
-        cmd: "Chat | Deep Search | Fork",
+        cmd: "Chat | Deep Search | Fork | Swarm",
         need: "empfohlen",
-        desc: "Chat = normale Nachricht. Deep Search = /deep-research. Fork = Session branchen (/fork).",
+        desc: "Chat = Nachricht. Deep Search = Grok /deep-research (sonst ausgegraut). Fork = Session branchen. Swarm = °_Agent/^_Code Planer+Suche+Synthese.",
       },
       {
-        cmd: "verbunden / offline",
+        cmd: "Kette · verbunden / offline",
         need: "empfohlen",
-        desc: "Agent starten/beenden. Gold = verbunden (nicht mehr „grün“).",
+        desc: "Icon-Button: Agent starten/beenden. Gold-Kette = verbunden, rot = offline.",
+      },
+      {
+        cmd: "/merken",
+        need: "empfohlen",
+        desc: "Skill (Befehle / Skills): eine Erkenntnis nach Chat-Ja. Wiki nur nach Vorlage (Aufgabe · Lösung · Datei/Beleg · Suchbegriffe). Ablehnen statt aufblähen.",
+      },
+      {
+        cmd: "Name · /rename",
+        need: "optional",
+        desc: "Lupe: r oder Button Name. Composer: /rename Titel. Nur Grok-Sessions auf Disk.",
       },
       {
         cmd: "Freitext + Kontext",
@@ -106,7 +132,22 @@ const COMMAND_LEGEND = [
       {
         cmd: "Kopieren",
         need: "optional",
-        desc: "Nachricht in die Zwischenablage (Button neben Vorlesen). Ersetzt TUI /copy.",
+        desc: "Klick auf die Nachricht: Kopieren/Vorlesen darunter. Letzte Antwort schiebt hoch, damit die Buttons nicht unter dem Composer liegen.",
+      },
+      {
+        cmd: "Tool-Karte",
+        need: "auto",
+        desc: "Live-Tools: Verb + Ziel. Klick öffnet Input/Diff/Ausgabe. Fehlgeschlagene Tools öffnen sich selbst.",
+      },
+      {
+        cmd: "Plan-Freigabe",
+        need: "optional",
+        desc: "Arbeitsleiste über LVL. Frischer Plan (alles offen): Umsetzen sendet, Ändern fokussiert den Composer.",
+      },
+      {
+        cmd: "LVL · Zusammenpressen",
+        need: "optional",
+        desc: "Klick auf die Leiste: Legende. Über Soft-Cap (Grok): Zusammenpressen sendet /compact.",
       },
     ],
   },
@@ -154,6 +195,11 @@ const COMMAND_LEGEND = [
         desc: "Session laden / öffnen.",
       },
       {
+        cmd: "r",
+        need: "optional",
+        desc: "Markierte Session umbenennen.",
+      },
+      {
         cmd: "Esc",
         need: "optional",
         desc: "Panel schließen oder Bestätigung abbrechen.",
@@ -162,41 +208,18 @@ const COMMAND_LEGEND = [
   },
 ];
 
-/** Built after agentCommands are known (live ACP catalog). */
-function agentCommandGroup(agentCommands) {
-  if (agentCommands?.length) {
-    return {
-      group: "Agent-Befehle (live)",
-      items: agentCommands.map((c) => {
-        const slash = c.name.startsWith("/") ? c.name : `/${c.name}`;
-        const cmd = c.inputHint ? `${slash} ${c.inputHint}` : slash;
-        return {
-          cmd,
-          need: "agent",
-          desc: c.description || "—",
-        };
-      }),
-    };
-  }
-  return {
-    group: "Agent-Befehle (live)",
-    items: [
-      {
-        cmd: "noch leer",
-        need: "auto",
-        desc: "Erscheint nach Verbindung, sobald der Agent available_commands_update sendet — keine statische Pflege mehr.",
-      },
-    ],
-  };
-}
-
 const COMMAND_HINTS = {
   group: "Hinweis",
   items: [
     {
+      cmd: "Befehle und Skills",
+      need: "hilfreich",
+      desc: "Live Skills + Agent-Commands im Seitenpanel: Leiste, ⌘/Ctrl+K oder / im Composer. Nicht in dieser Legende ausführen.",
+    },
+    {
       cmd: "Slash in dieser UI",
       need: "hilfreich",
-      desc: "Live-Liste = was der Agent wirklich anbietet. Glyph-eigene Aktionen: Deep Search, Fork, Sessions, Kopieren, Plan-Leiste.",
+      desc: "Live-Liste = was der Agent wirklich anbietet. Glyph-eigene Aktionen: Deep Search, Fork, Rewind, /rename, Sessions, Kopieren, Plan-Leiste.",
     },
     {
       cmd: "TUI-Doku",
@@ -228,33 +251,69 @@ function HandbookText({ children }) {
  */
 const SHORT_HANDBOOK = [
   {
+    id: "what",
+    title: "Was Glyph ist",
+    body: [
+      "**Glyph ist keine KI** — nur eine Browser-Hülle für Agenten (ACP).",
+      "Du bringst Grok Build / ^_Code / °_Agent mit; Glyph zeigt Chat, Tools und Status.",
+      "Für Leute, die lokal arbeiten und wissen, was sie tun (z. B. Mac Mini).",
+    ],
+  },
+  {
+    id: "first",
+    title: "Erster Start",
+    body: [
+      "**Mac & Windows:** Node.js 22+ · `git clone` · `npm install` · `npm run build` · `npm start`.",
+      "Browser: **http://127.0.0.1:5174** (Prod). Dev: `npm run dev` → UI :5173, Bridge :5174.",
+      "macOS-Extras (LaunchAgent, Dock) sind optional — unter Windows weglassen.",
+      "**Graph**: Bind prüfen — Grok Build = `grok login`. Agent/Code = Direct in der Legende.",
+      "Profil wählen (Header) → **Kette** verbinden → chatten.",
+    ],
+  },
+  {
     id: "start",
     title: "Schnellstart",
     body: [
-      "Oben rechts **verbunden** (gold) = Agent läuft. Offline? Pill klicken.",
-      "Nachricht tippen → **Enter** senden · **Shift+Enter** = neue Zeile.",
+      "Oben rechts **Ketten-Icon** (gold) = Agent läuft. Offline (durchgestrichen)? Icon klicken.",
+      "Nachricht tippen → Desk **Enter** senden · **Shift+Enter** = Zeile. Handy: Tastatur-Enter = Zeile, Kopf = senden.",
       "Ohne Verbindung ist das Eingabefeld deaktiviert.",
       "Sicherheit: Bridge mit vollen Tool-Rechten — **nur localhost**.",
+    ],
+  },
+  {
+    id: "bind",
+    title: "Anbindung (Keys / OAuth)",
+    body: [
+      "**Graph** (Leiste): folgt Theme (Dunkel pechschwarz / Hell Papier). Köpfe um Glyph; Vaults/Roots als Punkte. Klick → Legende.",
+      "**Grok Build:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
+      "**^_Code / °_Agent:** Header-Pille oder Graph-Kopf → Host-URL, Direct-Key, OpenRouter-Key, Modell. Ohne Slash = Direct (`deepseek-v4-flash-vision-exp`), mit Slash = OpenRouter (`deepseek/deepseek-v4-flash-0731`).",
+      "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒 · Kabel an/ab. SoT: `~/.glyph/vaults.json`.",
+      "**Workspaces (Kabelsalat):** Code-Roots an ^_Code — Pfad · r · r+w · 🔒. `r+w` = beschreibbar, nicht Auto-Write. SoT: `~/.glyph/workspaces.json`.",
+      "**An/Ab** = Kabel durchtrennen, Eintrag bleibt.",
+      "**Voice:** optional `XAI_API_KEY` (console.x.ai).",
+      "Gespeichert lokal: `~/.glyph-ui/bindings.json` (nie committen).",
     ],
   },
   {
     id: "layout",
     title: "Oberfläche",
     body: [
-      "Links: Sessions, Neuer Chat, Befehle, Kalender, Wiki, Workspace, Theme, Refresh — **Buch** ganz unten.",
+      "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, UI neu laden, **Buch** (Handbuch · UI-Legende). Kalender & Skills = **Seitenpanel** (Chat bleibt); **Graph** = Vollfläche.",
+      "Header links: Glyph #0.9.0 · Term · ACP. cwd nicht in der Zeile (Tooltip / Workspace-Button). Rechts: Profil · Modell-Pille (eingesetztes Modell, nicht Primary→Reserve) · Kette.",
+      "glyph-ui.com: Header Stift · Befehle · Theme · Schloss · **UI neu laden**. Keine Kette (Beenden).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
-      "Unten: Composer · Chat | Deep Search | Fork · **Mic** · Stimme · **↵**.",
+      "Unten: **Arbeitsleiste** (Plan · Ordner · Aktiver Task) über der LVL-Leiste · Composer · Chat | Deep Search | Fork | Swarm · **Mic** · **Kopf**. °_Agent: Pixel-Apfel über dem Kopf = Ordner-Suche.",
     ],
   },
   {
     id: "rail",
     title: "Linke Leiste",
     rows: [
-      ["Lupe", "Sessions suchen/öffnen; Ja + Wiki · Löschen (/delete)"],
+      ["Lupe", "Sessions suchen/öffnen; Schließen = Disk-Ordner weg. Wissen: /merken"],
+      ["Graph", "Direkt unter der Lupe · Köpfe um Glyph · Punkt → Legende"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
-      ["Befehle", "Filterbare Legende (Mitte der Leiste)"],
-      ["Buch", "Kurzhandbuch — ganz unten in der Leiste"],
-      ["Kalender", "Aktivitäts-Heatmap — Klick → Sessions des Tages"],
+      ["Buch", "Handbuch · UI-Legende"],
+      ["Kalender", "Seitenpanel Plan/Aktivität (Chat bleibt) · Heatmap (Grok)"],
       ["Wiki", "Wiki-Index (.md) in Obsidian / Standard-App"],
       ["Ordner", "Aktuellen Workspace (cwd) im Finder öffnen"],
       ["Theme", "Hell / Dunkel"],
@@ -266,10 +325,15 @@ const SHORT_HANDBOOK = [
     title: "Schreiben & senden",
     rows: [
       ["Chat", "Normale Nachricht an den aktiven Agenten"],
-      ["Deep Search", "Strukturierte Multi-Quellen-Recherche"],
+      ["Apfel", "°_Agent: über dem Kopf. Wiki, TinyFish und Exa laufen immer. An = Arbeits-Vault beim Senden, Composer leer, Query in der Leiste. ×/Snack bricht ab. Vault leer → KomNet, sonst DGUV. Aus = allgemeine Suche, Internet, soziale Netze."],
+      ["Treffer", "Arbeitsleiste über LVL, nicht im Chat. Start aus; nur angeklickte Arbeits-Vault-Treffer gehen in den Kontext. Web mit Apfel: KomNet/DGUV."],
+      ["Deep Search", "Grok: strukturierte Multi-Quellen-Recherche. Andere Köpfe ausgegraut."],
       ["Fork", "Session branchen; Text = optionale Directive"],
-      ["Enter", "Senden · während Arbeit → Warteschlange"],
-      ["Shift+Enter", "Neue Zeile ohne Senden"],
+      ["Swarm", "°_Agent / ^_Code: Planer, Suche, Synthese. Grok ausgegraut."],
+      ["↑", "Leerer Composer: Prompt-History"],
+      ["Rewind", "Esc Esc · /rewind · ↺ an der Nutzer-Nachricht. Dateien bleiben."],
+      ["Enter", "Desk: senden · Handy: Tastatur = Zeile, Kopf sendet (erster Tap)"],
+      ["Shift+Enter", "Neue Zeile ohne Senden (Desk)"],
     ],
   },
   {
@@ -286,11 +350,12 @@ const SHORT_HANDBOOK = [
     id: "working",
     title: "Während der Agent arbeitet",
     rows: [
-      ["Idle", "Button zeigt ↵ → senden"],
+      ["Idle", "Button zeigt den Kopf (Grok Build / °_Agent / ^_Code) → senden"],
       ["Arbeitet", "Runder Snack (Schlange jagt roten Stopp-Punkt)"],
       ["Überfressen", "Snack dick + X-Augen + Banner — Hänger, manuell neu starten"],
       ["Text + Enter", "Follow-up → Warteschlange (WARTE)"],
       ["Leer / Snack", "Soft-Stop (ACP-Cancel) im Kreis-Button"],
+      ["Arbeitsleiste", "Plan, Ordner-Suche, Aktiver Task: Gold-Rand, Label, × — über der LVL-Leiste, nicht Bildmitte. Freigabe bleibt eigenes Modal."],
       ["× / Leeren", "Queue-Eintrag bzw. ganze Queue löschen"],
       ["Neue Ausgabe ↓", "Wieder ans aktuelle Chat-Ende springen"],
     ],
@@ -300,9 +365,9 @@ const SHORT_HANDBOOK = [
     title: "Sessions & Wiki",
     body: [
       "Sessions liegen unter `~/.grok/sessions`. Lupe → suchen → Öffnen.",
-      "Schließen: **Ja + Wiki** (Archiv + löschen) · **Löschen** (TUI `/delete`) · Abbrechen.",
+      "Schließen: Session-Ordner auf Disk löschen · Abbrechen. Kein Wiki-Dump.",
       "Aktive Chat-Session ist geschützt (zuerst Stift = `/new`). Speicher freigeben = Ordner löschen.",
-      "Wiki-Ziel: `…/OpenClaw memory-wiki/sources/grok-sessions/`.",
+      "**Merken:** Slash `/merken` (Befehle / Skills). Wiki-Karte nach Vorlage, erst nach Chat-Ja. Ablehnen ohne Suchwert.",
     ],
   },
   {
@@ -314,6 +379,7 @@ const SHORT_HANDBOOK = [
       ["Recherche", "Web/Docs; Deep Search für tiefergehend"],
       ["Medien", "Bilder/Video oft als Freitext; TUI: /imagine"],
       ["Erweiterungen", "Skills, Workflows, Subagents, MCPs"],
+      ["Merken", "Slash /merken: Erkenntnis nach Vorlage, Chat-Ja. Kein Zusammenfassen-Button."],
     ],
   },
   {
@@ -322,64 +388,98 @@ const SHORT_HANDBOOK = [
     body: [
       "**Schnell:** verbunden → Aufgabe → Enter → optional Queue.",
       "**Fortsetzen:** Lupe → Session öffnen → weiterchatten.",
-      "**Aufräumen:** Lupe → Schließen → Ja + Wiki, oder **Löschen** (/delete).",
+      "**Aufräumen:** Lupe → Schließen (Disk). Wissen: `/merken`.",
+      "**Merken:** `/merken` → Karte zeigen → Ja. Ohne Suchwert ablehnen.",
       "**Aktivität:** Kalender → Tag → Sessions.",
       "**Neues Thema:** Stift (/new, Disk bleibt) oder Fork (Abzweig mit Verlauf).",
+      "**Aufgabe übergeben:** Kette an der Antwort → Beleg hängt (Meldung + Antwort). **Was ist zu tun** = Korrektur. **Übernehmen** in den Composer, kein Auto-Kopfwechsel.",
+    ],
+  },
+  {
+    id: "grant",
+    title: "Freigabe (^_Code)",
+    body: [
+      "`r+w` heißt Workspace beschreibbar — nicht dauerhaft schreiben ohne Nachfrage.",
+      "Dialog: **Einmal** · **Für Auftrag** · **Für Task**. Kein „immer“, kein „Für diese Session“. Elevated Shell nur Einmal/Ablehnen.",
+      "**Aktiver Task** in der Arbeitsleiste: Name, Pfade, Restzeit, **Widerrufen**. Preview: `?grant=demo` · `?task=demo` · `?handoff=demo`.",
+      "Tool-Karte: *Warum erlaubt?* — einmal, Auftrag oder Task-Name.",
+    ],
+  },
+  {
+    id: "aufgaben",
+    title: "Aufgaben (Übergabe)",
+    body: [
+      "Kette an einer Antwort: Arbeitsleiste, Beleg (Meldung + Antwort, aufklappbar) + Titel + **Was ist zu tun**. Ohne das Paar keine Aufgabe. Kein Session-Sprung.",
+      "Liegt unter **Plan & Aktivität**. **Übernehmen** → Composer. **Fertig** nur mit Pfad oder Ort.",
+      "Aufgabe ≠ Task-Freigabe, ≠ wiederkehrendes To-do.",
     ],
   },
   {
     id: "tips",
     title: "Probleme & Tipps",
     rows: [
-      ["offline", "Pill klicken · `grok` im PATH? · `grok login`?"],
+      ["offline", "Kette klicken · Graph → Grok Build · `grok login`?"],
       ["Eingabe grau", "Erst verbinden"],
       [
         "hängt",
         "Snack mit X_X = überfressen (2+ Min still) · tippen = Stop · UI neu laden · sonst npm run service:install",
       ],
-      ["Disk voll", "Lupe → Schließen → Ja + Wiki oder Löschen (/delete)"],
-      ["UI veraltet", "Refresh in der Leiste"],
+      ["Disk voll", "Lupe → Schließen (Session-Ordner). Wissen: /merken"],
+      ["UI veraltet", "UI neu laden in der Leiste"],
       ["Slash „tut nichts“", "Viele /Befehle sind TUI-only — Freitext oder Tabs"],
+      ["Code/Agent rot", "Graph → Agent/Code · Direct-Key · glyph-agent :18899"],
     ],
   },
   {
     id: "check",
     title: "Checkliste",
     body: [
-      "✓ `grok` eingeloggt · Status **verbunden**",
+      "✓ Graph: Grok Build OAuth / Agent Direct · Status **verbunden**",
       "✓ Workspace passt (Header-Pfad)",
-      "✓ Enter = senden · Shift+Enter = Zeile",
+      "✓ Desk: Enter = senden · Handy: Tastatur-Enter = Zeile, Kopf = senden",
       "✓ Arbeit: Text → Queue, leer → Stop",
       "✓ Lupe · Kalender · Wiki · Mic / Lautsprecher",
     ],
   },
 ];
 
+function normalizeHelpTab(t) {
+  // "commands" / "befehle" = früherer Tab-Name → Legende (UI-Doku, keine Live-Skills)
+  if (t === "commands" || t === "befehle" || t === "legend" || t === "legende")
+    return "legend";
+  if (t === "handbook") return t;
+  return "handbook";
+}
+
 function CommandLegend({
   open,
   onClose,
   initialTab = "handbook",
+  /** @deprecated Live-Katalog nur noch im Seitenpanel „Befehle und Skills“; prop bleibt für Call-Sites. */
   agentCommands = [],
+  agentProfileId = "",
+  onOpenLage,
+  side = "right",
+  mode = "overlay",
 }) {
+  void agentProfileId;
+  void onOpenLage;
+  void agentCommands;
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState(initialTab); // handbook | commands
-  const panelRef = useRef(null);
+  const [tab, setTab] = useState(() => normalizeHelpTab(initialTab));
+  const searchRef = useRef(null);
 
   useEffect(() => {
     if (open) {
       setQuery("");
-      setTab(initialTab === "commands" ? "commands" : "handbook");
-      requestAnimationFrame(() => panelRef.current?.focus());
+      setTab(normalizeHelpTab(initialTab));
     }
   }, [open, initialTab]);
 
+  // Nur UI-Legende + Hinweise. Live Skills/Agent-Commands → Seitenpanel „Befehle und Skills“.
   const commandGroups = useMemo(
-    () => [
-      ...COMMAND_LEGEND,
-      agentCommandGroup(agentCommands),
-      COMMAND_HINTS,
-    ],
-    [agentCommands],
+    () => [...COMMAND_LEGEND, COMMAND_HINTS],
+    [],
   );
 
   const filteredCommands = useMemo(() => {
@@ -414,40 +514,18 @@ function CommandLegend({
     });
   }, [query]);
 
-  if (!open) return null;
-
   return (
-    <div className="overview-scrim" role="presentation" onClick={onClose}>
-      <section
-        ref={panelRef}
-        className="overview-panel legend-panel handbook-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Hilfe und Kurzhandbuch"
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            onClose();
-          }
-        }}
-      >
-        <header className="overview-head">
-          <div>
-            <p className="overview-kicker">In der App</p>
-            <h2>Kurzhandbuch</h2>
-            <p className="overview-meta">
-              Überblick · Bedienung · Sprache · Sessions · Tipps
-            </p>
-          </div>
-          <div className="overview-head-actions">
-            <button type="button" className="ghost" onClick={onClose}>
-              Schließen
-            </button>
-          </div>
-        </header>
-
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      kicker="In der App"
+      title="Buch"
+      className="app-drawer--book"
+      ariaLabel="Hilfe und Kurzhandbuch"
+      initialFocusRef={searchRef}
+      side={side}
+      mode={mode}
+    >
         <div className="help-tabs" role="tablist" aria-label="Hilfe-Bereich">
           <button
             type="button"
@@ -461,11 +539,11 @@ function CommandLegend({
           <button
             type="button"
             role="tab"
-            aria-selected={tab === "commands"}
-            className={`help-tab${tab === "commands" ? " help-tab--active" : ""}`}
-            onClick={() => setTab("commands")}
+            aria-selected={tab === "legend"}
+            className={`help-tab${tab === "legend" ? " help-tab--active" : ""}`}
+            onClick={() => setTab("legend")}
           >
-            Befehle
+            Legende
           </button>
         </div>
 
@@ -480,26 +558,27 @@ function CommandLegend({
           </p>
         ) : (
           <p className="overview-hint">
-            <strong>UI:</strong> Leiste &amp; Composer (statisch).{" "}
-            <strong>Agent:</strong> live aus der Session (
+            <strong>UI-Legende</strong> (Doku, nicht ausführen). Skills und Agent-Commands: Leisten-Button{" "}
+            <strong>Befehle und Skills</strong> oder ⌘/Ctrl+K
             {agentCommands.length
-              ? `${agentCommands.length} Befehle`
-              : "warte auf Katalog"}
-            ). <strong>Kopieren:</strong> Button an der Nachricht.
+              ? ` · Agent meldet gerade ${agentCommands.length} Commands`
+              : " · Agent-Commands erscheinen nach Verbindung"}
+            .
           </p>
         )}
 
         <input
+          ref={searchRef}
           className="overview-search"
           type="search"
           placeholder={
             tab === "handbook"
               ? "Filter: Mic, Queue, Sessions, offline…"
-              : "Filter: Lupe, /fork, Deep Search, compact…"
+              : "Filter: Lupe, Composer, Deep Search, Queue…"
           }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          autoFocus
+          aria-label="Buch filtern"
         />
 
         {tab === "handbook" ? (
@@ -567,8 +646,7 @@ function CommandLegend({
             )}
           </div>
         )}
-      </section>
-    </div>
+    </SideDrawer>
   );
 }
 

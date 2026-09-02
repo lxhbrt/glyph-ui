@@ -11,6 +11,7 @@ import {
 } from "../../server/plan.js";
 import {
   normalizeClientPlanEntries,
+  planNeedsApproval,
   planProgress,
   planStatusGlyph,
 } from "../../client/src/utils/plan.js";
@@ -106,6 +107,23 @@ describe("planProgress", () => {
       { content: "b", status: "completed" },
     ]);
     assert.equal(p.allDone, true);
+  });
+});
+
+describe("planNeedsApproval", () => {
+  it("true only when every entry is pending", () => {
+    assert.equal(
+      planNeedsApproval([{ content: "a", status: "pending" }]),
+      true,
+    );
+    assert.equal(
+      planNeedsApproval([
+        { content: "a", status: "pending" },
+        { content: "b", status: "in_progress" },
+      ]),
+      false,
+    );
+    assert.equal(planNeedsApproval([]), false);
   });
 });
 

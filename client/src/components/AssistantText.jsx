@@ -1,25 +1,28 @@
 /**
  * AssistantText — rendert die Antwort eines lokalen/Cloud-Agenten.
  *
- * Zwei Quellen für die Tool-/Denk-Stufen („SearchVault“/„SearchWeb“/„Think“ …):
- *   1. `steps` (live): Array von {start, result} pro Stufe, das die UI während
- *      des Streamings aufbaut (Stufe erscheint, sobald sie beginnt; das Ergebnis
- *      wird nach der Aktivität angehängt).
+ * Lese-Hierarchie (Lesespur-Vertrag):
+ *   - Primärspur = nur Final-/Status-Text (Markdown)
+ *   - Protokoll = Steps (Tools) + Entwürfe (Zwischen-LLM), live offen,
+ *     nach Turn-Ende zugeklappt (HSEQ-Nachvollzug per Klick)
+ *
+ * Zwei Quellen für die Tool-/Denk-Stufen („SearchVault“/„SearchWeb“ …):
+ *   1. `steps` (live): Array von {start, result} pro Stufe während Streaming.
  *   2. Fallback über den Sentinel im Text (alte, nicht-streamende Antworten).
  *
- * Die Stufen werden als eigenes, bewusst gedecktes Element (dunkler, kleiner)
- * ÜBER dem normalen Markdown-Antworttext gezeigt — so heben sie sich visuell ab.
+ * Der Antworttext geht immer durch cleanAssistantAnswer — Sentinel/Banner
+ * und geleakte Tool-JSON landen nie im Markdown-Body (saubere Lesespur).
  *
  * Copyright (c) 2026 Alexander Hubert · SPDX-License-Identifier: MIT
  */
-import { memo } from "react";
+import { memo, useState, useEffect } from "react";
 import { MarkdownBody } from "./MarkdownBody.jsx";
-import { splitStepBanner } from "../utils/assistantTrace.js";
+import { cleanAssistantAnswer } from "../utils/assistantTrace.js";
 
 function StepRail({ steps }) {
-  if (!Array.isArray(steps) || !steps.length) return null;
+  if (!Array.isArray(steps) || steps.length === 0) return null;
   return (
-    <div className="steps-rail" data-testid="steps-rail">
+    <div className="steps-rail chat-secondary" data-testid="steps-rail">
       {steps.map((s, i) => (
         <div className="step-block" key={s.id ?? i}>
           {s.start ? <div className="step-line step-line--start">{s.start}</div> : null}
@@ -30,33 +33,94 @@ function StepRail({ steps }) {
   );
 }
 
-const AssistantText = memo(function AssistantText({ text, steps }) {
-  // Live-Stufen bevorzugt; sonst Fallback auf den (alten) zusammengefassten Banner.
+function BannerSteps({ banner }) {
+  if (!banner) return null;
+  return (
+    <div className="agent-steps chat-secondary" data-testid="agent-steps">
+      {banner.split("\n").map((line, i) => (
+        <div className="agent-step-line" key={i}>
+          {line}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DraftsBlock({ drafts }) {
+  if (!Array.isArray(drafts) || drafts.length === 0) return null;
+  return (
+    <div className="drafts-rail chat-secondary" data-testid="drafts-rail">
+      <div className="drafts-rail-label">Entwürfe</div>
+      {drafts.map((d, i) => (
+        <div className="draft-block" key={d.id ?? i}>
+          <div className="draft-body">{typeof d === "string" ? d : d.text || ""}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function protocolSummary(stepCount, draftCount) {
+  const parts = [];
+  if (stepCount > 0) {
+    parts.push(`${stepCount} Schritt${stepCount === 1 ? "" : "e"}`);
+  }
+  if (draftCount > 0) {
+    parts.push(`${draftCount} Entwurf${draftCount === 1 ? "" : "e"}`);
+  }
+  if (!parts.length) return "Arbeitsprotokoll";
+  return `Arbeitsprotokoll · ${parts.join(" · ")}`;
+}
+
+const AssistantText = memo(function AssistantText({
+  text,
+  steps,
+  drafts,
+  streaming = false,
+  protocolCollapsed = false,
+}) {
   const hasLiveSteps = Array.isArray(steps) && steps.length > 0;
+  const draftList = Array.isArray(drafts) ? drafts : [];
+  // Banner + leaked tool JSON never enter MarkdownBody.
+  const { banner, answer } = cleanAssistantAnswer(text);
+  const prose = answer || "";
 
-  if (hasLiveSteps) {
-    return (
-      <>
-        <StepRail steps={steps} />
-        {text ? <MarkdownBody text={text} /> : null}
-      </>
-    );
-  }
+  const stepCount = hasLiveSteps
+    ? steps.length
+    : banner
+      ? banner.split("\n").filter(Boolean).length
+      : 0;
+  const hasProtocol = stepCount > 0 || draftList.length > 0;
 
-  const { banner, answer } = splitStepBanner(text);
-  if (!banner) {
-    return text ? <MarkdownBody text={text} /> : null;
-  }
+  // Live: Protokoll offen. Fertig: Default zugeklappt (Q8), Nutzer kann öffnen.
+  const [open, setOpen] = useState(Boolean(streaming) || !protocolCollapsed);
+  useEffect(() => {
+    if (streaming) {
+      setOpen(true);
+    } else if (protocolCollapsed) {
+      setOpen(false);
+    }
+  }, [streaming, protocolCollapsed]);
+
   return (
     <>
-      <div className="agent-steps" data-testid="agent-steps">
-        {banner.split("\n").map((line, i) => (
-          <div className="agent-step-line" key={i}>
-            {line}
+      {hasProtocol ? (
+        <details
+          className="work-protocol chat-secondary"
+          data-testid="work-protocol"
+          open={open}
+          onToggle={(e) => setOpen(e.currentTarget.open)}
+        >
+          <summary className="work-protocol-summary">
+            {protocolSummary(stepCount, draftList.length)}
+          </summary>
+          <div className="work-protocol-body">
+            {hasLiveSteps ? <StepRail steps={steps} /> : <BannerSteps banner={banner} />}
+            <DraftsBlock drafts={draftList} />
           </div>
-        ))}
-      </div>
-      {answer ? <MarkdownBody text={answer} /> : null}
+        </details>
+      ) : null}
+      {prose ? <MarkdownBody text={prose} /> : null}
     </>
   );
 });

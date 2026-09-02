@@ -84,7 +84,7 @@ export function insertSlashCommand(text, cursor, name) {
  * @param {string} [description]
  * @returns {number}
  */
-export function fuzzyScore(query, name, description = "") {
+export function fuzzyScore(query, name, description = "", aliases = []) {
   const q = String(query || "")
     .trim()
     .toLowerCase();
@@ -95,6 +95,14 @@ export function fuzzyScore(query, name, description = "") {
   if (n.startsWith(q)) return 800 - Math.min(n.length, 100);
   if (n.includes(q)) return 500 - n.indexOf(q);
   if (d.includes(q)) return 200;
+  const aliasList = Array.isArray(aliases) ? aliases : [];
+  for (const a of aliasList) {
+    const al = String(a || "").toLowerCase();
+    if (!al) continue;
+    if (al === q) return 950;
+    if (al.startsWith(q)) return 750 - Math.min(al.length, 100);
+    if (al.includes(q)) return 400;
+  }
   // subsequence
   let qi = 0;
   for (let i = 0; i < n.length && qi < q.length; i++) {
@@ -138,7 +146,7 @@ export function rankCatalog(skills, commands, query) {
     (list || [])
       .map((item) => ({
         item,
-        score: fuzzyScore(query, item.name, item.description),
+        score: fuzzyScore(query, item.name, item.description, item.aliases),
       }))
       .filter((x) => x.score > 0)
       .sort(
@@ -164,20 +172,19 @@ export function isValidSlashCommand(query, skills, commands) {
   if (!q) return false;
   const items = [...(skills || []), ...(commands || [])];
   if (items.some((it) => catalogNameKey(it.name) === q)) return true;
+  if (items.some((it) => (it.aliases || []).some((al) => catalogNameKey(al) === q))) return true;
 
   // Name-only fuzzy (ignore description-only matches for "valid command")
   const nameHits = items.filter((it) => {
-    const n = catalogNameKey(it.name);
-    if (!n) return false;
-    if (n === q) return true;
-    if (n.startsWith(q)) return true;
-    if (n.includes(q)) return true;
-    // subsequence on name
-    let qi = 0;
-    for (let i = 0; i < n.length && qi < q.length; i++) {
-      if (n[i] === q[qi]) qi += 1;
-    }
-    return qi === q.length;
+    const names = [catalogNameKey(it.name), ...(it.aliases || []).map(catalogNameKey)].filter(Boolean);
+    return names.some((n) => {
+      if (n === q || n.startsWith(q) || n.includes(q)) return true;
+      let qi = 0;
+      for (let i = 0; i < n.length && qi < q.length; i++) {
+        if (n[i] === q[qi]) qi += 1;
+      }
+      return qi === q.length;
+    });
   });
   return nameHits.length === 1;
 }
@@ -234,4 +241,52 @@ export function highlightSlashSegments(text, skills, commands) {
   }
   if (pos < s.length) segs.push({ text: s.slice(pos), highlight: false });
   return segs;
+}
+
+/** TUI /quit and /exit are useless in the web UI (tab close). Do not advertise. */
+export function isHiddenAgentCommand(name) {
+  const k = catalogNameKey(name);
+  return k === "quit" || k === "exit";
+}
+
+export function withoutHiddenAgentCommands(list) {
+  return (list || []).filter((c) => c && !isHiddenAgentCommand(c.name));
+}
+
+/** Local menu item that replaces advertised /quit. Label is German everyday speech. */
+export const UI_RELOAD_COMMAND = {
+  name: "UI neu laden",
+  description: "Web-UI neu laden, Anmeldung bleibt",
+  kind: "ui",
+  action: "reload",
+  aliases: ["quit", "exit", "reload", "laden"],
+};
+
+export function isUiReloadItem(item) {
+  if (!item || typeof item !== "object") return false;
+  if (item.action === "reload" || item.kind === "ui") return true;
+  return catalogNameKey(item.name) === catalogNameKey(UI_RELOAD_COMMAND.name);
+}
+
+export function isUiReloadSlash(text) {
+  const t = String(text || "").trim();
+  if (!t.startsWith("/")) return false;
+  const head = t.slice(1).trim().split(/\s+/, 1)[0] || "";
+  const k = catalogNameKey(head);
+  if (!k) return false;
+  if (k === catalogNameKey(UI_RELOAD_COMMAND.name)) return true;
+  return (UI_RELOAD_COMMAND.aliases || []).some((a) => catalogNameKey(a) === k);
+}
+
+export function slashItemLabel(item) {
+  const name = String(item && item.name ? item.name : "").replace(/^\//, "");
+  if (!name) return "";
+  if (item && (item.kind === "ui" || item.action === "reload" || item.local)) return name;
+  return "/" + name;
+}
+
+export function withUiReloadCommand(commands) {
+  const filtered = withoutHiddenAgentCommands(commands);
+  if (filtered.some(isUiReloadItem)) return filtered;
+  return filtered.concat([{ ...UI_RELOAD_COMMAND }]);
 }

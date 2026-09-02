@@ -52,6 +52,16 @@ describe("skillRootsForProfile", () => {
     });
     assert.ok(roots.some((r) => r.dir.includes(".claude/skills")));
   });
+
+  it("all heads scan ~/.glyph/skills (merken)", () => {
+    for (const id of ["grok", "_code", "glyph-agent"]) {
+      const roots = skillRootsForProfile(id, { home: "/Users/x", cwd: "/proj" });
+      assert.ok(
+        roots.some((r) => r.dir.endsWith("/.glyph/skills")),
+        `${id}: ~/.glyph/skills fehlt`,
+      );
+    }
+  });
 });
 
 describe("listSkillsForProfile", () => {
@@ -77,5 +87,30 @@ description: A test skill
     const hit = result.skills.find((s) => s.name === "demo-skill");
     assert.equal(hit.kind, "skill");
     assert.match(hit.description, /test skill/i);
+  });
+
+  it("lists merken from shared ~/.glyph/skills", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "glyph-merken-"));
+    const skillDir = path.join(tmp, ".glyph", "skills", "merken");
+    await fs.mkdir(skillDir, { recursive: true });
+    await fs.writeFile(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: merken
+description: "Eine Erkenntnis in die richtige Schicht. Wiki nur nach Vorlage."
+user-invocable: true
+---
+# merken
+`,
+      "utf8",
+    );
+    const result = await listSkillsForProfile("glyph-agent", {
+      home: tmp,
+      cwd: path.join(tmp, "empty-cwd"),
+    });
+    const hit = result.skills.find((s) => s.name === "merken");
+    assert.ok(hit, "merken nicht im Katalog");
+    assert.equal(hit.kind, "skill");
+    assert.match(hit.description, /Vorlage/);
   });
 });

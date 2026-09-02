@@ -61,6 +61,7 @@ describe("queue persistence", () => {
         savedAt: Date.now(),
         items: [
           { id: "a", text: "x", action: "deep-search" },
+          { id: "s", text: "z", action: "swarm" },
           { id: "b", text: "y", action: "weird" },
         ],
       }),
@@ -68,7 +69,8 @@ describe("queue persistence", () => {
     const loaded = loadPersistedQueue();
     assert.equal(loaded[0].action, "deep-search");
     assert.equal(loaded[0].displayText, "x");
-    assert.equal(loaded[1].action, "chat");
+    assert.equal(loaded[1].action, "swarm");
+    assert.equal(loaded[2].action, "chat");
   });
 
   it("drops empty / invalid entries", () => {

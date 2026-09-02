@@ -12,6 +12,81 @@ const SNACK_CELL = 10;
 const SNACK_GAP = Math.max(1, Math.floor(SNACK_CELL * 0.14)); // 1
 const SNACK_PIXEL = SNACK_CELL - SNACK_GAP * 2; // 8
 const SNACK_STEP = SNACK_CELL; // center-to-center = cell
+const SNACK_BODY_N = 4; // rotating body stones (not head)
+const SNACK_BODY_GAP = SNACK_STEP - SNACK_PIXEL; // 2
+const SNACK_BODY_TRAIL = SNACK_BODY_N * SNACK_STEP; // head → last body slot
+const SNACK_RAIL_W = SNACK_PIXEL + 4;
+
+function snackRoundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/** Soft-pixel stone dab — matches GraphFaces painterly cells (slight round + bleed). */
+function snackDrawSquare(ctx, x, y, fill) {
+  const ix = Math.round(x);
+  const iy = Math.round(y);
+  const s = SNACK_PIXEL;
+  const r = Math.max(1.2, s * 0.28);
+  ctx.fillStyle = fill;
+  ctx.globalAlpha = 0.35;
+  snackRoundRect(ctx, ix - 0.4, iy - 0.35, s + 0.9, s + 0.8, r + 0.3);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  snackRoundRect(ctx, ix, iy, s, s, r);
+  ctx.fill();
+}
+
+function snackDrawApple(ctx, x, y, stop, stopInner) {
+  // Pixel-Apfel (8px): Fruchtkörper mit abgerundeten Ecken, Glanzpunkt,
+  // brauner Stiel, grünes Blatt — liest sich als Apfel, nicht als Ball.
+  const ix = Math.round(x);
+  const iy = Math.round(y);
+  // Fruchtkörper: Ecken oben/unten abgeschnitten → runde Frucht-Silhouette
+  ctx.fillStyle = stop;
+  ctx.fillRect(ix + 1, iy, SNACK_PIXEL - 2, SNACK_PIXEL); // Kern (6×8)
+  ctx.fillRect(ix, iy + 2, SNACK_PIXEL, SNACK_PIXEL - 2); // Mitte (8×6)
+  // Glanzpunkt (links oben)
+  ctx.fillStyle = stopInner;
+  ctx.fillRect(ix + 1, iy + 2, 2, 1);
+  // Stiel (braun, mittig oben)
+  ctx.fillStyle = "#7a5230";
+  ctx.fillRect(ix + 3, iy - 2, 1, 2);
+  // Blatt (grün, rechts vom Stiel)
+  ctx.fillStyle = "#5e9c3f";
+  ctx.fillRect(ix + 4, iy - 2, 2, 1);
+}
+
+/** Head travel range so snout touches apple at destination. */
+function snackHeadRange(trackH, dir) {
+  const appleBelow = dir >= 0;
+  const appleY = appleBelow ? trackH - SNACK_PIXEL : 0;
+  let headMin;
+  let headMax;
+  if (appleBelow) {
+    headMin = SNACK_BODY_TRAIL;
+    headMax = appleY - SNACK_PIXEL;
+  } else {
+    headMin = appleY + SNACK_PIXEL;
+    headMax = trackH - SNACK_PIXEL - SNACK_BODY_TRAIL;
+  }
+  if (headMax < headMin) {
+    const mid = Math.max(0, Math.floor((trackH - SNACK_PIXEL) / 2));
+    headMin = appleBelow ? 0 : mid;
+    headMax = appleBelow ? mid : Math.max(0, trackH - SNACK_PIXEL);
+    if (headMax < headMin) {
+      headMin = 0;
+      headMax = 0;
+    }
+  }
+  return { appleY, headMin, headMax };
+}
 
 /** Parse #rgb / #rrggbb / rgb() / rgba() → [r,g,b] */
 function snackParseColor(c) {
@@ -44,9 +119,9 @@ function snackMixColor(a, b, t) {
 }
 
 /**
- * Snack while Grok works: chases a coral STOP target on a dark arena.
- * Gold snake (accent family) stays visible in light + dark theme.
- * Board is square so it fills the round send/stop control cleanly.
+ * Snack while Grok works: chases a pixel apple (stem+leaf) on a --bg arena.
+ * Gold snake stones only — arena matches composer/--bg (no gold plate).
+ * Board is square so it fills the round send/stop hit-target cleanly.
  * Click = cancel turn.
  *
  * stuffed=true → KO cartoon: X eyes, stuck-out tongue, apples raining on head.
@@ -72,7 +147,8 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       (css.getPropertyValue(name) || "").trim() || fallback;
     // Fallbacks = same gold/danger hex as CSS tokens
     const palette = {
-      arena: col("--send-work-bg", "transparent"),
+      // Arena = send surface (--bg); never a gold/olive disc behind stones
+      arena: col("--send-work-bg", col("--bg", "transparent")),
       head: stuffed
         ? col("--snack-stuffed-head", "#c9a227")
         : col("--snack-snake-head", "#d4af37"),
@@ -309,52 +385,65 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
 
     const drawCell = (x, y, fill, gapRatio = 0.14) => {
       // Same inset math as SNACK_PIXEL / SNACK_GAP (unified stone size)
+      // Soft dab corners — same painterly language as GraphFaces stones
       const gap = Math.max(1, Math.floor(cell * gapRatio));
       const s = cell - gap * 2;
+      const px = x * cell + gap;
+      const py = y * cell + gap;
+      const r = Math.max(1.2, s * 0.28);
       ctx.fillStyle = fill;
-      ctx.fillRect(x * cell + gap, y * cell + gap, s, s);
-      return { gap, size: s, px: x * cell + gap, py: y * cell + gap };
+      ctx.globalAlpha = 0.32;
+      snackRoundRect(ctx, px - 0.35, py - 0.3, s + 0.8, s + 0.7, r + 0.25);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      snackRoundRect(ctx, px, py, s, s, r);
+      ctx.fill();
+      return { gap, size: s, px, py };
     };
 
-    /** Coral stop disc — round target, matches circular send/stop control */
-    const drawStop = (x, y) => {
-      const pad = Math.max(1, Math.floor(cell * 0.12));
-      const s = cell - pad * 2;
-      const cx = x * cell + pad + s / 2;
-      const cy = y * cell + pad + s / 2;
-      const r = s / 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = palette.stop;
-      ctx.fill();
-      const inn = Math.max(1.5, s * 0.22);
-      ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(1, r - inn), 0, Math.PI * 2);
-      ctx.fillStyle = palette.stopInner;
-      ctx.fill();
-    };
 
     /**
-     * Full snack-apple (same language as hunt target + scrollbar apple):
-     * solid coral square ≈ head stone, inner highlight, tiny leaf.
-     * Size should match head — this is the pixel design, not weather.
+     * Pixel apple (hunt stop + KO rain): stem + leaf — never a flat round ball.
+     * Size ≈ head stone so the stop target reads clearly on the busy board.
      */
     const drawPixelApple = (x, y, size) => {
       const s = Math.max(SNACK_PIXEL, Math.round(size));
       const ix = Math.round(x);
       const iy = Math.round(y);
+      // Fruchtkörper: abgeschrägte Ecken (Apfel-Silhouette, kein Kreis-Disc)
+      const corner = Math.max(1, Math.floor(s * 0.18));
       ctx.fillStyle = palette.stop;
-      ctx.fillRect(ix, iy, s, s);
-      // same inset highlight idea as drawApple / stopInner
-      const pad = Math.max(1, Math.floor(s * 0.22));
-      const inner = Math.max(2, s - pad * 2);
+      ctx.fillRect(ix + corner, iy + corner, s - corner * 2, s - corner); // Kern
+      ctx.fillRect(ix, iy + corner, s, s - corner); // volle Breite unter den Ecken
+      // leichte untere Abrundung (Apfel, kein Ball-Disc)
+      ctx.fillRect(ix + corner, iy + s - 1, s - corner * 2, 1);
+      // Glanzpunkt
+      const pad = Math.max(1, Math.floor(s * 0.2));
       ctx.fillStyle = palette.stopInner;
-      ctx.fillRect(ix + pad, iy + pad, inner, inner);
-      // leaf nub (matches snack “food” readability at head scale)
+      ctx.fillRect(ix + pad, iy + pad + 1, Math.max(1, Math.floor(s * 0.22)), Math.max(1, Math.floor(s * 0.14)));
+      // Stiel (braun) — taller so it reads at send-button scale
+      const stemH = Math.max(2, Math.floor(s * 0.28));
+      const stemW = Math.max(1, Math.floor(s * 0.14));
+      ctx.fillStyle = "#7a5230";
+      ctx.fillRect(ix + Math.floor(s / 2), iy - stemH, stemW, stemH);
+      // Blatt (grün, rechts vom Stiel) — slightly larger for clarity
       if (s >= 6) {
         ctx.fillStyle = palette.leaf;
-        ctx.fillRect(ix + s - Math.max(2, Math.floor(s * 0.28)), iy - 1, Math.max(2, Math.floor(s * 0.28)), 2);
+        const leafW = Math.max(2, Math.floor(s * 0.36));
+        const leafH = Math.max(1, Math.floor(s * 0.18));
+        ctx.fillRect(ix + Math.floor(s / 2) + stemW, iy - stemH, leafW, leafH);
       }
+    };
+
+    /** Pixel apple stop target (stem+leaf) — never a flat coral disc / ball. */
+    const drawStop = (x, y) => {
+      const gap = Math.max(1, Math.floor(cell * 0.14));
+      const s = Math.max(SNACK_PIXEL, cell - gap * 2);
+      const px = x * cell + gap;
+      const py = y * cell + gap;
+      // Prefer full pixel apple language; fall back to shared 8px drawer
+      if (s >= SNACK_PIXEL + 2) drawPixelApple(px, py, s);
+      else snackDrawApple(ctx, px, py, palette.stop, palette.stopInner);
     };
 
     /** Dark pupil on head, aimed at the stop target (works light + dark). */
@@ -440,7 +529,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       const s = stateRef.current;
       if (!s) return;
 
-      // Transparent / same as button surface — no black fill takeover
+      // Transparent / --bg button surface — no gold plate, no black takeover
       ctx.clearRect(0, 0, boardW, boardH);
 
       if (!stuffed) {
@@ -497,7 +586,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
 
       const next = [{ x: nx, y: ny }, ...s.snake];
       if (nx === s.food.x && ny === s.food.y) {
-        // Hit stop disc in-game — just relocate; real stop is click
+        // Hit apple in-game — just relocate; real stop is click
         s.snake = next.slice(0, maxLen);
         s.food = placeFood(s.snake);
       } else {
@@ -565,7 +654,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       draw();
     };
 
-    // Any click on the snack board while working = stop (red disc is the cue)
+    // Any click on the snack board while working = stop (pixel apple is the cue)
     const onClick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -610,8 +699,8 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       }`}
       title={
         stuffed
-          ? "Überfressen (X_X + Zunge) — Äpfel auf den Kopf · tippen = Stopp"
-          : "Roter Punkt = Stopp (klicken)"
+          ? "Glyph got lost… in space — tippen = Stopp · dann neu"
+          : "Stopp — roter Punkt / Klick bricht ab"
       }
     />
   );
@@ -649,56 +738,6 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     snakeBot: 0,
   });
 
-  const PIXEL = SNACK_PIXEL; // 8×8 every stone + apple
-  const BODY_N = 4; // rotating body stones (not head)
-  const TOTAL = 1 + BODY_N; // head + body
-  const BODY_GAP = SNACK_STEP - SNACK_PIXEL; // 2
-  const STEP = SNACK_STEP; // 10
-  const BODY_TRAIL = (TOTAL - 1) * STEP; // distance from head to last body slot
-  const RAIL_W = PIXEL + 4;
-
-  const drawSquare = (ctx, x, y, fill) => {
-    ctx.fillStyle = fill;
-    ctx.fillRect(Math.round(x), Math.round(y), PIXEL, PIXEL);
-  };
-
-  const drawApple = (ctx, x, y, stop, stopInner) => {
-    const ix = Math.round(x);
-    const iy = Math.round(y);
-    ctx.fillStyle = stop;
-    ctx.fillRect(ix, iy, PIXEL, PIXEL);
-    ctx.fillStyle = stopInner;
-    ctx.fillRect(ix + 3, iy + 3, 2, 2);
-  };
-
-  /** Head travel range so snout touches apple at destination. */
-  const headRange = (trackH, dir) => {
-    const appleBelow = dir >= 0;
-    const appleY = appleBelow ? trackH - PIXEL : 0;
-    let headMin;
-    let headMax;
-    if (appleBelow) {
-      // Body trails upward. Start near top; finish with snout on bottom apple.
-      headMin = BODY_TRAIL;
-      headMax = appleY - PIXEL; // head bottom edge = apple top edge
-    } else {
-      // Body trails downward. Finish near bottom; start with snout on top apple.
-      headMin = appleY + PIXEL; // head top edge = apple bottom edge
-      headMax = trackH - PIXEL - BODY_TRAIL;
-    }
-    if (headMax < headMin) {
-      // Tiny track: collapse to centered contact if possible
-      const mid = Math.max(0, Math.floor((trackH - PIXEL) / 2));
-      headMin = appleBelow ? 0 : mid;
-      headMax = appleBelow ? mid : Math.max(0, trackH - PIXEL);
-      if (headMax < headMin) {
-        headMin = 0;
-        headMax = 0;
-      }
-    }
-    return { appleY, headMin, headMax };
-  };
-
   const paint = useCallback(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
@@ -712,7 +751,7 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     const stopInnerC = col("--snack-stop-inner", "#e07070");
 
     const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
-    const w = RAIL_W;
+    const w = SNACK_RAIL_W;
     const h = Math.max(1, Math.floor(wrap.clientHeight));
     if (
       canvas.width !== w * dpr ||
@@ -732,55 +771,56 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     ctx.clearRect(0, 0, w, h);
     if (!st.visible) return;
 
-    const x = Math.floor((w - PIXEL) / 2);
+    const x = Math.floor((w - SNACK_PIXEL) / 2);
     const appleBelow = st.dir >= 0;
     const headY = Math.round(st.headY);
     const appleY = Math.round(st.appleY);
 
     // ── HEAD: fixed brick, eye toward destination apple ───────────
-    drawSquare(ctx, x, headY, headC);
+    snackDrawSquare(ctx, x, headY, headC);
     {
       const eye = 2;
-      const ex = x + Math.floor((PIXEL - eye) / 2);
+      const ex = x + Math.floor((SNACK_PIXEL - eye) / 2);
       const ey = appleBelow
-        ? Math.round(headY) + PIXEL - eye - 1
+        ? Math.round(headY) + SNACK_PIXEL - eye - 1
         : Math.round(headY) + 1;
       ctx.fillStyle = "rgba(0,0,0,0.78)";
       ctx.fillRect(ex, ey, eye, eye);
     }
 
     // ── BODY: crawl wrap; head→tail gets lighter ─────────────────
-    const phase = ((st.scrollTop * 0.55) % STEP + STEP) % STEP;
-    const band = BODY_N * STEP;
-    for (let k = 0; k < BODY_N; k++) {
-      let dist = (k + 1) * STEP - phase;
+    const phase =
+      ((st.scrollTop * 0.55) % SNACK_STEP + SNACK_STEP) % SNACK_STEP;
+    const band = SNACK_BODY_N * SNACK_STEP;
+    for (let k = 0; k < SNACK_BODY_N; k++) {
+      let dist = (k + 1) * SNACK_STEP - phase;
       dist = ((dist % band) + band) % band;
-      if (dist < BODY_GAP) continue;
+      if (dist < SNACK_BODY_GAP) continue;
 
       // Soft edge only when a stone wraps at the tail band
       let alpha = 1;
-      if (dist > band - PIXEL) {
-        alpha = Math.max(0, (band - dist) / PIXEL);
+      if (dist > band - SNACK_PIXEL) {
+        alpha = Math.max(0, (band - dist) / SNACK_PIXEL);
       }
 
       const y = appleBelow
         ? headY - dist // body trails upward (away from bottom apple)
         : headY + dist; // body trails downward (away from top apple)
 
-      if (y + PIXEL < 0 || y > h) continue;
+      if (y + SNACK_PIXEL < 0 || y > h) continue;
       // k=0 nearest head, k→tail lighter (mix toward white only)
-      const t = (k + 1) / BODY_N;
+      const t = (k + 1) / SNACK_BODY_N;
       const fill = snackMixColor(bodyC, "#ffffff", 0.08 + t * 0.5);
       ctx.globalAlpha = Math.max(0.45, alpha);
-      drawSquare(ctx, x, y, fill);
+      snackDrawSquare(ctx, x, y, fill);
     }
     ctx.globalAlpha = 1;
 
     // ── APPLE: pinned to endpoint, PIXEL×PIXEL ────────────────────
-    if (appleY + PIXEL >= 0 && appleY <= h) {
-      drawApple(ctx, x, appleY, stopC, stopInnerC);
+    if (appleY + SNACK_PIXEL >= 0 && appleY <= h) {
+      snackDrawApple(ctx, x, appleY, stopC, stopInnerC);
     }
-  }, [PIXEL, RAIL_W, STEP, BODY_N, BODY_GAP]);
+  }, []);
 
   const measure = useCallback(() => {
     const el = scrollRef?.current;
@@ -810,14 +850,14 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     }
 
     const ratio = Math.min(1, Math.max(0, scrollTop / overflow));
-    const { appleY, headMin, headMax } = headRange(trackH, dir);
+    const { appleY, headMin, headMax } = snackHeadRange(trackH, dir);
     const headY = headMin + ratio * (headMax - headMin);
     const appleBelow = dir >= 0;
     // Hit-box for the tight snake (body + head), not the empty hunt gap
-    const snakeTop = appleBelow ? headY - BODY_TRAIL : headY;
+    const snakeTop = appleBelow ? headY - SNACK_BODY_TRAIL : headY;
     const snakeBot = appleBelow
-      ? headY + PIXEL
-      : headY + BODY_TRAIL + PIXEL;
+      ? headY + SNACK_PIXEL
+      : headY + SNACK_BODY_TRAIL + SNACK_PIXEL;
 
     stateRef.current = {
       visible: true,
@@ -834,7 +874,7 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     };
     setVisible(true);
     paint();
-  }, [scrollRef, paint, PIXEL, BODY_TRAIL]);
+  }, [scrollRef, paint]);
 
   useEffect(() => {
     const el = scrollRef?.current;
@@ -885,7 +925,10 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
       e.currentTarget.setPointerCapture?.(e.pointerId);
     } else {
       // Click track / apple → jump so head would sit near click
-      const targetHead = Math.min(headMax, Math.max(headMin, yIn - PIXEL / 2));
+      const targetHead = Math.min(
+        headMax,
+        Math.max(headMin, yIn - SNACK_PIXEL / 2),
+      );
       const span = headMax - headMin;
       scrollToRatio(span > 0 ? (targetHead - headMin) / span : 0);
     }
@@ -915,7 +958,7 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
     <div
       ref={wrapRef}
       className={`snack-scroll${visible ? " snack-scroll--on" : ""}`}
-      style={{ width: RAIL_W }}
+      style={{ width: SNACK_RAIL_W }}
       aria-hidden={!visible}
     >
       <canvas
