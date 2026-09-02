@@ -1990,14 +1990,18 @@ export default function App() {
   // Glyph-Momente: Apfel-Flug-Trigger (Ref, weil send() früher definiert ist als flyAppleTo)
   const flyAppleRef = useRef(null);
 
-  const send = useCallback(() => {
+  const send = useCallback((explicitText) => {
     // Apfel fliegt beim echten Senden vom Composer zum Send-Kopf.
     const composerEl = document.querySelector(".composer textarea, .composer [contenteditable='true']");
     if (composerEl && typeof flyAppleRef.current === "function") {
       const r = composerEl.getBoundingClientRect();
       flyAppleRef.current(r.left + r.width / 2 - 6, r.top + r.height / 2 - 6);
     }
-    const text = input.trim();
+    // Optional explicit text avoids stale closure when callers setInput then send
+    // in the same tick (e.g. empty-state starter chips).
+    const text = (
+      typeof explicitText === "string" ? explicitText : input
+    ).trim();
     if (attachBusy) return;
     if (text && isUiReloadSlash(text)) {
       hardReloadUi();
@@ -3872,18 +3876,10 @@ export default function App() {
                       type="button"
                       className="empty-starter-chip"
                       onClick={() => {
-                        // Complete prompt — bare „das“ left the agent with nothing to explain.
-                        // Fill + focus only: send() closes over `input`, so setInput+send is stale.
+                        // One-click send: pass text into send() — setInput+send would be stale.
                         const prompt =
                           "Was ist Glyph? Erklär kurz und klar: die Web-Fläche glyph-ui.com (°_Agent), den Schreibtisch auf dem Mac, und wofür man Glyph nutzt. Nutze die Wiki falls vorhanden.";
-                        setInput(prompt);
-                        requestAnimationFrame(() => {
-                          const ta = composerRef.current;
-                          if (!ta) return;
-                          ta.focus();
-                          const n = ta.value.length;
-                          ta.setSelectionRange(n, n);
-                        });
+                        send(prompt);
                       }}
                     >
                       Kurz erklären

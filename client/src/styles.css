@@ -70,7 +70,9 @@
   --ok: var(--gold-bright);
 
   --send-fg: color-mix(in srgb, var(--gold) 12%, #000000);
-  /* D = material A: container = composer/--bg. Gold ONLY on stones, never a fill plate. */
+  /* D = material A: container = composer/--bg. Gold ONLY on stones, never a fill plate.
+     button.send uses background-color: var(--bg) directly (no bg transition) so theme
+     flips cannot interpolate a circular gold disc behind the snake. */
   --send-idle-bg: var(--bg);
   --send-idle-border: transparent;
   --send-work-bg: var(--bg);
@@ -1256,8 +1258,11 @@ button:disabled {
 button.send {
   --send-morph: 0.72s cubic-bezier(0.22, 1.15, 0.36, 1);
   touch-action: manipulation;
-  /* D: transparent/bg-matching surface — round hit-target only, no gold plate */
-  background: var(--send-idle-bg);
+  -webkit-appearance: none;
+  appearance: none;
+  /* D: surface = --bg only — round hit-target, never a gold fill plate (C) */
+  background-color: var(--bg);
+  background-image: none;
   color: var(--gold-bright);
   border: 1px solid var(--send-idle-border);
   font-weight: 650;
@@ -1277,17 +1282,16 @@ button.send {
   align-self: stretch;
   position: relative;
   overflow: hidden;
+  /* No background/color transition — theme flip must not paint a gold disc */
   transition:
-    background 0.2s ease,
     border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    color 0.2s ease,
-    border-radius 0.2s ease;
+    box-shadow 0.2s ease;
 }
 
 button.send:hover:not(:disabled):not(.send--working) {
   /* No second color plane — only brighten stone gold */
-  background: var(--send-idle-bg);
+  background-color: var(--bg);
+  background-image: none;
   border-color: var(--send-idle-border);
   color: var(--text);
 }
@@ -1483,7 +1487,8 @@ button.send.send--morph-out .send-face--snack {
   No gold/olive fill plate (that was C).
 */
 button.send.send--working {
-  background: var(--send-work-bg);
+  background-color: var(--bg);
+  background-image: none;
   color: var(--text);
   cursor: pointer;
   opacity: 1;
