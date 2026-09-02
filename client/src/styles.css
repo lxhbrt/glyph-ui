@@ -70,10 +70,10 @@
   --ok: var(--gold-bright);
 
   --send-fg: color-mix(in srgb, var(--gold) 12%, #000000);
-  /* Clear primary: stronger gold fill so Send reads above Mic / + / mode / avatar */
-  --send-idle-bg: color-mix(in srgb, var(--gold) 46%, var(--panel));
-  --send-idle-border: color-mix(in srgb, var(--gold) 62%, var(--border));
-  --send-work-bg: var(--send-idle-bg);
+  /* D = material A: container = composer/--bg. Gold ONLY on stones, never a fill plate. */
+  --send-idle-bg: var(--bg);
+  --send-idle-border: transparent;
+  --send-work-bg: var(--bg);
 
   /* Snack = gold snake + danger stop (same hexes, only mix)
      Head darker → tail lighter (Enter board + chat scrollbar). */
@@ -121,9 +121,10 @@
   --ok: var(--gold-dim);
 
   --send-fg: color-mix(in srgb, var(--gold) 15%, #000000);
-  --send-idle-bg: color-mix(in srgb, var(--gold) 38%, var(--panel));
-  --send-idle-border: color-mix(in srgb, var(--gold) 55%, var(--border));
-  --send-work-bg: var(--send-idle-bg);
+  /* D = material A: container = composer/--bg (no gold plate in light either) */
+  --send-idle-bg: var(--bg);
+  --send-idle-border: transparent;
+  --send-work-bg: var(--bg);
 
   /* Darker gold head on light surface; body/tail ramp lighter */
   --snack-snake-head: var(--gold-deep);
@@ -1255,7 +1256,7 @@ button:disabled {
 button.send {
   --send-morph: 0.72s cubic-bezier(0.22, 1.15, 0.36, 1);
   touch-action: manipulation;
-  /* Calm idle: soft accent tint, not a solid neon block */
+  /* D: transparent/bg-matching surface — round hit-target only, no gold plate */
   background: var(--send-idle-bg);
   color: var(--gold-bright);
   border: 1px solid var(--send-idle-border);
@@ -1272,7 +1273,7 @@ button.send {
   font-size: 1.35rem;
   line-height: 1;
   letter-spacing: 0;
-  border-radius: 999px; /* same round language as composer bubble */
+  border-radius: 999px; /* invisible round hit-target; no visible plate fill */
   align-self: stretch;
   position: relative;
   overflow: hidden;
@@ -1285,9 +1286,27 @@ button.send {
 }
 
 button.send:hover:not(:disabled):not(.send--working) {
-  background: color-mix(in srgb, var(--gold) 58%, var(--panel));
-  border-color: color-mix(in srgb, var(--gold) 72%, var(--border));
+  /* No second color plane — only brighten stone gold */
+  background: var(--send-idle-bg);
+  border-color: var(--send-idle-border);
   color: var(--text);
+}
+
+button.send:hover:not(:disabled):not(.send--working) .send-snake-head .graph-face {
+  color: var(--gold-bright);
+}
+
+button.send:hover:not(:disabled):not(.send--working) .send-tail-stone--a {
+  background: var(--gold-bright);
+}
+
+button.send:focus {
+  outline: none;
+}
+
+button.send:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 button.send:disabled:not(.send--working) {
@@ -1313,8 +1332,10 @@ button.send .send-face {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Clip snack arena to round hit-target; no fill — surface stays --bg */
   border-radius: 50%;
-  overflow: hidden; /* idle head + SnackBoard share one circular clip */
+  overflow: hidden;
+  background: transparent;
   transition:
     opacity var(--send-morph),
     transform var(--send-morph),
@@ -1354,7 +1375,8 @@ button.send .send-snake-head {
   height: var(--send-head);
   z-index: 2;
   overflow: hidden;
-  border-radius: 50%; /* idle stone clipped to circle — same as working snack */
+  /* Square stone (faces on stone) — do NOT round into a gold disc */
+  border-radius: 0;
 }
 
 button.send .send-snake-head .graph-face {
@@ -1457,8 +1479,8 @@ button.send.send--morph-out .send-face--snack {
 }
 
 /*
-  Working / Stopp: same fill as idle head — only the red rim + snack change.
-  No black/full color takeover.
+  Working / Stopp: same --bg surface as idle — only danger rim + snack change.
+  No gold/olive fill plate (that was C).
 */
 button.send.send--working {
   background: var(--send-work-bg);
@@ -1497,8 +1519,8 @@ button.send .send-snack {
   width: 100%;
   height: 100%;
   border: none;
-  border-radius: 999px; /* clip snack arena to the round send button */
-  background: transparent;
+  border-radius: 999px; /* clip arena to round hit-target; surface stays --bg */
+  background: transparent; /* never a gold plate behind stones */
   overflow: hidden;
 }
 
@@ -4300,7 +4322,7 @@ button.composer-sheet-head:hover {
   height: 3.25rem;
   min-height: 3.25rem;
   flex-shrink: 0;
-  border-radius: 999px; /* idle head and working snack/stop share one circle */
+  border-radius: 999px; /* round hit-target only — no visible gold disc */
 }
 
 .composer.composer--grok .send.send--working,
@@ -4308,7 +4330,7 @@ button.composer-sheet-head:hover {
   width: 3.5rem;
   height: 3.5rem;
   min-height: 3.5rem;
-  border-radius: 999px; /* keep circle while snack is visible */
+  border-radius: 999px; /* keep round hit-target while snack is visible */
 }
 
 .composer.composer--grok .send.send--working .send-face--head {
@@ -7054,8 +7076,9 @@ button.cal-cell {
   color: inherit;
 }
 .permission-btn--allow {
-  background: var(--send-idle-bg);
-  border-color: var(--send-idle-border);
+  /* Own accent fill — must NOT share send tokens (send is --bg / no gold plate) */
+  background: color-mix(in srgb, var(--gold) 46%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 62%, var(--border));
   color: var(--gold-bright, var(--gold));
 }
 .permission-btn--reject {
