@@ -15,6 +15,8 @@ export function normalizeAvailableCommands(raw) {
     if (!c || typeof c !== "object") continue;
     const name = String(c.name || "").trim();
     if (!name) continue;
+    const key = name.replace(/^\//, "").toLowerCase();
+    if (key === "quit" || key === "exit") continue;
     const description = String(c.description || "").trim();
     const hint =
       c.input && typeof c.input === "object" && c.input.hint != null

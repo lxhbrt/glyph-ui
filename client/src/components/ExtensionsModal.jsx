@@ -4,7 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { rankCatalog } from "../utils/slash.js";
+import { rankCatalog, slashItemLabel, withoutHiddenAgentCommands } from "../utils/slash.js";
+
+/** Unified badge label: SKILL / UI / USER */
+function badgeMeta(item) {
+  const kind = item?.kind;
+  if (kind === "ui") return { label: "UI", cls: "ui" };
+  if (kind === "skill") {
+    if (item?.source === "user") return { label: "USER", cls: "user" };
+    return { label: "SKILL", cls: "skill" };
+  }
+  // Agent-/command entries → USER (nutzer-/agent-seitig ausführbar)
+  return { label: "USER", cls: "user" };
+}
 
 /**
  * @param {object} props
@@ -47,11 +59,13 @@ function ExtensionsModal({
 
   const commandItems = useMemo(
     () =>
-      (agentCommands || []).map((c) => ({
-        ...c,
-        kind: "command",
-        name: String(c.name || "").replace(/^\//, ""),
-      })),
+      withoutHiddenAgentCommands(
+        (agentCommands || []).map((c) => ({
+          ...c,
+          kind: c.kind === "ui" ? "ui" : "command",
+          name: String(c.name || "").replace(/^\//, ""),
+        })),
+      ).filter((c) => c.kind !== "ui" && c.action !== "reload"),
     [agentCommands],
   );
 
@@ -59,6 +73,8 @@ function ExtensionsModal({
     () => rankCatalog(skillItems, commandItems, query),
     [skillItems, commandItems, query],
   );
+
+  const filterEmpty = Boolean(query.trim()) && items.length === 0 && !loading;
 
   useEffect(() => {
     if (!open) return;
@@ -129,7 +145,8 @@ function ExtensionsModal({
             <h2>Befehle &amp; Skills</h2>
             <p className="overview-meta">
               {profileLabel ? `Profil: ${profileLabel} · ` : ""}
-              Auswahl fügt den Befehl in den Composer ein — sendet nicht.
+              Ausführbare Liste (Skills + Agent-Commands). Auswahl fügt{" "}
+              <code>/name</code> in den Composer ein — sendet nicht.
             </p>
           </div>
           <div className="overview-head-actions">
@@ -139,15 +156,26 @@ function ExtensionsModal({
           </div>
         </header>
 
-        <input
-          ref={searchRef}
-          className="overview-search"
-          type="search"
-          placeholder="Filtern…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Befehle filtern"
-        />
+        <p className="overview-hint">
+          Filtern und auswählen · <kbd>↑</kbd>/<kbd>↓</kbd> + <kbd>Enter</kbd> ·{" "}
+          <kbd>Esc</kbd> schließt · <kbd>/</kbd> im Composer öffnet dasselbe
+          (Popup). UI-Bedienung steht im <strong>Buch → Legende</strong>.
+        </p>
+
+        <div className="extensions-search-row">
+          <input
+            ref={searchRef}
+            className="overview-search"
+            type="search"
+            placeholder="Skills und Agent-Commands filtern…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Befehle und Skills filtern"
+          />
+          <span className="extensions-filter-hint" title="Filterfeld (Fokus hier)">
+            Filter
+          </span>
+        </div>
 
         {error ? <p className="overview-hint overview-hint--error">{error}</p> : null}
         {loading ? <p className="overview-hint">Skills werden geladen…</p> : null}
@@ -156,7 +184,21 @@ function ExtensionsModal({
         ) : null}
 
         <div className="overview-list extensions-list" role="listbox">
-          {items.length === 0 && !loading ? (
+          {filterEmpty ? (
+            <div className="extensions-empty">
+              <p className="slash-popup-empty">Keine Treffer</p>
+              <button
+                type="button"
+                className="ghost extensions-reset-filter"
+                onClick={() => {
+                  setQuery("");
+                  requestAnimationFrame(() => searchRef.current?.focus());
+                }}
+              >
+                Filter zurücksetzen
+              </button>
+            </div>
+          ) : items.length === 0 && !loading ? (
             <p className="slash-popup-empty" style={{ padding: 12 }}>
               Keine Einträge
               {commandItems.length === 0
@@ -167,6 +209,7 @@ function ExtensionsModal({
             items.map((item, i) => {
               const key = `${item.kind}:${item.name}`;
               const selected = i === selectedIndex;
+              const badge = badgeMeta(item);
               return (
                 <button
                   key={key}
@@ -183,11 +226,11 @@ function ExtensionsModal({
                 >
                   <div className="session-main">
                     <div className="extensions-row-title">
-                      <code>/{item.name}</code>
-                      <span className={`slash-badge slash-badge--${item.kind}`}>
-                        {item.kind === "skill" ? "Skill" : "Agent"}
+                      <code>{slashItemLabel(item)}</code>
+                      <span className={`slash-badge slash-badge--${badge.cls}`}>
+                        {badge.label}
                       </span>
-                      {item.source ? (
+                      {item.source && item.source !== "user" ? (
                         <span className="extensions-source">{item.source}</span>
                       ) : null}
                     </div>

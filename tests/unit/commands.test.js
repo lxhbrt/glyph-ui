@@ -29,6 +29,15 @@ describe("normalizeAvailableCommands", () => {
     });
     assert.equal(out[1].inputHint, "");
   });
+  it("drops advertised quit and exit", () => {
+    const out = normalizeAvailableCommands([
+      { name: "quit", description: "Exit the TUI" },
+      { name: "/exit", description: "Leave" },
+      { name: "compact", description: "Compress context" },
+    ]);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].name, "compact");
+  });
 });
 
 describe("commandsBroadcastPayload", () => {

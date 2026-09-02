@@ -17,7 +17,7 @@ UID_NUM="$(id -u)"
 DOMAIN="gui/${UID_NUM}"
 PORT="${PORT:-5174}"
 HOST="${HOST:-127.0.0.1}"
-GLYPH_UI_CWD="${GLYPH_UI_CWD:-$HOME_DIR}"
+GLYPH_UI_CWD="${GLYPH_UI_CWD:-$ROOT}"
 GLYPH_UI_STATE_DIR="${GLYPH_UI_STATE_DIR:-$HOME_DIR/.glyph-ui}"
 
 if [[ -n "${GROK_BIN:-}" ]]; then

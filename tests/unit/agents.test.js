@@ -37,7 +37,7 @@ test("parseArgs", async (t) => {
   });
 });
 
-test("resolveClaudeCommand", async (t) => {
+test("resolveClaudeCommand (legacy helper)", async (t) => {
   await t.test("explicit binary wins", () => {
     const r = resolveClaudeCommand({
       GLYPH_CLAUDE_BIN: "/opt/acp",
@@ -54,7 +54,6 @@ test("resolveClaudeCommand", async (t) => {
     assert.equal(r.bin, "npx");
     assert.equal(r.via, "npx");
     assert.ok(r.args.includes("@agentclientprotocol/claude-agent-acp"));
-    // -y so a missing package does not block on a prompt
     assert.equal(r.args[0], "-y");
   });
 });
@@ -62,10 +61,10 @@ test("resolveClaudeCommand", async (t) => {
 test("buildAgentProfiles", async (t) => {
   const profiles = buildAgentProfiles({ PATH: "/nonexistent-dir-xyz" });
 
-  await t.test("offers three profiles (no separate openrouter UI)", () => {
+  await t.test("offers three profiles: grok, _code, glyph-agent", () => {
     assert.deepEqual(
       profiles.map((p) => p.id),
-      ["grok", "claude", "glyph-agent"],
+      ["grok", "_code", "glyph-agent"],
     );
   });
 
@@ -87,30 +86,36 @@ test("buildAgentProfiles", async (t) => {
     assert.equal(findAgent(custom, "grok").bin, "/usr/local/bin/grok");
   });
 
-  await t.test("grok-only features are declared per profile", () => {
+  await t.test("^_Code uses glyph-agent-acp with MODE=code", () => {
+    const code = findAgent(profiles, "_code");
+    assert.equal(code.label, "^_Code");
+    assert.ok(code.args.some((a) => String(a).includes("glyph-agent-acp")));
+    assert.equal(code.env?.GLYPH_AGENT_MODE, "code");
+    assert.deepEqual(code.capabilities, {
+      deepSearch: false,
+      swarm: true,
+      activity: false,
+      sessionList: false,
+      sessionHistory: true,
+    });
+  });
+
+  await t.test("capabilities per profile", () => {
     assert.deepEqual(findAgent(profiles, "grok").capabilities, {
       deepSearch: true,
+      swarm: false,
       activity: true,
       sessionList: true,
       sessionHistory: true,
-      summarize: true,
     });
-    // Claude: keine Session/History/Summarize (externer Adapter)
-    assert.deepEqual(findAgent(profiles, "claude").capabilities, {
-      deepSearch: false,
-      activity: false,
-      sessionList: false,
-      sessionHistory: false,
-      summarize: false,
-    });
-    // glyph-agent: kein SessionList (Lupe), aber History + Summarize
     assert.deepEqual(findAgent(profiles, "glyph-agent").capabilities, {
       deepSearch: false,
+      swarm: true,
       activity: false,
       sessionList: false,
       sessionHistory: true,
-      summarize: true,
     });
+    assert.equal(findAgent(profiles, "glyph-agent").env?.GLYPH_AGENT_MODE, "agent");
   });
 });
 
@@ -118,7 +123,25 @@ test("resolveAgent", async (t) => {
   const profiles = buildAgentProfiles({ PATH: "" });
 
   await t.test("returns the requested profile", () => {
-    assert.equal(resolveAgent(profiles, "claude").id, "claude");
+    assert.equal(resolveAgent(profiles, "_code").id, "_code");
+  });
+
+  await t.test("maps claude/code aliases to _code", () => {
+    assert.equal(resolveAgent(profiles, "claude").id, "_code");
+    assert.equal(resolveAgent(profiles, "code").id, "_code");
+    assert.equal(resolveAgent(profiles, "^_Code").id, "_code");
+  });
+
+  await t.test("maps Grok Build to grok", () => {
+    assert.equal(resolveAgent(profiles, "Grok Build").id, "grok");
+    assert.equal(resolveAgent(profiles, "grok-build").id, "grok");
+  });
+
+  await t.test("maps °_Agent / legacy -_Agent / agent aliases to glyph-agent", () => {
+    assert.equal(resolveAgent(profiles, "°_Agent").id, "glyph-agent");
+    assert.equal(resolveAgent(profiles, "-_Agent").id, "glyph-agent");
+    assert.equal(resolveAgent(profiles, "_agent").id, "glyph-agent");
+    assert.equal(resolveAgent(profiles, "agent").id, "glyph-agent");
   });
 
   await t.test("unknown or missing id falls back to the default", () => {
@@ -129,6 +152,7 @@ test("resolveAgent", async (t) => {
 
   await t.test("findAgent stays strict so callers can reject bad input", () => {
     assert.equal(findAgent(profiles, "gpt"), null);
+    assert.equal(findAgent(profiles, "claude"), null);
   });
 });
 
@@ -136,11 +160,24 @@ test("publicAgent", async (t) => {
   const profiles = buildAgentProfiles({ PATH: "/nonexistent-dir-xyz" });
 
   await t.test("flattens command for the header tooltip", () => {
-    const wire = publicAgent(findAgent(profiles, "claude"));
-    assert.equal(wire.id, "claude");
-    assert.equal(wire.label, "Claude");
-    assert.ok(wire.command.startsWith("npx -y "));
+    const wire = publicAgent(findAgent(profiles, "_code"));
+    assert.equal(wire.id, "_code");
+    assert.equal(wire.label, "^_Code");
+    assert.ok(wire.command.includes("glyph-agent-acp"));
     assert.equal(typeof wire.hint, "string");
+    assert.ok(wire.hint.toLowerCase().includes("deepseek"));
+  });
+
+  await t.test("Grok Build is the public label for grok", () => {
+    const wire = publicAgent(findAgent(profiles, "grok"));
+    assert.equal(wire.id, "grok");
+    assert.equal(wire.label, "Grok Build");
+  });
+
+  await t.test("°_Agent is the public label for glyph-agent", () => {
+    const wire = publicAgent(findAgent(profiles, "glyph-agent"));
+    assert.equal(wire.id, "glyph-agent");
+    assert.equal(wire.label, "°_Agent");
   });
 
   await t.test("copies capabilities instead of sharing them", () => {

@@ -6,7 +6,18 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildCompact, formatSteps, modelLabel } from "../../client/src/utils/assistantTrace.js";
+import {
+  buildCompact,
+  cleanAssistantAnswer,
+  formatSteps,
+  modelHudText,
+  modelLabel,
+  resolveHudModel,
+  shortModelLabel,
+  splitStepBanner,
+  STEP_BANNER_SENTINEL,
+  stripLeakedToolCalls,
+} from "../../client/src/utils/assistantTrace.js";
 
 describe("modelLabel", () => {
   it("returns 'unbekannt' for missing/empty model", () => {
@@ -21,6 +32,169 @@ describe("modelLabel", () => {
 
   it("keeps a bare model name (no provider prefix)", () => {
     assert.equal(modelLabel("gpt-5.6-luna"), "gpt-5.6-luna");
+  });
+});
+
+describe("shortModelLabel / modelHudText", () => {
+  it("maps DeepSeek V4 Flash to DS-V4F", () => {
+    assert.equal(shortModelLabel("deepseek/deepseek-v4-flash-0731"), "DS-V4F");
+    assert.equal(shortModelLabel("deepseek-v4-flash"), "DS-V4F");
+  });
+
+  it("maps DeepSeek V4 Flash Vision Exp to DS-V4V, not DS-V4F", () => {
+    assert.equal(shortModelLabel("deepseek-v4-flash-vision-exp"), "DS-V4V");
+    assert.equal(
+      shortModelLabel("deepseek/deepseek-v4-flash-vision-exp"),
+      "DS-V4V",
+    );
+    assert.equal(modelHudText("deepseek-v4-flash-vision-exp", ""), "DS-V4V");
+  });
+
+  it("maps DeepSeek V4 Pro to DS-V4P", () => {
+    assert.equal(shortModelLabel("deepseek-v4-pro"), "DS-V4P");
+  });
+
+  it("maps common families to short codes", () => {
+    assert.equal(shortModelLabel("openai/gpt-4o-mini"), "4o-mini");
+    assert.equal(shortModelLabel("anthropic/claude-sonnet-4"), "Sonnet");
+    assert.equal(shortModelLabel("google/gemini-2.5-flash"), "Gem-Flash");
+  });
+
+  it("maps grok models to a version, never the word grok", () => {
+    assert.equal(shortModelLabel("grok-4.6"), "4.6");
+    assert.equal(shortModelLabel("grok-4-fast"), "4-fast");
+    assert.equal(shortModelLabel("grok-4"), "4");
+    assert.equal(shortModelLabel("grok-3-mini"), "3-mini");
+    assert.equal(shortModelLabel("xai/grok"), "Build");
+  });
+
+  it("falls back to first 4 chars for long unknown tokens", () => {
+    assert.equal(shortModelLabel("provider/superlongmodelname-v2"), "supe");
+  });
+
+  it("keeps short unknown tokens intact", () => {
+    assert.equal(shortModelLabel("ollama/qwen3"), "Qwen");
+    assert.equal(shortModelLabel("foo-bar"), "foo");
+  });
+
+  it("returns em-dash for empty", () => {
+    assert.equal(shortModelLabel(""), "—");
+    assert.equal(shortModelLabel(null), "—");
+  });
+
+  it("modelHudText shows only the model in use, not the configured pair", () => {
+    assert.equal(
+      modelHudText("deepseek/deepseek-v4-flash-0731", "openai/gpt-4o-mini"),
+      "DS-V4F",
+    );
+    assert.equal(modelHudText("deepseek/deepseek-v4-flash-0731", ""), "DS-V4F");
+    assert.equal(
+      modelHudText("deepseek-v4-pro", "deepseek/deepseek-v4-flash-0731"),
+      "DS-V4P",
+    );
+  });
+
+  it("modelHudText prefers the actually used model over primary", () => {
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash-0731",
+        "deepseek/deepseek-v4-flash-0731",
+      ),
+      "DS-V4F",
+    );
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash-0731",
+        "openai/gpt-4o-mini",
+      ),
+      "4o-mini",
+    );
+  });
+
+  it("modelHudText uses a live hop that belongs to the pair", () => {
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash-0731",
+        "",
+        "deepseek/deepseek-v4-flash-0731",
+      ),
+      "DS-V4F",
+    );
+  });
+
+  it("modelHudText ignores a chain live-label and falls back to primary", () => {
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash-0731",
+        "deepseek-v4-pro → deepseek/deepseek-v4-flash-0731",
+      ),
+      "DS-V4P",
+    );
+    assert.equal(
+      modelHudText(
+        "deepseek-v4-pro",
+        "x",
+        "deepseek-v4-pro -> deepseek/deepseek-v4-flash-0731",
+      ),
+      "DS-V4P",
+    );
+  });
+});
+
+describe("resolveHudModel", () => {
+  const agent = {
+    primary: "deepseek-v4-pro",
+    fallback: "deepseek/deepseek-v4-flash-0731",
+  };
+
+  it("defaults to primary when nothing has run yet", () => {
+    assert.equal(resolveHudModel(agent), "deepseek-v4-pro");
+  });
+
+  it("uses live fallback when that hop last ran (belongs to the pair)", () => {
+    assert.equal(
+      resolveHudModel({
+        ...agent,
+        liveLabel: "deepseek/deepseek-v4-flash-0731",
+      }),
+      "deepseek/deepseek-v4-flash-0731",
+    );
+  });
+
+  it("ignores a leftover CODE live-label on the agent pair", () => {
+    assert.equal(
+      resolveHudModel({
+        ...agent,
+        liveLabel: "google/gemini-3.7-flash",
+      }),
+      "deepseek-v4-pro",
+    );
+  });
+
+  it("session trace wins over live label", () => {
+    assert.equal(
+      resolveHudModel({
+        ...agent,
+        used: "deepseek-v4-pro",
+        liveLabel: "deepseek/deepseek-v4-flash-0731",
+      }),
+      "deepseek-v4-pro",
+    );
+  });
+
+  it("CODE primary stays even if shared provider still holds flash", () => {
+    assert.equal(
+      resolveHudModel({
+        primary: "google/gemini-3.7-flash",
+        fallback: "",
+        liveLabel: "deepseek/deepseek-v4-flash-0731",
+      }),
+      "google/gemini-3.7-flash",
+    );
   });
 });
 
@@ -229,5 +403,53 @@ describe("formatSteps + buildCompact steps chain", () => {
     });
     assert.ok(line.includes("VaultFind → WebSearch → LLM → answer"));
     assert.ok(line.includes("openrouter"));
+  });
+});
+
+describe("stripLeakedToolCalls", () => {
+  it("removes inline {\"tool\":…,\"args\":…} dumps between prose", () => {
+    const raw =
+      'Ich prüfe die Font-Definitionen.{"tool": "Grep", "args": {"pattern": "font", "path": ".", "max_hits": 30}}Ich prüfe die Klassen.';
+    const cleaned = stripLeakedToolCalls(raw);
+    assert.ok(!cleaned.includes('"tool"'));
+    assert.ok(cleaned.includes("Ich prüfe die Font-Definitionen."));
+    assert.ok(cleaned.includes("Ich prüfe die Klassen."));
+  });
+
+  it("removes name/arguments tool shape", () => {
+    const raw =
+      'Done.{"name":"ReadFile","arguments":{"path":"client/src/styles.css","offset":950}}Schrift: IBM Plex.';
+    const cleaned = stripLeakedToolCalls(raw);
+    assert.ok(!cleaned.includes("ReadFile"));
+    assert.ok(cleaned.includes("Done."));
+    assert.ok(cleaned.includes("Schrift: IBM Plex."));
+  });
+
+  it("keeps normal JSON without tool keys", () => {
+    const raw = 'Config: {"theme":"dark","font":"Plex"} bleibt.';
+    assert.equal(stripLeakedToolCalls(raw), raw);
+  });
+
+  it("leaves incomplete streaming objects alone", () => {
+    const raw = 'Start {"tool": "Grep", "args": {"pattern": "foo"';
+    assert.equal(stripLeakedToolCalls(raw), raw);
+  });
+});
+
+describe("cleanAssistantAnswer", () => {
+  it("splits banner and strips tool dumps from answer", () => {
+    const raw =
+      `Tool · Grep — erledigt\n${STEP_BANNER_SENTINEL}\n` +
+      'Prosa.{"tool":"Grep","args":{"path":"."}}Weiterer Text.';
+    const { banner, answer } = cleanAssistantAnswer(raw);
+    assert.ok(banner.includes("Grep"));
+    assert.ok(!answer.includes('"tool"'));
+    assert.ok(answer.includes("Prosa."));
+    assert.ok(answer.includes("Weiterer Text."));
+  });
+
+  it("matches splitStepBanner when no dumps", () => {
+    const raw = `a\n${STEP_BANNER_SENTINEL}\nb`;
+    assert.deepEqual(cleanAssistantAnswer(raw), splitStepBanner(raw));
   });
 });

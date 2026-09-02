@@ -2,6 +2,8 @@
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
+import { GlyphMark } from "./EgyptMarks.jsx";
+import { TabletPhoto } from "./GraphFaces.jsx";
 
 function IconSearch({ size = 20 }) {
   return (
@@ -28,16 +30,47 @@ function IconCompose({ size = 20 }) {
 }
 
 function IconCommands({ size = 20 }) {
-  /* Command palette / slash — Befehle */
+  /* ^_ — Befehle/Skills (analog Obsidian >_, passend zu ^_Code) */
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {/* caret ^ */}
       <path
-        d="M9 7.5V9a2.5 2.5 0 0 1-2.5 2.5H5M15 7.5V9a2.5 2.5 0 0 0 2.5 2.5H19M9 16.5V15a2.5 2.5 0 0 0-2.5-2.5H5M15 16.5V15a2.5 2.5 0 0 1 2.5-2.5H19"
+        d="M4.75 14.25L9 8.5l4.25 5.75"
         stroke="currentColor"
-        strokeWidth="1.75"
+        strokeWidth="1.85"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* underscore _ */}
+      <path
+        d="M14.25 16.75h5"
+        stroke="currentColor"
+        strokeWidth="1.85"
         strokeLinecap="round"
       />
-      <path d="M10 12h4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Three nodes + sagging cables — Graph */
+function IconLage({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="7" r="2.1" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="6.2" cy="17" r="2.1" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="17.8" cy="17" r="2.1" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M10.4 8.6C9 11.2 7.6 13.4 6.8 15.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M13.6 8.6C15 11.2 16.4 13.4 17.2 15.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -70,75 +103,14 @@ function IconBook({ size = 20 }) {
 }
 
 /**
- * Activity calendar icon — 4 snack-style cells:
- * red apple (+ light highlight) · dark gold head (eye toward apple) · mid · light
+ * Glyph mark — cartouche + Aten. Activity-calendar action is unchanged.
  */
 function IconCalendar({ size = 20 }) {
-  const gap = 1.5;
-  const cell = (24 - gap * 3) / 2; // 2×2 grid with outer padding = gap
-  const pad = gap;
-  const r = 1.2;
-  // positions: [x, y]
-  const tl = [pad, pad];
-  const tr = [pad + cell + gap, pad];
-  const bl = [pad, pad + cell + gap];
-  const br = [pad + cell + gap, pad + cell + gap];
-  // apple red · peak head · mid · light (matches cal-cell / snack palette)
-  const apple = "var(--snack-stop, #d94a4a)";
-  // same as snack drawApple stopInner (danger-bright = red + white)
-  const appleDot = "var(--snack-stop-inner, #e8a0a0)";
-  const head = "var(--gold-deep, #8a6a12)";
-  const mid = "var(--gold, #d4af37)";
-  const light = "var(--gold-bright, #e8c86a)";
-  const eye = "rgba(0,0,0,0.82)";
-  // highlight on apple (matches snack PIXEL apple: inset light square)
-  const appleDotSz = 2.2;
-  const appleDotX = tl[0] + 2.2;
-  const appleDotY = tl[1] + 2.2;
-  // eye on head (top-right) looking LEFT toward the apple
-  const eyeSz = 2.2;
-  const eyeX = tr[0] + 1.4;
-  const eyeY = tr[1] + (cell - eyeSz) / 2;
-
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      {/* top-left: Apfel (rot) + heller Punkt wie Snack-Apfel */}
-      <rect x={tl[0]} y={tl[1]} width={cell} height={cell} rx={r} fill={apple} />
-      <rect
-        x={appleDotX}
-        y={appleDotY}
-        width={appleDotSz}
-        height={appleDotSz}
-        fill={appleDot}
-      />
-      {/* top-right: Kopf / Peak — Auge schaut zum Apfel (links) */}
-      <rect x={tr[0]} y={tr[1]} width={cell} height={cell} rx={r} fill={head} />
-      <rect x={eyeX} y={eyeY} width={eyeSz} height={eyeSz} fill={eye} />
-      {/* bottom-left: mittel */}
-      <rect x={bl[0]} y={bl[1]} width={cell} height={cell} rx={r} fill={mid} />
-      {/* bottom-right: hell */}
-      <rect x={br[0]} y={br[1]} width={cell} height={cell} rx={r} fill={light} />
-    </svg>
-  );
+  return <GlyphMark size={size} className="icon-glyph-mark" />;
 }
 
-/**
- * Activity calendar (Claude-Code style):
- * gold cells = active days; brighter = less, darker = more;
- * darkest + eye = peak frequency.
- */
-
 function IconFolder({ size = 20 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M4 8.5A2.5 2.5 0 0 1 6.5 6H10l1.8 1.8H17.5A2.5 2.5 0 0 1 20 10.3v5.2A2.5 2.5 0 0 1 17.5 18h-11A2.5 2.5 0 0 1 4 15.5v-7z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <TabletPhoto size={size} />;
 }
 
 /** Wiki / Info — circle with “i” (clearer than book/cabinet). */
@@ -185,6 +157,20 @@ function IconMic({ size = 20 }) {
       <rect x="9" y="3.5" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.75" />
       <path
         d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3.5M9 20.5h6"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Simple plus — attach / add in composer */
+function IconPlus({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 5v14M5 12h14"
         stroke="currentColor"
         strokeWidth="1.75"
         strokeLinecap="round"
@@ -292,10 +278,102 @@ function IconStop({ size = 18 }) {
   );
 }
 
+/** Web-Tor password. */
+function IconLock({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect
+        x="6"
+        y="11"
+        width="12"
+        height="9"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M8.5 11V8.2a3.5 3.5 0 0 1 7 0V11"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Agent connected — chain link (status color via parent). */
+function IconLink({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9.5 14.5l5-5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11.2 16.8l-1.1 1.1a3.6 3.6 0 0 1-5.1-5.1l1.1-1.1M12.8 7.2l1.1-1.1a3.6 3.6 0 1 1 5.1 5.1l-1.1 1.1"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Agent offline — broken link. */
+function IconLinkOff({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9.5 14.5l1.8-1.8M14.5 9.5l-1.2 1.2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11.2 16.8l-1.1 1.1a3.6 3.6 0 0 1-5.1-5.1l1.1-1.1M12.8 7.2l1.1-1.1a3.6 3.6 0 1 1 5.1 5.1l-1.1 1.1"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5 5l14 14"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconRewind({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8.2 7.2L4.5 11l3.7 3.8"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.2 11h8.1c3 0 5.4 2.1 5.4 4.8v.4"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export {
   IconSearch,
   IconCompose,
   IconCommands,
+  IconLage,
   IconBook,
   IconCalendar,
   IconFolder,
@@ -303,10 +381,15 @@ export {
   IconWorkspace,
   IconTheme,
   IconMic,
+  IconPlus,
   IconSpeaker,
   IconSpeakerOff,
   IconCopy,
   IconCheck,
   IconRefresh,
   IconStop,
+  IconLock,
+  IconLink,
+  IconLinkOff,
+  IconRewind,
 };

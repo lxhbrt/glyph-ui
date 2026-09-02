@@ -8,6 +8,35 @@
   - All other tints = color-mix of those bases with white/black/panel
     (lighter/darker only — never shift gold→orange or mint/blue side accents)
 */
+
+/*
+  Type scale — identical in Hell/Dunkel and every agent profile
+  (Grok / ^_Code / °_Agent) and Chat|Deep Search|Fork.
+  Themes may only change colors; never re-size type per mode.
+  Desktop composer matches chat size; iOS media query floors at 16px
+  so Safari never auto-zooms the focused textarea.
+*/
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --type-chat: 0.85rem;
+  --type-chat-leading: 1.48;
+  --type-user: 0.85rem;
+  --type-user-leading: 1.42;
+  --type-secondary: 0.72rem;
+  --type-secondary-leading: 1.38;
+  --composer-font-size: 0.85rem;
+  --composer-line-height: 1.42;
+  --composer-letter-spacing: normal;
+  --composer-tab-size: 4;
+  --composer-pad-y: 8px;
+  --composer-pad-x: 10px;
+  --composer-min-h: 2.25rem;
+  --composer-max-h: min(42vh, 28rem);
+  /* P3 shared focus ring — thin gold ~2px */
+  --focus-ring: 2px solid color-mix(in srgb, var(--gold, #d4af37) 70%, transparent);
+  --focus-ring-offset: 2px;
+}
+
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -24,11 +53,13 @@
   --gold-dim: color-mix(in srgb, var(--gold) 72%, #000000);
   --gold-deep: color-mix(in srgb, var(--gold) 45%, #000000);
 
-  /* Chat: assistant flat on --bg; user = Grok-style bubble fill */
-  --user: #2a272f;
+  /* Chat: assistant flat on --bg; user/composer fill = bg, rim only */
+  --user: var(--bg);
+  --user-rim: color-mix(in srgb, var(--text) 18%, var(--border));
   --assistant: transparent;
-  --thought: transparent;
-  --tool: transparent;
+  /* Live-Verlauf (Think/Tool) — muted, immer lesbar */
+  --thought: var(--muted);
+  --tool: var(--muted);
 
   /* THE stop red (stop rim + snack target only) */
   --danger: #d94a4a;
@@ -39,9 +70,12 @@
   --ok: var(--gold-bright);
 
   --send-fg: color-mix(in srgb, var(--gold) 12%, #000000);
-  --send-idle-bg: color-mix(in srgb, var(--gold) 18%, var(--panel));
-  --send-idle-border: color-mix(in srgb, var(--gold) 40%, var(--border));
-  --send-work-bg: var(--send-idle-bg);
+  /* D = material A: container = composer/--bg. Gold ONLY on stones, never a fill plate.
+     button.send uses background-color: var(--bg) directly (no bg transition) so theme
+     flips cannot interpolate a circular gold disc behind the snake. */
+  --send-idle-bg: var(--bg);
+  --send-idle-border: transparent;
+  --send-work-bg: var(--bg);
 
   /* Snack = gold snake + danger stop (same hexes, only mix)
      Head darker → tail lighter (Enter board + chat scrollbar). */
@@ -57,8 +91,6 @@
   /* Shared stone size (matches Enter SnackBoard cell 10 / gap 0.14 → 8px) */
   --snack-pixel: 8px;
   --snack-pixel-gap: 2px;
-
-  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
 :root[data-theme="light"] {
@@ -76,11 +108,13 @@
   --gold-dim: color-mix(in srgb, var(--gold) 78%, #000000);
   --gold-deep: color-mix(in srgb, var(--gold) 52%, #000000);
 
-  /* Chat: assistant flat on --bg; user bubble slightly warm */
-  --user: color-mix(in srgb, var(--gold) 10%, #e8e2d8);
+  /* Chat: assistant flat on --bg; user/composer fill = bg, rim only */
+  --user: var(--bg);
+  --user-rim: color-mix(in srgb, var(--text) 14%, var(--border));
   --assistant: transparent;
-  --thought: transparent;
-  --tool: transparent;
+  /* Live-Verlauf (Think/Tool) — muted, immer lesbar */
+  --thought: var(--muted);
+  --tool: var(--muted);
 
   --danger: #d94a4a;
   --danger-bright: color-mix(in srgb, var(--danger) 55%, #ffffff);
@@ -89,9 +123,10 @@
   --ok: var(--gold-dim);
 
   --send-fg: color-mix(in srgb, var(--gold) 15%, #000000);
-  --send-idle-bg: color-mix(in srgb, var(--gold) 14%, var(--panel));
-  --send-idle-border: color-mix(in srgb, var(--gold) 36%, var(--border));
-  --send-work-bg: var(--send-idle-bg);
+  /* D = material A: container = composer/--bg (no gold plate in light either) */
+  --send-idle-bg: var(--bg);
+  --send-idle-border: transparent;
+  --send-work-bg: var(--bg);
 
   /* Darker gold head on light surface; body/tail ramp lighter */
   --snack-snake-head: var(--gold-deep);
@@ -121,6 +156,9 @@ body,
 html {
   height: 100%;
   height: 100dvh;
+  /* Prevent iOS Safari from inflating text independently of our scale */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body,
@@ -166,6 +204,9 @@ body,
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 55%, var(--bg));
   box-sizing: border-box;
+  /* Above Graph stage (z-index 60, left: 48px) so Theme/Reload stay clickable */
+  position: relative;
+  z-index: 70;
 }
 
 /* Push book / bottom actions to the foot of the rail */
@@ -213,8 +254,52 @@ body,
   cursor: not-allowed;
 }
 
-.side-rail-btn svg {
+/* Offene Session-To-dos: Punkt am Kalender-Icon (kein neuer Menüpunkt) */
+.side-rail-btn {
+  position: relative;
+}
+
+.side-rail-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold-bright, var(--gold));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--panel) 80%, var(--bg));
+  pointer-events: none;
+}
+
+.side-rail-btn--plan-open:not(:disabled) {
+  color: color-mix(in srgb, var(--gold-bright, var(--gold)) 70%, var(--muted));
+}
+
+.side-rail-btn svg,
+.side-rail-btn .icon-glyph-mark {
   display: block;
+}
+
+.icon-glyph-mark {
+  flex: 0 0 auto;
+  color: inherit;
+}
+
+/* Rail: no plate fill — signs follow the other icons (muted / text). */
+.icon-glyph-mark .tablet-plate,
+:root[data-theme="light"] .icon-glyph-mark .tablet-plate {
+  fill: none;
+}
+
+.icon-glyph-mark path.tablet-plate,
+:root[data-theme="light"] .icon-glyph-mark path.tablet-plate {
+  stroke: currentColor;
+  stroke-width: 1.35;
+}
+
+.icon-glyph-mark .tablet-sign,
+:root[data-theme="light"] .icon-glyph-mark .tablet-sign {
+  fill: currentColor;
 }
 
 .side-rail-sep {
@@ -242,13 +327,15 @@ body,
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* Kleiner Abstand Transcript → LVL/Composer (nicht flush, nicht die alten 44px) */
   gap: 12px;
   overflow: hidden;
   /* Content column centered with max width, padding away from rail */
   max-width: 920px;
   width: 100%;
   margin: 0 auto;
-  padding: 16px;
+  /* Chat etwas tiefer als knappes 16px, weniger als Draft 28px (Q17=C) */
+  padding: 18px 16px 16px;
   box-sizing: border-box;
 }
 
@@ -258,6 +345,14 @@ body,
   align-items: flex-start;
   gap: 12px;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.top > div:first-child {
+  min-width: 0;
+  flex: 1 1 10rem;
 }
 
 .top h1 {
@@ -270,7 +365,7 @@ body,
   gap: 0.4rem 0.55rem;
 }
 
-/* Build mark next to “Glyph” — product identity (#17), not semver noise */
+/* Build mark next to “Glyph” — #0.9.0 from git count 90 */
 .app-build {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.72rem;
@@ -301,11 +396,25 @@ body,
   font-size: 0.85rem;
 }
 
+/* Product line sits next to Glyph #0.9.0 — one header row, less height on phone */
+.sub.sub--inline {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  /* Allow soft wrap after · without exploding the row */
+  white-space: normal;
+  max-width: min(100%, 28rem);
+}
+
 .top-actions {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 /* Agent picker (Grok ↔ Claude) — sits left of the connection pill. */
@@ -344,6 +453,681 @@ body,
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
+.model-hud {
+  /* Kürzel (shortModelLabel) — volle ID nur im title-Tooltip */
+  max-width: 9rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #333);
+  background: transparent;
+  color: var(--muted, #999);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+  text-align: left;
+}
+.model-hud:hover {
+  color: var(--fg, #eee);
+  border-color: var(--fg-dim, #666);
+}
+.model-hud--mismatch {
+  border-color: #c9a227;
+  color: #e6c35c;
+}
+.model-hud--muted {
+  opacity: 0.75;
+}
+.model-hud-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* —— Provider-Umschalter (Header, °_Agent/^_Code) —— */
+.provider-switch {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.provider-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #333);
+  background: transparent;
+  color: var(--muted, #999);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.provider-switch-btn:hover:not(:disabled) {
+  color: var(--fg, #eee);
+  border-color: var(--fg-dim, #666);
+}
+
+.provider-switch-btn.is-mismatch {
+  border-color: #c9a227;
+  color: #e6c35c;
+}
+
+.provider-switch-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.provider-switch-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.provider-switch-caret {
+  font-size: 0.6rem;
+  opacity: 0.8;
+}
+
+.provider-switch-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 9.5rem;
+  background: var(--panel, #1c1c1e);
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.provider-switch-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted, #999);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.provider-switch-opt:hover {
+  background: color-mix(in srgb, var(--accent, #c9a227) 12%, transparent);
+  color: var(--fg, #eee);
+}
+
+.provider-switch-opt.is-on {
+  color: var(--accent, #c9a227);
+}
+
+.provider-switch-peak {
+  margin-left: auto;
+  font-size: 0.62rem;
+  opacity: 0.75;
+}
+/* —— Kabelsalat · Vaults (Buch → Vaults) —— */
+.vaults-panel {
+  padding: 0 0 0.25rem;
+}
+
+.vaults-lede {
+  margin: 0 0 0.55rem;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: var(--muted);
+}
+
+.vaults-hint {
+  margin: 0 0 0.55rem;
+}
+
+.vaults-map-stage {
+  position: relative;
+  display: block;
+  width: 10.5rem;
+  height: 10.5rem;
+  min-height: 10.5rem;
+  margin: 0 auto 0.1rem;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.vaults-map-stage[data-loading] {
+  opacity: 0.72;
+}
+
+.vaults-map-stage[data-loading]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 8px,
+    color-mix(in srgb, var(--gold) 7%, transparent) 8px,
+    color-mix(in srgb, var(--gold) 7%, transparent) 16px
+  );
+}
+
+.vaults-map-empty {
+  position: absolute;
+  left: 50%;
+  bottom: 0.2rem;
+  z-index: 2;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: 90%;
+  text-align: center;
+  font-size: 0.62rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.vaults-map-cables {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.vaults-cable {
+  stroke-linecap: round;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+/* r = angebunden, nur Lesen: Gold-Zebra (gestrichelt), nie Grau = offline */
+.vaults-cable.is-r {
+  stroke: color-mix(in srgb, var(--gold) 62%, transparent);
+  stroke-width: 1.05;
+  stroke-dasharray: 2.4 1.6;
+}
+
+/* r+w = volles Kabel, durchgezogen */
+.vaults-cable.is-rw {
+  stroke: color-mix(in srgb, var(--gold) 78%, var(--accent));
+  stroke-width: 1.25;
+  stroke-dasharray: none;
+}
+
+/* privat = rot gestrichelt (Red Line) */
+.vaults-cable.is-private {
+  stroke: color-mix(in srgb, var(--danger, #c44) 72%, var(--muted));
+  stroke-width: 1;
+  stroke-dasharray: 1.2 1.8;
+}
+
+.vaults-cable.is-selected {
+  stroke-width: 1.55;
+  stroke-dasharray: 2.4 1.6;
+  filter: drop-shadow(0 0 2.5px color-mix(in srgb, var(--gold) 45%, transparent));
+  animation: vaults-cable-hum 1.1s linear infinite;
+}
+
+@keyframes vaults-cable-hum {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vaults-cable.is-selected {
+    animation: none;
+  }
+}
+
+.vaults-cable.is-cut {
+  opacity: 0.35;
+}
+
+/* Legende unter dem Graph */
+.vaults-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.vaults-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.vaults-legend-line {
+  display: inline-block;
+  width: 1.15rem;
+  height: 0;
+  border-top: 2px solid color-mix(in srgb, var(--gold) 62%, transparent);
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.vaults-legend-line.is-r {
+  border-top-style: dashed;
+  border-top-color: color-mix(in srgb, var(--gold) 70%, transparent);
+}
+
+.vaults-legend-line.is-rw {
+  border-top-style: solid;
+  border-top-color: color-mix(in srgb, var(--gold) 85%, var(--accent));
+  border-top-width: 2.5px;
+}
+
+.vaults-legend-line.is-private {
+  border-top-style: dashed;
+  border-top-color: color-mix(in srgb, var(--danger, #c44) 75%, var(--muted));
+}
+
+.vaults-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  font-size: inherit;
+  line-height: 1;
+  color: inherit;
+}
+
+.vaults-mode-glyph {
+  flex-shrink: 0;
+  display: block;
+  opacity: 0.95;
+}
+
+.vaults-mode-badge.is-r {
+  color: color-mix(in srgb, var(--gold) 75%, var(--text));
+}
+
+.vaults-mode-badge.is-rw {
+  color: color-mix(in srgb, var(--gold) 90%, var(--accent));
+}
+
+.vaults-mode-badge.is-private {
+  color: color-mix(in srgb, var(--danger, #c44) 80%, var(--text));
+}
+
+.vaults-map-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  min-width: 2.6rem;
+  height: 1.55rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--gold) 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, var(--border));
+  pointer-events: none;
+}
+
+.vaults-hub-label {
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  color: var(--gold-bright, var(--gold));
+}
+
+.vaults-dot {
+  position: absolute;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.vaults-dot-mark {
+  display: block;
+  width: 7px;
+  height: 7px;
+  margin: 7.5px auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gold) 72%, var(--text));
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+.vaults-dot.is-r .vaults-dot-mark {
+  background: color-mix(in srgb, var(--gold) 62%, var(--muted));
+}
+
+.vaults-dot.is-rw .vaults-dot-mark {
+  background: color-mix(in srgb, var(--gold) 88%, var(--text));
+}
+
+.vaults-dot.is-private .vaults-dot-mark {
+  background: color-mix(in srgb, var(--danger) 80%, var(--muted));
+}
+
+.vaults-dot.is-primary .vaults-dot-mark {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 3.5px color-mix(in srgb, var(--gold) 70%, transparent);
+}
+
+.vaults-list-item.is-open .vaults-list-mode {
+  display: none;
+}
+
+.vaults-dot.is-selected .vaults-dot-mark {
+  width: 9px;
+  height: 9px;
+  margin: 6.5px auto;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.vaults-dot:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 0;
+  border-radius: 999px;
+}
+
+.vaults-dot.is-missing,
+.vaults-dot.is-cut {
+  opacity: 0.4;
+}
+
+.vaults-node {
+  display: none;
+}
+
+.vaults-star {
+  color: var(--gold);
+  font-size: 0.7rem;
+  margin-right: 0.28rem;
+}
+
+.vaults-attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.25rem;
+  align-items: center;
+  margin: 0.65rem 0 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.vaults-attach-input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.15rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.vaults-attach-input:focus {
+  outline: none;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--gold) 55%, var(--border));
+}
+
+.vaults-attach-mode {
+  font: inherit;
+  font-size: 0.75rem;
+  min-height: 44px;
+  padding: 0.25rem 0.2rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.vaults-detail {
+  display: none;
+}
+
+.vaults-badge {
+  font-size: 0.62rem;
+  font-weight: 650;
+  margin-left: 0.4rem;
+  color: var(--gold-bright, var(--gold));
+}
+
+.vaults-badge--warn {
+  color: var(--danger);
+}
+
+.vaults-path {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0;
+  font-size: var(--type-secondary);
+  color: var(--muted);
+}
+
+.vaults-path code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: inherit;
+  color: inherit;
+}
+
+.vaults-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.15rem 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.vaults-toolbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.vaults-tool-pair {
+  display: inline-flex;
+}
+
+.vaults-tool {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-height: 44px;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.vaults-tool:hover:not(:disabled),
+.vaults-tool:focus-visible {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.vaults-tool:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.vaults-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.vaults-tool-next {
+  color: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.vaults-tool--danger {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.vaults-detach {
+  color: var(--danger, #c44) !important;
+}
+
+.vaults-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--type-secondary);
+  color: var(--text);
+}
+
+.vaults-open {
+  text-decoration: none;
+}
+
+.vaults-pin-list {
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-secondary);
+  color: var(--muted);
+}
+
+.vaults-pin-list li + li {
+  margin-top: 0.1rem;
+}
+
+.vaults-pin-src,
+.vaults-pin-path {
+  display: none;
+}
+
+.vaults-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vaults-list-item + .vaults-list-item {
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.vaults-list-item.is-cut .vaults-list-name {
+  color: var(--muted);
+}
+
+.vaults-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.4rem 0.05rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vaults-list-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vaults-list-row:hover,
+.vaults-list-row.is-selected {
+  color: var(--text);
+}
+
+.vaults-list-item.is-open .vaults-list-name {
+  font-weight: 600;
+}
+
+.vaults-inspect {
+  padding: 0 0.05rem 0.7rem;
+}
+
+.vaults-list-mode {
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.vaults-list-mode.is-r {
+  color: color-mix(in srgb, var(--gold) 70%, var(--muted));
+}
+
+.vaults-list-mode.is-rw {
+  color: color-mix(in srgb, var(--gold) 85%, var(--text));
+}
+
+.vaults-list-mode.is-private {
+  color: color-mix(in srgb, var(--danger, #c44) 75%, var(--muted));
+}
+
+.bindings-advanced {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+}
+.bindings-advanced summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted, #999);
+}
+.bindings-hint--warn {
+  color: var(--gold-bright, var(--gold));
+}
 .agent-pick-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -373,6 +1157,37 @@ button.pill-btn {
     color 0.15s ease,
     background 0.15s ease,
     transform 0.1s ease;
+}
+
+/* Compact icon-only pills (status) — saves header space on phone */
+button.pill-btn.pill-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  letter-spacing: 0;
+  text-transform: none;
+  flex-shrink: 0;
+}
+
+button.pill-btn.pill-btn--icon.pending svg {
+  animation: pill-icon-spin 0.9s linear infinite;
+}
+
+@keyframes pill-icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.pill-btn.pill-btn--icon.pending svg {
+    animation: none;
+  }
 }
 
 button.pill-btn:hover:not(:disabled) {
@@ -444,10 +1259,14 @@ button:disabled {
 }
 
 button.send {
-  --send-morph: 0.48s cubic-bezier(0.34, 1.25, 0.64, 1);
-  /* Calm idle: soft accent tint, not a solid neon block */
-  background: var(--send-idle-bg);
-  color: var(--text);
+  --send-morph: 0.72s cubic-bezier(0.22, 1.15, 0.36, 1);
+  touch-action: manipulation;
+  -webkit-appearance: none;
+  appearance: none;
+  /* D: surface = --bg only — round hit-target, never a gold fill plate (C) */
+  background-color: var(--bg);
+  background-image: none;
+  color: var(--gold-bright);
   border: 1px solid var(--send-idle-border);
   font-weight: 650;
   width: 100%;
@@ -462,37 +1281,68 @@ button.send {
   font-size: 1.35rem;
   line-height: 1;
   letter-spacing: 0;
-  border-radius: 999px; /* same round language as composer bubble */
+  border-radius: 999px; /* invisible round hit-target; no visible plate fill */
   align-self: stretch;
   position: relative;
   overflow: hidden;
+  /* No background/color transition — theme flip must not paint a gold disc */
   transition:
-    background 0.2s ease,
     border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    color 0.2s ease,
-    border-radius 0.2s ease;
+    box-shadow 0.2s ease;
 }
 
 button.send:hover:not(:disabled):not(.send--working) {
-  background: color-mix(in srgb, var(--gold) 28%, var(--panel));
-  border-color: color-mix(in srgb, var(--gold) 55%, var(--border));
+  /* No second color plane — only brighten stone gold */
+  background-color: var(--bg);
+  background-image: none;
+  border-color: var(--send-idle-border);
+  color: var(--text);
+}
+
+button.send:hover:not(:disabled):not(.send--working) .send-snake-head .graph-face {
+  color: var(--gold-bright);
+}
+
+button.send:hover:not(:disabled):not(.send--working) .send-tail-stone--a {
+  background: var(--gold-bright);
+}
+
+button.send:focus {
+  outline: none;
+}
+
+button.send:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+button.send:disabled:not(.send--working) {
+  color: color-mix(in srgb, var(--gold-bright) 45%, var(--muted));
 }
 
 button.send .send-icon {
-  display: block;
-  font-size: 1.45rem;
-  font-weight: 700;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 
-/* Stacked faces for ↵ ⇄ Snack morph */
+button.send .send-icon svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Stacked faces for Kopf ⇄ Snack morph */
 button.send .send-face {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Clip snack arena to round hit-target; no fill — surface stays --bg */
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
   transition:
     opacity var(--send-morph),
     transform var(--send-morph),
@@ -501,27 +1351,115 @@ button.send .send-face {
   pointer-events: none;
 }
 
-/* Idle: Enter visible, Snack tucked away */
-button.send .send-face--enter {
+/* Idle: Graph head visible, Snack tucked away */
+button.send .send-face--head {
   opacity: 1;
   transform: scale(1) rotate(0deg);
   filter: blur(0);
   z-index: 2;
 }
 
+button.send .send-face--head .send-icon {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+button.send .send-snake {
+  --send-head: 50%;
+  --send-head-pad: 25%;
+  --send-chin: calc(var(--send-head-pad) + var(--send-head) - 2px);
+  --send-head-right: calc(var(--send-head-pad) + var(--send-head));
+  position: absolute;
+  inset: 0;
+}
+
+button.send .send-snake-head {
+  position: absolute;
+  left: var(--send-head-pad);
+  top: var(--send-head-pad);
+  width: var(--send-head);
+  height: var(--send-head);
+  z-index: 2;
+  overflow: hidden;
+  /* Square stone (faces on stone) — do NOT round into a gold disc */
+  border-radius: 0;
+}
+
+button.send .send-snake-head .graph-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  color: var(--gold);
+}
+
+button.send .send-tail {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+button.send .send-tail-stone {
+  position: absolute;
+  top: var(--send-chin);
+  border-radius: 0;
+  image-rendering: pixelated;
+  animation: graph-glance 8.4s steps(1, end) infinite;
+}
+
+/* 8 → 6 → 4px along the chin, trailing right toward the rim. */
+button.send .send-tail-stone--a {
+  left: calc(var(--send-head-right) - 10px);
+  width: var(--snack-pixel);
+  height: var(--snack-pixel);
+  background: var(--snack-snake-head);
+  animation-delay: -0.35s;
+}
+
+button.send .send-tail-stone--b {
+  left: calc(var(--send-head-right) - 1px);
+  width: calc(var(--snack-pixel) - var(--snack-pixel-gap));
+  height: calc(var(--snack-pixel) - var(--snack-pixel-gap));
+  background: var(--snack-snake-body);
+  animation-delay: -0.12s;
+}
+
+button.send .send-tail-stone--c {
+  left: calc(var(--send-head-right) + 6px);
+  width: calc(var(--snack-pixel) * 0.5);
+  height: calc(var(--snack-pixel) * 0.5);
+  background: color-mix(in srgb, var(--snack-snake-body) 70%, #fff);
+  animation-delay: 0.12s;
+}
+
+button.send:disabled:not(.send--working) .send-face--head .graph-face {
+  color: color-mix(in srgb, var(--gold) 45%, var(--muted));
+}
+
+/* Disabled (leerer Input): Kopf + Schwanz gleichermaßen sichtbar halten —
+   nur leicht gedimmt. Vorher 0.45: auf dunklem Grund wirkte der Schwanz
+   wie verschwunden („Kopf ohne Schwanz“). */
+button.send:disabled:not(.send--working) .send-tail {
+  opacity: 0.7;
+}
+
 button.send .send-face--snack {
   opacity: 0;
-  transform: scale(0.2) rotate(75deg);
-  filter: blur(2px);
+  transform: scale(0.35) rotate(48deg);
+  filter: blur(1.5px);
   z-index: 1;
   padding: 4px;
 }
 
-/* Working: Enter collapses into Snack */
-button.send.send--working .send-face--enter {
+/* Working: Head collapses into Snack */
+button.send.send--working .send-face--head {
   opacity: 0;
-  transform: scale(0.15) rotate(-100deg);
-  filter: blur(3px);
+  transform: scale(0.28) rotate(-72deg);
+  filter: blur(2px);
   z-index: 1;
 }
 
@@ -532,8 +1470,8 @@ button.send.send--working .send-face--snack {
   z-index: 2;
 }
 
-/* Work done: Snack morphs back into ↵ */
-button.send.send--morph-out .send-face--enter {
+/* Work done: Snack morphs back into the head */
+button.send.send--morph-out .send-face--head {
   opacity: 1;
   transform: scale(1) rotate(0deg);
   filter: blur(0);
@@ -542,17 +1480,18 @@ button.send.send--morph-out .send-face--enter {
 
 button.send.send--morph-out .send-face--snack {
   opacity: 0;
-  transform: scale(0.2) rotate(-75deg);
-  filter: blur(2px);
+  transform: scale(0.35) rotate(-48deg);
+  filter: blur(1.5px);
   z-index: 1;
 }
 
 /*
-  Working / Stopp: same fill as idle Enter — only the red rim + snack change.
-  No black/full color takeover.
+  Working / Stopp: same --bg surface as idle — only danger rim + snack change.
+  No gold/olive fill plate (that was C).
 */
 button.send.send--working {
-  background: var(--send-work-bg);
+  background-color: var(--bg);
+  background-image: none;
   color: var(--text);
   cursor: pointer;
   opacity: 1;
@@ -588,8 +1527,8 @@ button.send .send-snack {
   width: 100%;
   height: 100%;
   border: none;
-  border-radius: 999px; /* clip snack arena to the round send button */
-  background: transparent;
+  border-radius: 999px; /* clip arena to round hit-target; surface stays --bg */
+  background: transparent; /* never a gold plate behind stones */
   overflow: hidden;
 }
 
@@ -624,6 +1563,41 @@ button.send .send-snack .snack-canvas {
   padding: 10px 12px;
   border-radius: 10px;
   font-size: 0.9rem;
+}
+
+.banner--dismissible {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.banner-dismiss {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: -2px -4px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.75;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.banner-dismiss:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
 }
 
 /* Stale UI vs bridge build — visible only when numbers diverge */
@@ -706,6 +1680,8 @@ button.send.send--stuffed .send-snack {
   flex-direction: row;
   position: relative;
   gap: 0;
+  /* Chat-Fläche etwas vom Header absetzen */
+  margin-top: 6px;
 }
 
 /* Column: LVL context bar (sticky top) + scrollable messages */
@@ -715,50 +1691,68 @@ button.send.send--stuffed .send-snack {
 }
 
 /*
-  LVL-UP context Jagd-Bar — strip directly above the composer input.
+  LVL-UP context Jagd-Bar — strip above the composer.
+  Bar owns the height; text is a thin overlay (not a second row).
   Gray = context fill; gold snake shrinks with scroll (when overflow).
 */
 .context-lvl-bar {
   flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  position: relative;
+  display: block;
   margin: 0;
-  padding: 4px 6px 6px;
+  padding: 5px 8px;
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  cursor: pointer;
   cursor: help;
   user-select: none;
 }
 
+.context-lvl-bar-track {
+  position: relative;
+}
+
+/* Overlay: LVL left, % right — same vertical band as the pixel track */
 .context-lvl-bar-meta {
+  position: absolute;
+  inset: 0 8px;
+  z-index: 1;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  min-height: 1rem;
-  padding: 0 2px;
-  font-size: 0.68rem;
+  pointer-events: none;
+  font-size: 0.58rem;
   font-weight: 650;
   letter-spacing: 0.04em;
   color: var(--muted);
 }
 
 .context-lvl-bar-tag {
+  flex: 0 0 auto;
+  padding: 1px 5px 0;
+  border-radius: 4px;
   color: var(--gold-bright, var(--gold));
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.62rem;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--bg) 80%, transparent);
 }
 
 .context-lvl-bar-label {
+  flex: 0 0 auto;
+  padding: 1px 6px 0;
+  border-radius: 4px;
   font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--text) 72%, var(--muted));
-}
-
-.context-lvl-bar-est {
-  color: var(--muted);
-  font-weight: 700;
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--text) 90%, var(--muted));
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--bg) 80%, transparent);
 }
 
 .context-lvl-bar-canvas {
@@ -767,6 +1761,45 @@ button.send.send--stuffed .send-snack {
   height: auto;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.context-lvl-bar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.context-lvl-bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.7rem;
+  margin: 4px 2px 0;
+  padding: 0;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.context-lvl-bar-legend span:last-child {
+  flex: 1 1 100%;
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  font-variant-numeric: tabular-nums;
+}
+
+.context-lvl-compact {
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 650;
+  padding: 2px 7px;
+  min-height: 1.5rem;
+  cursor: pointer;
+}
+
+.context-lvl-compact:hover {
+  background: color-mix(in srgb, var(--gold) 22%, var(--panel));
 }
 
 /* Drag-and-drop target on the transcript (no toolbar button needed) */
@@ -832,7 +1865,7 @@ button.send.send--stuffed .send-snack {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 14px 0;
+  padding: 14px 18px 0;
 }
 
 .attach-chip {
@@ -906,7 +1939,7 @@ button.send.send--stuffed .send-snack {
 .composer-box.is-drop-target {
   outline: 2px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
   outline-offset: 2px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--user));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
 }
 
 /* Floating cue while reading mid-chat and new tool/chunks arrive below */
@@ -938,24 +1971,30 @@ button.send.send--stuffed .send-snack {
   flex: 1 1 auto;
   min-height: 0; /* critical: allow flex child to scroll */
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: var(--panel);
-  padding: 14px;
+  /* Same surface as page — only the rim separates the pane */
+  background: var(--bg);
+  padding: 20px;
   position: relative;
   z-index: 1;
-  /* Native scrollbar — LVL bar owns the snack hunt metaphor */
+  /* Native scrollbar only when content overflows — LVL bar owns snack metaphor */
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--gold) 45%, var(--border)) transparent;
 }
 
-/* Inner column — height changes observed for stick-to-bottom */
+/* Inner column — full height when empty (center hint), grows with messages.
+   flex-end: short threads sit on the composer (no dead air under last reply).
+   When content overflows, the box grows with content so scroll is unchanged. */
 .messages-content {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-height: min-content;
+  justify-content: flex-end;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 100%;
 }
 
 /* Seamless answer area — same black as page chrome (--bg) */
@@ -963,15 +2002,49 @@ button.send.send--stuffed .send-snack {
   border: none;
   border-radius: 0;
   background: var(--bg);
-  padding: 8px 8px 18px 4px;
+  /* Thin air; Kopieren/Vorlesen reservieren Platz am Message, nicht am Pane. */
+  padding: 8px 8px 11px 4px;
 }
 
 .empty {
-  color: var(--muted);
-  margin: auto;
+  /* AA vs near-black --bg: brighter than --muted alone */
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  margin: auto 0;
+  align-self: center;
   text-align: center;
   max-width: 28rem;
-  line-height: 1.5;
+  padding: 0 12px;
+  overflow-wrap: anywhere;
+  font-size: var(--type-chat);
+  line-height: var(--type-chat-leading);
+}
+
+.transcript-older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  width: 100%;
+  margin: 0 0 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  cursor: pointer;
+}
+
+.transcript-older:hover,
+.transcript-older:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--border));
+}
+
+.transcript-older:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 /*
@@ -980,8 +2053,9 @@ button.send.send--stuffed .send-snack {
   - User prompts → right-aligned speech bubble
 */
 .msg {
+  position: relative;
   border-radius: 0;
-  padding: 6px 4px 10px;
+  padding: 6px 4px 0;
   border: none;
   background: transparent;
   max-width: 100%;
@@ -1000,16 +2074,58 @@ button.send.send--stuffed .send-snack {
   padding: 10px 12px;
 }
 
-/* Prompt bubble — like Grok Chat app */
+/* User row: column so copy sits under the bubble, not inside the rim */
 .msg-user {
-  background: var(--user);
+  background: transparent;
   align-self: flex-end;
   max-width: min(82%, 34rem);
   border: none;
+  padding: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  user-select: text;
+}
+
+/* Prompt bubble — fill = page bg, rim only (not a filled card) */
+.msg-user-bubble {
+  background: var(--bg);
+  width: 100%;
+  border: 1px solid var(--user-rim);
   /* Speech bubble: round, slightly sharper corner toward the “tail” (bottom-right) */
   border-radius: 1.25rem 1.25rem 0.35rem 1.25rem;
   padding: 10px 14px 11px;
   box-shadow: none;
+}
+
+/* Message actions (copy / speak): under the text, not inside the bubble.
+   Closed = no layout. Open = padding so the bar is in the scroll box
+   (absolute overflow on the last msg cannot be scrolled). */
+.msg .msg-bottom-actions {
+  display: none;
+  position: absolute;
+  z-index: 3;
+  left: 2px;
+  bottom: 4px;
+  padding: 2px 0 0;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border-radius: 9px;
+}
+
+.msg.is-actions-open {
+  padding-bottom: 40px;
+}
+
+.msg.is-actions-open .msg-bottom-actions {
+  display: flex;
+}
+
+/* Copy under user bubble: outside the rim, right-aligned */
+.msg-user .msg-bottom-actions {
+  left: auto;
+  right: 0;
+  justify-content: flex-end;
 }
 
 .msg-user .role {
@@ -1018,28 +2134,28 @@ button.send.send--stuffed .send-snack {
 
 .msg-user .body,
 .msg-user .md-body {
-  font-size: 0.97rem;
-  line-height: 1.45;
+  font-size: var(--type-user);
+  line-height: var(--type-user-leading);
 }
 
 /*
-  Grok answers = primary reading track.
-  Full body contrast: dark theme → light text, light theme → dark text
-  (same as --text, forced so nothing inherits muted chrome).
+  Chat reading hierarchy:
+  - Answer = primary track (full contrast)
+  - Think / Tool / Steps / System = secondary, muted but always readable
 */
 .msg-assistant {
   background: transparent;
   align-self: stretch;
   max-width: min(100%, 48rem);
-  padding: 4px 6px 12px 2px;
+  padding: 6px 6px 0 2px;
   opacity: 1;
   color: var(--text);
 }
 
 .msg-assistant .role {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   color: var(--text);
-  opacity: 0.82;
+  opacity: 0.78;
   font-weight: 650;
 }
 
@@ -1053,13 +2169,14 @@ button.send.send--stuffed .send-snack {
   color: var(--text);
 }
 
+/* Primary reading size — same token as user + composer (all modes) */
 .msg-assistant .md-body {
   font-weight: 400;
-  font-size: 1rem;
-  line-height: 1.55;
+  font-size: var(--type-chat);
+  line-height: var(--type-chat-leading);
+  letter-spacing: 0.005em;
 }
 
-/* Dark: keep Grok as light as the app text (or a touch brighter) */
 :root[data-theme="dark"] .msg-assistant,
 :root[data-theme="dark"] .msg-assistant .md-body,
 :root[data-theme="dark"] .msg-assistant .md-body .md-p,
@@ -1067,7 +2184,6 @@ button.send.send--stuffed .send-snack {
   color: var(--text);
 }
 
-/* Light: keep Grok as dark as the app text */
 :root[data-theme="light"] .msg-assistant,
 :root[data-theme="light"] .msg-assistant .md-body,
 :root[data-theme="light"] .msg-assistant .md-body .md-p,
@@ -1076,67 +2192,293 @@ button.send.send--stuffed .send-snack {
 }
 
 /*
-  Tool + Thinking: secondary “nice to know” chrome.
-  Pale + italic so Grok replies scan as the main column.
+  Secondary chrome: muted, always visible (live tool/think stream).
+  No left accent bar — label + muted type is enough.
 */
 .msg-thought,
-.msg-tool {
+.msg-tool,
+.msg-system,
+.chat-secondary,
+.agent-steps,
+.steps-rail {
   background: transparent;
   max-width: min(100%, 48rem);
-  padding: 1px 6px 6px 2px;
-  opacity: 0.52;
-  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  padding: 2px 6px 8px 2px;
+  opacity: 1;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  font-weight: 400;
+  border: none;
+  border-left: none;
+  box-shadow: none;
 }
 
 .msg-thought .body,
 .msg-thought .md-body,
 .msg-tool .body,
-.msg-tool .md-body {
-  font-size: 0.84rem;
-  line-height: 1.4;
-  font-style: italic;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--muted) 75%, var(--text));
+.msg-tool .md-body,
+.msg-system .body,
+.msg-system .md-body,
+.msg-thought .md-body .md-p,
+.msg-thought .md-body .md-li,
+.msg-thought .md-body .md-h,
+.msg-tool .md-body .md-p,
+.msg-tool .md-body .md-li,
+.msg-tool .md-body .md-h,
+.msg-thought .md-body strong,
+.msg-tool .md-body strong,
+.msg-thought .md-code-inline,
+.msg-tool .md-code-inline,
+.msg-thought .md-code-block,
+.msg-tool .md-code-block,
+.msg-thought .md-body a,
+.msg-tool .md-body a,
+.msg-thought .role,
+.msg-tool .role,
+.msg-system .role,
+.agent-step-line,
+.step-line,
+.step-line--start,
+.step-line--result {
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  opacity: 1;
+  font-style: normal;
 }
 
-.msg-thought .role,
-.msg-tool .role {
-  font-size: 0.65rem;
-  letter-spacing: 0.1em;
-  opacity: 0.75;
-  margin-bottom: 3px;
-  color: var(--muted);
+/* Thinking body: italic (role label stays upright) */
+.msg-thought .body,
+.msg-thought .md-body,
+.msg-thought .md-body .md-p,
+.msg-thought .md-body .md-li {
+  font-style: italic;
+}
+
+.msg-thought {
+  color: var(--thought);
 }
 
 .msg-tool {
-  font-size: 0.84rem;
+  color: var(--tool);
 }
 
-/* Slightly quieter than tools/thinking, still secondary */
-.msg-system {
+.msg-thought .md-pre,
+.msg-tool .md-pre {
+  margin: 0.35em 0 0.5em;
+  padding: 0;
+  border-radius: 0;
   background: transparent;
+  border: none;
+}
+
+.msg-thought .role,
+.msg-tool .role,
+.msg-system .role {
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+
+.msg-tool {
+  font-size: var(--type-secondary);
+}
+
+/* Tool-Karte: stiller Disclosure, gleiche Palette (kein extra Grün). */
+.tool-card {
+  display: block;
   max-width: min(100%, 48rem);
-  padding: 2px 6px 8px 2px;
-  opacity: 0.72;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+.tool-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35em 0.5em;
+  width: 100%;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+button.tool-card-summary {
+  cursor: pointer;
+}
+button.tool-card-summary:hover .tool-card-target,
+button.tool-card-summary:hover .tool-card-verb {
+  color: var(--text);
+}
+.tool-card-verb {
+  color: var(--muted);
+}
+.tool-card-target {
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  color: var(--text);
+  opacity: 0.78;
+  word-break: break-all;
+}
+.tool-card-delta-add {
+  color: var(--ok);
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.92em;
+}
+.tool-card-delta-del {
+  color: var(--danger);
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.92em;
+}
+.tool-card-status {
+  opacity: 0.7;
+}
+.tool-card-chev {
+  opacity: 0.5;
+  font-size: 0.85em;
+}
+.tool-card--failed .tool-card-status {
+  color: var(--danger);
+  opacity: 1;
+}
+.tool-card--in_progress .tool-card-status {
+  color: var(--gold);
+  opacity: 0.9;
+}
+.tool-card-details {
+  margin: 2px 0 6px;
+  padding: 4px 0 2px 2px;
+  border-left: 1px solid var(--border);
+}
+.tool-card-section + .tool-card-section {
+  margin-top: 6px;
+}
+.tool-card-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.tool-card-pre {
+  margin: 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow: auto;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tool-card-line--add {
+  color: var(--ok);
+}
+.tool-card-line--del {
+  color: var(--danger);
+}
+
+/* Step banners / live rail: muted mono secondary track */
+.agent-steps,
+.steps-rail {
+  display: block;
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  margin: 0 0 6px 0;
+  padding: 0 0 0 6px;
+  word-break: break-word;
+  color: var(--muted);
 }
 
 /*
-  glyph-agent Tool-/Stufen-Banner (SearchVault/SearchWeb/... + Modell):
-  bewusst gedeckt — kleiner + dunkler als der eigentliche Antworttext, damit
-  die „Tool/Think“-Stufen als Nebenkanal erscheinen und die Antwort im Fokus bleibt.
+  Arbeitsprotokoll: Steps + Entwürfe, live offen, nach Final zugeklappt.
+  Primärspur (md-body) bleibt darunter in voller Lesestärke.
 */
-.agent-steps {
+.work-protocol {
   display: block;
-  font-size: 0.82rem;
-  line-height: 1.45;
+  margin: 0 0 10px 0;
+  padding: 0;
+  max-width: min(100%, 48rem);
   color: var(--muted);
-  opacity: 0.9;
-  margin: 0 0 8px 0;
-  padding: 6px 9px;
-  border-left: 3px solid color-mix(in srgb, var(--muted) 55%, transparent);
-  background: color-mix(in srgb, var(--panel) 40%, var(--bg));
-  border-radius: 6px;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+
+.work-protocol-summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  padding: 2px 0 4px;
+  outline: none;
+}
+
+.work-protocol-summary::-webkit-details-marker {
+  display: none;
+}
+
+.work-protocol-summary::before {
+  content: "▸ ";
+  display: inline-block;
+  width: 0.9em;
+  color: color-mix(in srgb, var(--muted) 80%, var(--text));
+}
+
+.work-protocol[open] > .work-protocol-summary::before {
+  content: "▾ ";
+}
+
+.work-protocol-body {
+  padding: 2px 0 6px 2px;
+  border-left: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+  margin-left: 2px;
+  padding-left: 8px;
+}
+
+.drafts-rail {
+  display: block;
+  margin: 6px 0 0;
+  padding: 0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--muted);
   word-break: break-word;
+}
+
+.drafts-rail-label {
+  font-style: normal;
+  font-weight: 550;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 4px;
+  opacity: 0.85;
+}
+
+.draft-block + .draft-block {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed color-mix(in srgb, var(--muted) 30%, transparent);
+}
+
+.draft-body {
+  white-space: pre-wrap;
+  max-height: 12rem;
+  overflow: auto;
+  opacity: 0.92;
 }
 
 .agent-step-line {
@@ -1148,26 +2490,6 @@ button.send.send--stuffed .send-snack {
   margin-top: 2px;
 }
 
-/*
-  Live-Stufen-Rail (glyph-agent, Streaming): Stufen erscheinen beim Beginn der
-  Tätigkeit, das Ergebnis wird nachträglich angehängt. Bewusst gedeckt — kleiner
-  + dunkler als der eigentliche Antworttext, damit die „Tool/Think“-Stufen als
-  Nebenkanal erscheinen und die Antwort im Fokus bleibt.
-*/
-.steps-rail {
-  display: block;
-  margin: 0 0 8px 0;
-  padding: 6px 9px;
-  border-left: 3px solid color-mix(in srgb, var(--muted) 55%, transparent);
-  background: color-mix(in srgb, var(--panel) 40%, var(--bg));
-  border-radius: 6px;
-  font-size: 0.82rem;
-  line-height: 1.45;
-  color: var(--muted);
-  opacity: 0.9;
-  word-break: break-word;
-}
-
 .step-block {
   margin: 0;
   padding: 0;
@@ -1175,8 +2497,7 @@ button.send.send--stuffed .send-snack {
 
 .step-block + .step-block {
   margin-top: 3px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
-  padding-top: 3px;
+  padding-top: 0;
 }
 
 .step-line {
@@ -1185,12 +2506,22 @@ button.send.send--stuffed .send-snack {
 }
 
 .step-line--start {
-  font-weight: 600;
+  font-weight: 550;
 }
 
 .step-line--result {
-  opacity: 0.78;
   font-weight: 400;
+}
+
+/* Selection on secondary track */
+.msg-thought ::selection,
+.msg-tool ::selection,
+.msg-system ::selection,
+.agent-steps ::selection,
+.steps-rail ::selection,
+.chat-secondary ::selection {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 28%, var(--bg));
 }
 
 .role {
@@ -1263,16 +2594,11 @@ button.send.send--stuffed .send-snack {
   cursor: not-allowed;
 }
 
-/* Untere Aktionsleiste (Kopieren/Vorlesen) unter dem vollständigen Antworttext.
-   Reine Icon-Buttons (wie die frühere obere Leiste, nur unten platziert),
-   keine Text-Labels. Große, gut treffbare Touch-Flächen. */
+/* Untere Aktionsleiste (Kopieren/Vorlesen) — Icon-only, 34px (Desktop = Mobil). */
 .msg-bottom-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
 }
 
 .msg-bottom-actions .msg-bottom-btn {
@@ -1313,14 +2639,6 @@ button.send.send--stuffed .send-snack {
   cursor: not-allowed;
 }
 
-/* Große Touch-Flächen auf Mobilgeräten */
-@media (max-width: 640px) {
-  .msg-bottom-actions .msg-bottom-btn {
-    width: 44px;
-    height: 44px;
-  }
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1338,8 +2656,8 @@ button.send.send--stuffed .send-snack {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: inherit;
-  line-height: 1.45;
-  font-size: 0.98rem;
+  line-height: var(--type-chat-leading);
+  font-size: var(--type-chat);
 }
 
 /* Rendered Markdown in chat bubbles — no raw **markers** */
@@ -1347,8 +2665,8 @@ button.send.send--stuffed .send-snack {
   margin: 0;
   word-break: break-word;
   font-family: inherit;
-  line-height: 1.5;
-  font-size: 0.98rem;
+  line-height: var(--type-chat-leading);
+  font-size: var(--type-chat);
   color: var(--text);
 }
 
@@ -1373,15 +2691,15 @@ button.send.send--stuffed .send-snack {
 }
 
 .md-h {
-  margin: 0.85em 0 0.4em;
-  font-size: 1.05rem;
+  margin: 0.7em 0 0.3em;
+  font-size: 0.92rem;
   font-weight: 650;
   letter-spacing: 0.01em;
   color: var(--text);
 }
 
 .md-h--sm {
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .md-list {
@@ -1419,34 +2737,48 @@ button.send.send--stuffed .send-snack {
   font-style: italic;
 }
 
+/*
+  Inline code in the answer: readable mono, low chrome.
+  Gold chips compete with prose — keep neutral so “Codes” don’t dominate.
+*/
 .md-code-inline {
   font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
   font-size: 0.88em;
-  padding: 0.12em 0.4em;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--gold) 18%, var(--border));
-  color: var(--text);
+  padding: 0.08em 0.32em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--muted) 16%, var(--border));
+  color: color-mix(in srgb, var(--muted) 22%, var(--text));
 }
 
 .md-pre {
-  margin: 0.5em 0 0.75em;
+  margin: 0.55em 0 0.8em;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow-x: auto;
-  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--muted) 14%, var(--border));
 }
 
 .md-code-block {
   font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   line-height: 1.45;
   background: transparent;
   border: none;
   padding: 0;
-  color: var(--text);
+  color: color-mix(in srgb, var(--muted) 18%, var(--text));
   white-space: pre;
+}
+
+/* Answer path: code stays secondary to prose (full-contrast body wins) */
+.msg-assistant .md-code-inline {
+  background: color-mix(in srgb, var(--muted) 10%, var(--panel));
+  border-color: color-mix(in srgb, var(--muted) 14%, var(--border));
+}
+
+.msg-assistant .md-pre {
+  background: color-mix(in srgb, var(--panel) 45%, var(--bg));
 }
 
 .md-quote {
@@ -1521,12 +2853,13 @@ button.send.send--stuffed .send-snack {
   max-height: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* LVL strip flush against input card */
+  gap: 2px;
 }
 
 /* Follow-up queue while Grok is working (TUI-style) */
-/* ACP execution plan — slim strip above composer */
-.plan-bar {
+/* Arbeitsleiste — Plan, Ordner-Suche, Aktiver Task. Über der LVL-Leiste. */
+.composer-sheet {
   flex: 0 0 auto;
   margin: 0 0 8px;
   border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--border));
@@ -1535,17 +2868,33 @@ button.send.send--stuffed .send-snack {
   overflow: hidden;
 }
 
-.plan-bar--done {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-  background: color-mix(in srgb, var(--panel) 90%, var(--accent));
+.composer-sheet:focus {
+  outline: none;
 }
 
-.plan-bar-head {
+.composer-sheet:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
+.composer-sheet--done {
+  border-color: color-mix(in srgb, var(--gold) 30%, var(--border));
+  background: color-mix(in srgb, var(--panel) 90%, var(--gold));
+}
+
+.composer-sheet-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+}
+
+.composer-sheet-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 6px 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px 6px 10px;
   border: none;
   background: transparent;
   color: var(--text);
@@ -1555,22 +2904,87 @@ button.send.send--stuffed .send-snack {
   text-align: left;
 }
 
-.plan-bar-head:hover {
+div.composer-sheet-head {
+  cursor: default;
+}
+
+button.composer-sheet-head:hover {
   background: color-mix(in srgb, var(--bg) 18%, transparent);
 }
 
-.plan-bar-label {
+.composer-sheet-dismiss {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0 6px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.composer-sheet-dismiss:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.composer-sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 4px 4px 4px 0;
+}
+
+.composer-sheet-go {
+  min-height: 2rem;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--gold) 16%, var(--panel));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.composer-sheet-go:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gold) 26%, var(--panel));
+}
+
+.composer-sheet-go:disabled,
+.composer-sheet-quiet:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.composer-sheet-quiet {
+  min-height: 2rem;
+  padding: 0 8px;
+  font-size: 0.72rem;
+}
+
+.composer-sheet-label {
   font-weight: 750;
   letter-spacing: 0.08em;
   color: var(--gold-bright, var(--gold));
   flex-shrink: 0;
 }
 
-.plan-bar--done .plan-bar-label {
-  color: var(--accent);
+.composer-sheet--done .composer-sheet-label {
+  color: var(--gold-bright, var(--gold));
 }
 
-.plan-bar-count {
+.composer-sheet-count {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
@@ -1581,7 +2995,7 @@ button.send.send--stuffed .send-snack {
   background: color-mix(in srgb, var(--bg) 35%, transparent);
 }
 
-.plan-bar-current {
+.composer-sheet-current {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -1591,21 +3005,163 @@ button.send.send--stuffed .send-snack {
   font-weight: 500;
 }
 
-.plan-bar-chevron {
+.composer-sheet-chevron {
   flex-shrink: 0;
   color: var(--muted);
   font-size: 0.7rem;
 }
 
+.composer-sheet-body {
+  max-height: min(32vh, 14rem);
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+
+.composer-sheet-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.composer-sheet-footnote {
+  margin-right: auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.composer-sheet-note {
+  margin: 0;
+  padding: 4px 2px 6px;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: var(--muted);
+}
+
+.composer-sheet-note--err {
+  color: var(--danger);
+}
+
+.composer-sheet--handoff .composer-sheet-body {
+  max-height: min(48vh, 20rem);
+}
+
+.composer-sheet-fields {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.composer-sheet-fields label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--type-secondary);
+  color: var(--muted);
+}
+
+.composer-sheet-fields input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  color: inherit;
+  background: color-mix(in srgb, var(--bg) 88%, var(--text));
+  font: inherit;
+}
+
+.task-evidence {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+
+.task-evidence summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  outline: none;
+}
+
+.task-evidence summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-evidence summary::before {
+  content: "▸ ";
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--muted) 80%, var(--text));
+}
+
+.task-evidence[open] > summary::before {
+  content: "▾ ";
+}
+
+.task-evidence summary:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--gold) 50%, var(--border));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.task-evidence-kicker {
+  flex-shrink: 0;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.task-evidence-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+}
+
+.task-evidence-body {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 2px 2px;
+  padding: 6px 0 4px 10px;
+  border-left: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+}
+
+.task-evidence-body h4 {
+  margin: 0 0 2px;
+  font-size: var(--type-secondary);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.task-evidence-body pre {
+  margin: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: var(--type-secondary);
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+}
+
 .plan-bar-list {
   list-style: none;
   margin: 0;
-  padding: 0 8px 8px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 9.5rem;
-  overflow-y: auto;
 }
 
 .plan-bar-item {
@@ -1663,7 +3219,7 @@ button.send.send--stuffed .send-snack {
   flex: 0 0 auto;
   border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--border));
   border-radius: 1.15rem;
-  background: color-mix(in srgb, var(--gold) 8%, var(--user));
+  background: var(--bg);
   padding: 8px 12px;
 }
 
@@ -1837,15 +3393,17 @@ button.send.send--stuffed .send-snack {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
-/* Input shell — same “bubble” language as user prompts */
+/* Input shell — same language as user prompts: bg fill, rim only */
 .composer-box {
+  position: relative;
   display: flex;
   flex-direction: column;
-  border: 1px solid color-mix(in srgb, var(--user) 70%, var(--border));
-  border-radius: 1.45rem;
-  background: var(--user);
+  border: 1px solid var(--user-rim);
+  /* Copilot-like card: rounder sides; toolbar stays on the floor */
+  border-radius: 2.35rem;
+  background: var(--bg);
   overflow: visible;
-  box-shadow: 0 6px 24px color-mix(in srgb, var(--bg) 55%, transparent);
+  box-shadow: none;
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease;
@@ -1855,30 +3413,106 @@ button.send.send--stuffed .send-snack {
   position: relative;
   width: 100%;
   min-width: 0;
+  /*
+    Shared text metrics — mirror + textarea must occupy the SAME box.
+    Font/line/pad tokens live on :root so Hell/Dunkel and all profiles
+    share one scale; only layout may override pads on small screens.
+    Mirror width is set in JS to textarea.clientWidth so wrap points
+    match the caret (scrollbar must not widen the visible text layer).
+  */
+}
+
+/* Composer card: textarea full width on top, [+] [Chat] … [mic] [send] on the floor.
+   Long drafts grow the textarea upward; the toolbar row does not move. */
+.composer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px 2px;
+  padding: 14px 18px 12px;
+  min-width: 0;
+  overflow: visible;
+}
+
+.composer-row .composer-input-wrap {
+  flex: 1 0 100%;
+  order: 0;
+  width: 100%;
+  min-width: 100%;
+  align-self: stretch;
+  display: block;
 }
 
 /* Mirror layer under textarea: shows accent on valid /commands */
 .composer-highlight {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
+  /* width/height: JS → ta.clientWidth/clientHeight (excludes scrollbar) */
+  display: block;
   width: 100%;
-  min-height: 72px;
-  max-height: 200px;
-  padding: 16px 18px 10px;
+  height: 100%;
   margin: 0;
-  border: none;
+  border: 0 solid transparent;
   box-sizing: border-box;
+  padding: var(--composer-pad-y) var(--composer-pad-x);
+  min-height: 0;
+  max-height: none;
   font: inherit;
-  line-height: 1.45;
+  font-size: var(--composer-font-size);
+  font-family: inherit;
+  font-weight: 400;
+  font-style: normal;
+  line-height: var(--composer-line-height);
+  letter-spacing: var(--composer-letter-spacing);
+  tab-size: var(--composer-tab-size);
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
   word-wrap: break-word;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* No stable gutter — width is locked to textarea.clientWidth in JS */
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
   pointer-events: none;
   color: var(--text);
   z-index: 0;
+  text-align: left;
+  vertical-align: top;
 }
 
-.composer-highlight .slash-cmd,
+.composer-highlight::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Spans must not alter metrics vs plain textarea text */
+.composer-highlight > span {
+  margin: 0;
+  padding: 0;
+  border: none;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+/* Color-only slash highlight in composer — bold changes glyph width → caret lag */
+.composer-highlight .slash-cmd {
+  color: var(--gold);
+  font-weight: inherit;
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border-radius: 2px;
+  /* box-decoration-break keeps background on wraps without metric shift */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* History / standalone slash text may stay semibold (not under caret) */
 .user-text-with-slash .slash-cmd,
 .slash-highlighted-text .slash-cmd {
   color: var(--gold);
@@ -1889,26 +3523,63 @@ button.send.send--stuffed .send-snack {
 .composer.composer--grok textarea.composer-textarea--overlay {
   position: relative;
   z-index: 1;
+  display: block;
   width: 100%;
   height: auto;
-  min-height: 72px;
-  max-height: 200px;
-  resize: none;
-  border: none;
+  margin: 0;
+  border: 0 solid transparent;
   border-radius: 0;
+  box-sizing: border-box;
+  padding: var(--composer-pad-y) var(--composer-pad-x);
+  min-height: var(--composer-min-h);
+  max-height: var(--composer-max-h);
+  resize: none;
   background: transparent;
   color: transparent;
+  -webkit-text-fill-color: transparent;
   caret-color: var(--text);
-  padding: 16px 18px 10px;
   font: inherit;
-  line-height: 1.45;
+  font-size: var(--composer-font-size);
+  font-family: inherit;
+  font-weight: 400;
+  font-style: normal;
+  line-height: var(--composer-line-height);
+  letter-spacing: var(--composer-letter-spacing);
+  tab-size: var(--composer-tab-size);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  word-wrap: break-word;
+  overflow-x: hidden;
   overflow-y: auto;
-  box-sizing: border-box;
+  /* Mirror is sized to clientWidth — no extra gutter that desyncs wraps */
+  scrollbar-gutter: auto;
+  /* Off: JS sets height; content sizing fights caret/mirror sync */
+  field-sizing: fixed;
+  vertical-align: top;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .composer.composer--grok textarea.composer-textarea--overlay::placeholder {
   color: var(--muted);
+  -webkit-text-fill-color: var(--muted);
   opacity: 0.85;
+}
+
+/*
+  No slash highlight → paint the textarea itself. Overlay wrap ≠ native
+  wrap from line 2 (caret sits mid-text). Overlay stays in DOM for size
+  sync and only paints when a catalog command is in the draft.
+*/
+.composer-input-wrap:not(.composer-input-wrap--slash-hl) .composer-highlight {
+  visibility: hidden;
+}
+.composer.composer--grok
+  .composer-input-wrap:not(.composer-input-wrap--slash-hl)
+  textarea.composer-textarea--overlay {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
 }
 
 .user-text-with-slash {
@@ -2016,6 +3687,80 @@ button.send.send--stuffed .send-snack {
   opacity: 0.85;
 }
 
+.rewind-picker {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: min(32rem, calc(100vh - 3rem));
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  padding: 14px 16px 12px;
+  outline: none;
+}
+
+.rewind-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.rewind-picker-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.rewind-picker-hint {
+  margin: 8px 0 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.rewind-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.rewind-picker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rewind-picker-row.is-selected,
+.rewind-picker-row:hover {
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+}
+
+.rewind-picker-idx {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding-top: 2px;
+}
+
+.rewind-picker-text {
+  min-width: 0;
+  line-height: 1.35;
+}
+
 .slash-popup-empty {
   margin: 0;
   padding: 14px 12px;
@@ -2049,6 +3794,42 @@ button.send.send--stuffed .send-snack {
 
 .extensions-list {
   min-height: 200px;
+  /* Ticket 10: keep scrollbar off descriptions */
+  scrollbar-gutter: stable;
+  padding-right: 6px;
+  /* Ticket 8: last row not clipped — bottom pad + soft fade */
+  padding-bottom: 28px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - 32px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - 32px),
+    transparent 100%
+  );
+}
+
+.extensions-list .extensions-row,
+.extensions-list .session-row {
+  padding-right: 14px;
+}
+
+.extensions-list .session-summary,
+.extensions-list .extensions-hint-line {
+  padding-right: 4px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.extensions-list .session-summary {
+  margin: 0;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .extensions-row {
@@ -2102,19 +3883,17 @@ button.send.send--stuffed .send-snack {
 }
 
 .composer-box:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
-    0 8px 28px color-mix(in srgb, var(--bg) 50%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--user-rim));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
+/* Legacy toolbar (superseded by .composer-row); kept for any residual markup */
 .composer-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 6px 12px 12px;
-  /* Soft fade instead of hard card edge inside the bubble */
   border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
   background: color-mix(in srgb, var(--bg) 12%, transparent);
 }
@@ -2126,6 +3905,367 @@ button.send.send--stuffed .send-snack {
   gap: 8px;
   min-width: 0;
   flex: 1;
+}
+
+/* Circular + attach control */
+.composer-plus-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  order: 1;
+  width: 2.25rem;
+  height: 2.25rem;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 28%, var(--panel));
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.composer-plus-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.composer-plus-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Ordner-Suche (°_Agent): Pixel-Apfel schwebt rechts über dem LVL-Balken,
+   in Fluchtlinie mit dem Send-Button (Lampe-Prinzip, rechts statt links).
+   Absolut aus dem Flow — Composer-/LVL-Höhe bleibt unverändert. */
+.composer-send-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  order: 4;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.composer-vault-btn {
+  position: absolute;
+  right: 18px; /* Fluchtlinie: rechte Kante des Send-Buttons (composer-row padding) */
+  bottom: calc(100% + 16px); /* schwebt frei über dem LVL-Balken (kein Quetschen) */
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 28%, var(--panel));
+  opacity: 0.42;
+  filter: brightness(0.82) saturate(0.85);
+  cursor: pointer;
+  transition:
+    opacity 0.18s ease,
+    filter 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.composer-vault-btn:hover:not(:disabled) {
+  opacity: 0.58;
+  filter: brightness(0.9) saturate(0.9);
+  border-color: color-mix(in srgb, var(--gold) 22%, var(--border));
+}
+
+.composer-vault-btn.is-on {
+  opacity: 1;
+  filter: none;
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 10%, var(--panel));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--gold) 70%, transparent),
+    0 0 8px color-mix(in srgb, var(--gold) 38%, transparent);
+  animation: vault-search-pulse 1.8s ease-in-out infinite;
+}
+
+.composer-vault-btn.is-on:hover:not(:disabled) {
+  opacity: 1;
+  filter: brightness(1.06);
+}
+
+.composer-vault-btn:disabled {
+  cursor: default;
+}
+
+.composer-vault-apple {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.composer-vault-apple-body {
+  fill: color-mix(in srgb, var(--danger) 72%, #7a1212);
+}
+
+.composer-vault-apple-shade {
+  fill: color-mix(in srgb, var(--danger-dim) 70%, #4a0808);
+}
+
+.composer-vault-apple-stem {
+  fill: color-mix(in srgb, var(--gold) 22%, #3a2412);
+}
+
+.composer-vault-apple-leaf {
+  fill: var(--snack-leaf);
+}
+
+.composer-vault-apple-shine {
+  fill: var(--danger-bright);
+  opacity: 0.85;
+}
+
+.composer-vault-btn.is-on .composer-vault-apple-body {
+  fill: color-mix(in srgb, var(--danger) 82%, #fff);
+}
+
+.composer-vault-btn.is-on .composer-vault-apple-leaf {
+  fill: color-mix(in srgb, var(--snack-leaf) 78%, #fff);
+}
+
+@keyframes vault-search-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--gold) 70%, transparent),
+      0 0 7px color-mix(in srgb, var(--gold) 32%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--gold) 88%, transparent),
+      0 0 12px color-mix(in srgb, var(--gold) 52%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-vault-btn.is-on {
+    animation: none;
+  }
+}
+
+/* Reihen-Wrapper: LVL-Balken + schwebender Ordner-Suche-Apfel darüber.
+   Der Apfel (Toggle) hängt als letztes Kind im Row und schwebt absolut
+   über der Oberkante des Balkens — rechts, in Fluchtlinie mit dem Kopf (Lampe-Prinzip). */
+.context-lvl-row {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Composer-Card-Anker (Drop-Target / relative Kinder). */
+.composer-box-anchor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.vault-hits-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vault-hit {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.4;
+  transition:
+    opacity 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+
+.vault-hit:hover {
+  opacity: 0.62;
+  filter: brightness(1.06);
+}
+
+.vault-hit.is-on {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--gold) 32%, var(--border));
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
+}
+
+.vault-hit-pip {
+  width: var(--snack-pixel);
+  height: var(--snack-pixel);
+  flex-shrink: 0;
+  margin-top: 4px;
+  background: color-mix(in srgb, var(--gold) 45%, var(--danger));
+  image-rendering: pixelated;
+}
+
+.vault-hit.is-on .vault-hit-pip {
+  background: color-mix(in srgb, var(--gold) 28%, var(--danger) 72%);
+}
+
+.vault-hit-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vault-hit-title {
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: var(--text);
+}
+
+.vault-hit-excerpt {
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: var(--muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Compact mode dropdown (Chat | Deep Search | Fork | Swarm) */
+.composer-mode-wrap {
+  position: relative;
+  flex-shrink: 0;
+  order: 2;
+  margin-right: auto;
+  z-index: 5;
+}
+
+.composer-mode-wrap:has(.composer-mode-menu) {
+  z-index: 50;
+}
+
+.composer-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 2.25rem;
+  max-width: 8.5rem;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 28%, var(--panel));
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.composer-mode-btn:hover:not(:disabled),
+.composer-mode-btn.is-open {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.composer-mode-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.composer-mode-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-mode-chevron {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  line-height: 1;
+}
+
+.composer-mode-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: auto;
+  z-index: 40;
+  min-width: max(10.5rem, 100%);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 70%, #000);
+}
+
+.composer-mode-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.composer-mode-option:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.composer-mode-option.is-active {
+  color: var(--send-fg, var(--text));
+  background: color-mix(in srgb, var(--accent) 42%, var(--bg));
+}
+
+.composer-mode-option.is-blocked,
+.composer-mode-option:disabled {
+  opacity: 0.4;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  cursor: not-allowed;
 }
 
 .composer-chip {
@@ -2185,11 +4325,12 @@ button.send.send--stuffed .send-snack {
 
 .composer.composer--grok .send {
   position: relative;
+  order: 0;
   width: 3.25rem;
   height: 3.25rem;
   min-height: 3.25rem;
   flex-shrink: 0;
-  border-radius: 999px; /* idle ↵ and working snack/stop share one circle */
+  border-radius: 999px; /* round hit-target only — no visible gold disc */
 }
 
 .composer.composer--grok .send.send--working,
@@ -2197,10 +4338,10 @@ button.send.send--stuffed .send-snack {
   width: 3.5rem;
   height: 3.5rem;
   min-height: 3.5rem;
-  border-radius: 999px; /* keep circle while snack is visible */
+  border-radius: 999px; /* keep round hit-target while snack is visible */
 }
 
-.composer.composer--grok .send.send--working .send-face--enter {
+.composer.composer--grok .send.send--working .send-face--head {
   pointer-events: none;
 }
 
@@ -2217,7 +4358,7 @@ button.send.send--stuffed .send-snack {
   cursor: pointer;
 }
 
-/* Grok Voice: mic (STT) + voice picker (TTS) */
+/* Grok Voice: mic (STT) icon-only; TTS voice picker removed from composer */
 .voice-controls {
   display: inline-flex;
   align-items: center;
@@ -2228,15 +4369,18 @@ button.send.send--stuffed .send-snack {
 .voice-mic-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  order: 3;
+  width: 1.95rem;
+  height: 1.95rem;
+  box-sizing: border-box;
+  flex-shrink: 0;
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 650;
   color: var(--muted);
-  padding: 5px 10px;
+  padding: 0;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 36%, transparent);
   cursor: pointer;
   user-select: none;
 }
@@ -2250,7 +4394,7 @@ button.send.send--stuffed .send-snack {
 .voice-mic-btn.is-recording {
   color: #fff;
   border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
-  background: color-mix(in srgb, var(--danger) 78%, #000);
+  background: color-mix(in srgb, var(--danger) 78%, var(--panel));
   animation: voice-pulse 1.2s ease-in-out infinite;
 }
 
@@ -2264,8 +4408,31 @@ button.send.send--stuffed .send-snack {
   cursor: not-allowed;
 }
 
+/* Ticket 2: secondary composer chrome — must follow base btn rules */
+.composer-plus-btn,
+.voice-mic-btn:not(.is-recording),
+.composer-mode-btn {
+  opacity: 0.62;
+  color: color-mix(in srgb, var(--muted) 92%, var(--text));
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
+  font-weight: 500;
+}
+
+/* Mic stays secondary to snake/send — a hair quieter than + / mode */
+.voice-mic-btn:not(.is-recording) {
+  opacity: 0.52;
+}
+
+.composer-plus-btn:hover:not(:disabled),
+.voice-mic-btn:not(.is-recording):hover:not(:disabled),
+.composer-mode-btn:hover:not(:disabled),
+.composer-mode-btn.is-open {
+  opacity: 0.92;
+}
+
 .voice-mic-label {
-  letter-spacing: 0.02em;
+  display: none; /* icon-only mic; label kept for legacy markup */
 }
 
 .voice-select-wrap {
@@ -2308,7 +4475,7 @@ button.send.send--stuffed .send-snack {
   }
 }
 
-/* Action picker: Chat | Deep Search | Fork (TUI-aligned, not thinking toggle) */
+/* Action picker: Chat | Deep Search | Fork | Swarm (TUI-aligned) */
 .action-picker {
   display: inline-flex;
   align-items: stretch;
@@ -2401,9 +4568,16 @@ button.send.send--stuffed .send-snack {
 
 .empty-soft {
   display: inline-block;
-  margin-top: 10px;
-  color: var(--muted);
-  font-size: 0.9rem;
+  margin-top: 8px;
+  /* Small text needs ≥4.5:1 — lift above plain --muted on --bg */
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+
+.empty-soft strong {
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font-weight: 650;
 }
 
 button.ghost {
@@ -2524,6 +4698,13 @@ button.danger {
   min-height: 160px;
 }
 
+.overview-list--flat {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-height: 0;
+}
+
 .session-row {
   display: flex;
   justify-content: space-between;
@@ -2583,6 +4764,20 @@ button.danger {
 .session-title-row strong {
   font-weight: 600;
   font-size: 0.95rem;
+}
+
+.session-rename {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .session-sub {
@@ -2685,8 +4880,654 @@ button.danger {
 
 /* —— Activity calendar (Claude-Code style heatmap) —— */
 .cal-panel {
-  grid-template-rows: auto auto 1fr;
+  display: flex;
+  flex-direction: column;
+  grid-template-rows: none;
   width: min(760px, 100%);
+  max-height: min(88vh, 820px);
+  gap: 10px;
+  overflow: hidden;
+}
+
+.cal-panel-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  flex: 0 0 auto;
+}
+
+.cal-panel-sticky--tabs {
+  z-index: 2;
+  padding-top: 2px;
+  margin-top: -2px;
+}
+
+.cal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cal-plan-note {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--muted) 90%, var(--text));
+  line-height: 1.35;
+}
+
+.cal-tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 25%, transparent);
+  flex-shrink: 0;
+}
+
+.cal-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.cal-zone--tasks {
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+}
+
+.cal-zone--recurring {
+  background: color-mix(in srgb, var(--gold) 4%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 18%, var(--border));
+}
+
+.cal-zone-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 2px 0 4px;
+  background: inherit;
+  margin: -2px 0 0;
+}
+
+.cal-zone-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cal-zone-count {
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  margin-right: auto;
+}
+
+.cal-zone-primary {
+  font-size: 0.78rem !important;
+  padding: 4px 12px !important;
+}
+
+.cal-hint-one {
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.cal-hint-more {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cal-hint-detail {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.cal-todo-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cal-status-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
+  flex-shrink: 0;
+}
+
+.cal-status-chip--open {
+  color: color-mix(in srgb, var(--text) 85%, var(--muted));
+  border-color: color-mix(in srgb, var(--border) 70%, var(--text));
+}
+
+.cal-status-chip--pause {
+  color: color-mix(in srgb, var(--gold) 80%, var(--text));
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+}
+
+.cal-status-chip--error {
+  color: color-mix(in srgb, var(--danger-bright, var(--danger)) 85%, var(--text));
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.cal-status-chip--empty {
+  color: color-mix(in srgb, #e8b84a 90%, var(--text));
+  background: color-mix(in srgb, #e8b84a 14%, transparent);
+  border-color: color-mix(in srgb, #e8b84a 45%, var(--border));
+}
+
+.cal-status-chip--ok {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.cal-status-chip--inline {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.cal-todo-item--empty {
+  border-color: color-mix(in srgb, #e8b84a 35%, var(--border));
+}
+
+.cal-todo-item--error {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.cal-more-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.cal-more-btn {
+  min-width: 2rem;
+  letter-spacing: 0.08em;
+  font-weight: 700 !important;
+}
+
+.cal-more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  min-width: 9.5rem;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 70%, #000);
+}
+
+.cal-more-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cal-more-menu-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.cal-more-menu-item--danger {
+  color: color-mix(in srgb, var(--danger-bright, var(--danger)) 80%, var(--text));
+}
+
+.cal-more-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cal-inline-form,
+.cal-inline-confirm {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cal-inline-confirm p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.cal-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.cal-activity-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 4px;
+}
+
+.cal-legend--compact {
+  justify-content: flex-start;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.cal-activity-blocked {
+  padding: 18px 14px;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--border) 90%, transparent);
+  background: color-mix(in srgb, var(--panel) 60%, var(--bg));
+}
+
+.cal-blocked-title {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.cal-session-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+}
+
+.cal-session-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.cal-session-card .cal-session-open {
+  margin-left: auto;
+}
+
+.cal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 0 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  flex: 0 0 auto;
+}
+
+.cal-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 8px 12px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-tab:hover:not(:disabled) {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.cal-tab--active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  box-shadow: inset 0 -2px 0 var(--gold-bright, var(--gold));
+}
+
+.cal-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cal-tab-badge {
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
+  color: var(--muted);
+}
+
+.cal-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 4px 0 8px;
+}
+
+.cal-task-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+
+.cal-task-section h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cal-task-assign {
+  display: grid;
+}
+
+.cal-task-assign select {
+  min-height: 32px;
+  max-width: 11rem;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--bg) 55%, var(--panel));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.cal-plan-toolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.cal-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cal-plan-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  background: color-mix(in srgb, var(--panel) 70%, var(--bg));
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.cal-plan-item--in_progress {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+  background: color-mix(in srgb, var(--gold) 8%, var(--panel));
+}
+
+.cal-plan-item--completed {
+  opacity: 0.85;
+}
+
+.cal-plan-item--completed .cal-plan-text {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent);
+}
+
+.cal-plan-glyph {
+  flex-shrink: 0;
+  width: 1rem;
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.cal-plan-item--in_progress .cal-plan-glyph {
+  color: var(--gold-bright, var(--gold));
+}
+
+.cal-plan-item--completed .cal-plan-glyph {
+  color: var(--accent);
+}
+
+.cal-plan-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cal-plan-status {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 2px;
+}
+
+/* Wiederkehrende To-dos (Plan-Tab) */
+.cal-todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cal-todo-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--panel) 75%, var(--bg));
+}
+
+.cal-todo-item--done {
+  opacity: 0.92;
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.cal-todo-item--paused {
+  opacity: 0.75;
+}
+
+.cal-todo-main {
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cal-todo-title {
+  font-weight: 650;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.cal-todo-title--done {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 55%, transparent);
+  color: var(--muted);
+}
+
+.cal-todo-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.cal-todo-preview {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cal-todo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.cal-todo-btn {
+  font-size: 0.75rem !important;
+  padding: 4px 8px !important;
+}
+
+.cal-todo-btn--danger:hover {
+  color: var(--danger) !important;
+}
+
+.cal-todo-fertig {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cal-todo-fertig:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.cal-todo-status {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+.cal-todo-form > button.primary {
+  align-self: flex-start;
+}
+
+.cal-todo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 60%, var(--bg));
+  margin-bottom: 8px;
+}
+
+.cal-todo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cal-todo-field input,
+.cal-todo-field textarea,
+.cal-todo-field select {
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.cal-todo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cal-todo-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .cal-body {
@@ -2947,7 +5788,8 @@ button.cal-cell {
 .cal-session-open {
   flex-shrink: 0;
   font-size: 0.78rem !important;
-  padding: 4px 10px !important;
+  padding: 6px 14px !important;
+  white-space: nowrap;
 }
 
 /* —— Command legend / Kurzhandbuch —— */
@@ -2957,6 +5799,10 @@ button.cal-cell {
 
 .handbook-panel {
   width: min(560px, 100%);
+}
+
+.handbook-panel--wide {
+  width: min(640px, 100%);
 }
 
 .help-tabs {
@@ -3149,40 +5995,143 @@ button.cal-cell {
   color: color-mix(in srgb, var(--text) 88%, var(--muted));
 }
 
+/*
+  Mobile layout pass (≤640px / standalone PWA):
+  - Safe areas (notch / home indicator) for standalone
+  - Compact chrome, larger touch targets
+  - Type scale is NOT re-sized here — same tokens as desktop/all modes
+*/
 @media (max-width: 640px) {
   .app {
     flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    /* Home indicator only when keyboard is closed; see :focus-within below */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  /*
+    Composer focused → iOS keyboard open. safe-area-inset-bottom still reports
+    the home-indicator inset, which stacks as a dead black band above the
+    keyboard accessory. Drop it so the composer sits flush.
+  */
+  .app:has(.composer-box:focus-within),
+  .app:has(textarea:focus),
+  .app:has(input:focus) {
+    padding-bottom: 0;
   }
 
   .side-rail {
     flex-direction: row;
     width: 100%;
     height: auto;
-    justify-content: center;
-    flex-wrap: wrap;
-    padding: 8px;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px;
+    padding: 6px 8px;
     border-right: none;
     border-bottom: 1px solid var(--border);
     order: -1;
+  }
+
+  .side-rail::-webkit-scrollbar {
+    display: none;
   }
 
   .side-rail-spacer {
     display: none;
   }
 
+  .side-rail-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 2px;
+  }
+
   .side-rail-btn {
     flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
   }
 
   .app-main {
-    padding: 10px;
+    /* Bottom: 0 — no air between composer and keyboard / home indicator */
+    padding: 16px 10px 0;
     max-width: none;
+    /* Gleicher kleiner Abstand wie Desktop */
+    gap: 12px;
   }
 
   .top {
     flex-direction: column;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 8px;
   }
 
+  /* Column header: 10rem basis is height, not width — that parked the pills mid-screen. */
+  .top > div:first-child {
+    flex: 0 1 auto;
+  }
+
+  .top h1 {
+    font-size: 1.15rem;
+  }
+
+  .app-build {
+    font-size: 0.68rem;
+  }
+
+  .sub {
+    font-size: 0.78rem;
+    margin-top: 2px;
+  }
+
+  .sub.sub--inline {
+    /* Same type size as desktop — only layout width changes on phone */
+    margin-top: 0;
+    max-width: 100%;
+  }
+
+  .top-actions {
+    gap: 8px;
+    width: 100%;
+    /* Kürzel-Badge: kein Umbruch der Action-Zeile durch lange Modell-IDs */
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .model-hud {
+    max-width: 6.5rem;
+    flex: 0 1 auto;
+  }
+
+  .agent-pick-select {
+    min-height: 36px;
+    font-size: 0.8rem;
+    padding: 6px 26px 6px 12px;
+  }
+
+  button.pill-btn {
+    min-height: 36px;
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+
+  button.pill-btn.pill-btn--icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0;
+  }
+
+  /* Chat type scale stays on :root tokens (same as desktop / all modes) */
   .msg-user {
     max-width: 92%;
   }
@@ -3192,6 +6141,129 @@ button.cal-cell {
   .msg-tool,
   .msg-system {
     max-width: 100%;
+  }
+
+  /* LVL strip: slightly larger labels on small screens */
+  .context-lvl-bar {
+    padding: 6px 8px;
+  }
+
+  .context-lvl-bar-meta {
+    font-size: 0.65rem;
+  }
+
+  .context-lvl-bar-tag {
+    font-size: 0.62rem;
+  }
+
+  .context-lvl-bar-label {
+    font-size: 0.65rem;
+  }
+
+  .context-lvl-bar-legend {
+    font-size: 0.65rem;
+  }
+
+  .vaults-map-stage {
+    width: 9.5rem;
+    min-height: 9.5rem;
+    height: 9.5rem;
+  }
+
+  .vaults-attach-input,
+  .vaults-attach-mode,
+  .vaults-attach .ghost {
+    min-height: 44px;
+  }
+
+  /*
+    Composer (phone) — iOS zoom floor + slightly larger hit targets.
+    Two-row layout (textarea / toolbar) is the desktop default too.
+  */
+  .composer-input-wrap {
+    --composer-font-size: 16px;
+    --composer-pad-y: 10px;
+    --composer-pad-x: 4px;
+    --composer-min-h: 2.5rem;
+    --composer-max-h: min(36vh, 18rem);
+  }
+
+  .composer-row {
+    padding: 8px 10px 10px;
+    touch-action: manipulation;
+  }
+
+  .composer-plus-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .composer-send-stack {
+    gap: 0;
+  }
+
+  .composer-vault-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    right: 10px; /* composer-row Mobile-Padding = 10px → gleiche Fluchtlinie wie der Kopf */
+    bottom: calc(100% + 16px);
+  }
+
+  .composer-mode-wrap {
+    margin-right: auto;
+  }
+
+  .composer-mode-btn {
+    height: 2.5rem;
+    font-size: 0.8rem;
+    padding: 0 12px;
+    max-width: 7.5rem;
+  }
+
+  .voice-mic-btn {
+    order: 3;
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+
+  .composer.composer--grok .send {
+    order: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .composer.composer--grok .send.send--working,
+  .composer.composer--grok .send.send--morph-out {
+    width: 3rem;
+    height: 3rem;
+    min-height: 3rem;
+  }
+
+  /* Empty chat: less floaty void on tall phones — tokens stay :root scale */
+  .empty {
+    max-width: 22rem;
+    padding: 0 12px;
+  }
+
+  .empty-soft {
+    margin-top: 8px;
+  }
+
+  .messages.messages--borderless {
+    /* Phone: same thin air as desktop (≈1/4 of former 48px) */
+    padding: 6px 4px 12px;
+  }
+
+  .composer.composer--grok {
+    gap: 2px;
+    /* Kill any residual air under the pill */
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .composer-box {
+    margin-bottom: 0;
   }
 
   .session-row {
@@ -3205,157 +6277,3181 @@ button.cal-cell {
 
   .session-actions button {
     flex: 1;
+    min-height: 44px;
+  }
+
+  .slash-popup {
+    max-height: min(240px, 38dvh);
+    left: 0.4rem;
+    right: 0.4rem;
+  }
+
+  .composer-sheet-body {
+    max-height: min(28dvh, 12rem);
+  }
+
+  .composer-sheet--handoff .composer-sheet-body {
+    max-height: min(32dvh, 14rem);
+  }
+
+  .task-evidence summary {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .composer-sheet--handoff .composer-sheet-go {
+    width: 100%;
+  }
+
+  .composer-sheet-go,
+  .composer-sheet-quiet {
+    min-height: 44px;
   }
 }
 
-/* ---------- SummarizeDialog (Session-Zusammenfassung) ---------- */
-.summarize-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  padding: 20px;
+/* ---------- BindingsPanel (Anbindung · Kabelplan + Stecker) ---------- */
+.bindings-scroll {
+  padding-bottom: 20px;
 }
-.summarize-dialog {
-  background: var(--panel, #1c1c1e);
-  border: 1px solid var(--line, #333);
-  border-radius: 12px;
-  max-width: 640px;
-  width: 100%;
-  max-height: 86vh;
-  overflow: auto;
-  color: var(--fg, #eee);
+
+.bindings-panel {
+  padding: 2px 2px 16px;
 }
-.summarize-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--line, #333);
+
+.bindings-lead {
+  margin: 0 0 12px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
 }
-.summarize-header h3 { margin: 0; font-size: 16px; }
-.summarize-body { padding: 16px 18px; }
-.summarize-session { margin: 0 0 12px; font-size: 13px; }
-.summarize-id { opacity: 0.6; font-size: 11px; margin-left: 8px; }
-.summarize-label { display: block; font-size: 12px; opacity: 0.7; margin: 10px 0 4px; }
-.summarize-select, .summarize-input, .summarize-textarea {
-  width: 100%;
-  background: var(--bg, #0f0f0f);
-  color: var(--fg, #eee);
-  border: 1px solid var(--line, #333);
-  border-radius: 8px;
+
+.bindings-lead code {
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.bindings-section-title {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.bindings-flash {
+  margin: 0 0 10px;
   padding: 8px 10px;
-  font: inherit;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.bindings-flash--muted {
+  color: var(--muted);
+}
+
+.bindings-flash--error {
+  color: var(--danger-bright);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+}
+
+.bindings-flash--ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--border));
+  background: color-mix(in srgb, var(--ok) 10%, var(--panel));
+}
+
+/* —— Kabelplan: Glyph hub + 3 profile nodes + thin Voice strand —— */
+.bindings-map {
+  margin: 0 0 14px;
+}
+
+.bindings-map-stage {
+  position: relative;
+  height: 210px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  background:
+    radial-gradient(
+      ellipse 55% 50% at 50% 48%,
+      color-mix(in srgb, var(--gold) 12%, transparent),
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--panel) 70%, var(--bg));
+  overflow: hidden;
+}
+
+.bindings-map[data-loading] .bindings-map-stage {
+  opacity: 0.72;
+}
+
+.bindings-map-cables {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bindings-cable {
+  fill: none;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  transition:
+    stroke 0.2s ease,
+    stroke-dasharray 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.bindings-cable.is-live {
+  stroke: color-mix(in srgb, var(--gold) 78%, var(--border));
+  opacity: 0.95;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--gold) 35%, transparent));
+}
+
+.bindings-cable.is-cut {
+  stroke: color-mix(in srgb, var(--muted) 55%, var(--border));
+  stroke-dasharray: 3 3.5;
+  opacity: 0.55;
+}
+
+/* Thin capability strand (Voice) */
+.bindings-cable.is-thin {
+  stroke-width: 0.85;
+}
+
+.bindings-cable.is-thin.is-live {
+  stroke: color-mix(in srgb, var(--accent) 70%, var(--gold));
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 30%, transparent));
+}
+
+.bindings-map-hub {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.bindings-map-mark {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--panel) 80%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--border));
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--gold) 10%, transparent),
+    0 0 18px color-mix(in srgb, var(--gold) 18%, transparent);
+  padding: 4px;
   box-sizing: border-box;
 }
-.summarize-textarea { resize: vertical; min-height: 90px; }
-.summarize-status { opacity: 0.7; font-size: 13px; }
-.summarize-error { color: #ff6b6b; font-size: 13px; }
-.summarize-success { color: #4ade80; font-size: 13px; }
-.summarize-external-warning {
-  border: 1px solid #f59e0b;
-  background: rgba(245, 158, 11, 0.12);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 13px;
-  margin-bottom: 10px;
+
+.bindings-map-hub-label {
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
-.summarize-consent {
+
+.bindings-node {
+  position: absolute;
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
-  font-size: 13px;
+  min-width: 7.5rem;
+  max-width: 10rem;
+  padding: 7px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--bg) 55%, transparent);
+  /* Positions match MAP_POS % in BindingsPanel.jsx (cable ends) */
+  transform: translate(-50%, -50%);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.12s ease,
+    box-shadow 0.15s ease;
 }
-.summarize-consent input { margin: 0; }
-.summarize-rendered h4 { margin: 0 0 8px; }
-.summarize-rendered p { margin: 0 0 10px; font-size: 13px; }
-.summarize-rendered ul { margin: 4px 0 10px; padding-left: 18px; font-size: 13px; }
-.summarize-target { font-size: 11px; opacity: 0.6; word-break: break-all; margin: 10px 0 0; }
-.summarize-actions {
+
+.bindings-node:hover,
+.bindings-node.is-open {
+  transform: translate(-50%, calc(-50% - 1px));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.bindings-node:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.bindings-node--grok {
+  left: 50%;
+  top: 12%;
+}
+
+.bindings-node--code {
+  left: 16%;
+  top: 82%;
+}
+
+.bindings-node--agent {
+  left: 84%;
+  top: 82%;
+}
+
+.bindings-node--voice {
+  left: 90%;
+  top: 42%;
+}
+
+/* Mini capability chip — thinner than agent profiles */
+.bindings-node.is-thin {
+  min-width: 0;
+  max-width: 5.8rem;
+  padding: 5px 8px;
+  gap: 5px;
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+}
+
+.bindings-node.is-thin .bindings-node-label {
+  font-size: 0.74rem;
+}
+
+.bindings-node.is-thin .bindings-node-auth {
+  font-size: 0.55rem;
+}
+
+.bindings-node.is-thin .bindings-node-state {
+  font-size: 0.52rem;
+}
+
+.bindings-node.is-thin .bindings-node-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.bindings-node.is-ok {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+  background: color-mix(in srgb, var(--ok) 8%, var(--panel));
+}
+
+.bindings-node.is-bad {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: color-mix(in srgb, var(--danger) 7%, var(--panel));
+}
+
+.bindings-node.is-open {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.bindings-node-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+.bindings-node.is-ok .bindings-node-dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 25%, transparent);
+}
+
+.bindings-node-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bindings-node-label {
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.bindings-node-auth {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bindings-node-state {
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.bindings-node.is-ok .bindings-node-state {
+  color: var(--ok);
+}
+
+.bindings-node.is-bad .bindings-node-state {
+  color: color-mix(in srgb, var(--danger) 80%, var(--muted));
+}
+
+.bindings-node-detail {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.bindings-node-detail.is-ok {
+  border-color: color-mix(in srgb, var(--ok) 30%, var(--border));
+}
+
+.bindings-node-detail.is-bad {
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--border));
+}
+
+.bindings-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.bindings-checks li {
+  display: flex;
+  gap: 6px;
+  margin: 3px 0;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  word-break: break-word;
+}
+
+.bindings-checks li.ok {
+  color: color-mix(in srgb, var(--text) 92%, var(--ok));
+}
+
+.bindings-checks li.bad {
+  color: color-mix(in srgb, var(--text) 75%, var(--muted));
+}
+
+.bindings-check-mark {
+  width: 1em;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+}
+
+.bindings-checks li.ok .bindings-check-mark {
+  color: var(--ok);
+}
+
+.bindings-oauth-inline {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.bindings-oauth-inline code {
+  font-size: 0.72rem;
+  color: var(--text);
+}
+
+.bindings-hint {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.bindings-hint--warn {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--border));
+  background: color-mix(in srgb, var(--gold) 8%, var(--panel));
+  color: color-mix(in srgb, var(--text) 85%, var(--gold));
+}
+
+/* —— Stecker (form plugs) —— */
+.bindings-form {
+  margin: 0;
+}
+
+.bindings-plug {
+  margin: 0 0 16px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+}
+
+.bindings-label {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.bindings-plug > .bindings-label:first-child {
+  margin-top: 0;
+}
+
+.bindings-label-meta {
+  display: block;
+  font-weight: 400;
+  font-size: 0.7rem;
+  opacity: 0.9;
+  margin-top: 1px;
+}
+
+.bindings-provider {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.bindings-provider-opt {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 8px 6px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.bindings-provider-opt:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.bindings-provider-opt.is-on,
+.bindings-provider-opt.is-on:disabled {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.bindings-provider-opt:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.bindings-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  transition: border-color 0.12s ease;
+}
+
+.bindings-input:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.bindings-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.bindings-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bindings-key-row {
+  margin-top: 10px;
+}
+
+.bindings-key-row:first-child {
+  margin-top: 0;
+}
+
+.bindings-key-row .bindings-label {
+  margin-top: 0;
+}
+
+.bindings-key-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.bindings-key-controls .bindings-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.bindings-remove-btn {
+  flex-shrink: 0;
+  align-self: stretch;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+  color: color-mix(in srgb, var(--danger-bright, var(--danger)) 90%, var(--text));
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.bindings-remove-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+  background: color-mix(in srgb, var(--danger) 18%, var(--panel));
+}
+
+.bindings-remove-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bindings-advanced {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.bindings-advanced summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--text) 90%, var(--muted));
+  list-style: none;
+}
+
+.bindings-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.bindings-advanced summary::before {
+  content: "▸ ";
+  color: var(--accent);
+  font-size: 0.72rem;
+}
+
+.bindings-advanced[open] summary::before {
+  content: "▾ ";
+}
+
+.bindings-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 4px;
 }
-.summarize-actions button {
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--line, #333);
-  background: var(--bg, #131316);
-  color: var(--fg, #eee);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-}
-.summarize-actions button.primary { background: var(--accent, #3d7fff); border-color: transparent; color: #fff; }
-.summarize-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
-.summarize-edit { margin: 6px 0; }
-.summarize-actions .summary-ghost { opacity: 0.7; }
-.summarize-header button.summary-ghost {
-  background: transparent; border: none; color: inherit; font-size: 15px; cursor: pointer; opacity: 0.7;
-}
-.summarize-actions button.summary-ghost, .summarize-header button.summary-ghost { opacity: 0.7; }
 
-/* Profil-Anzeige im SummarizeDialog (statt Dropdown) */
-.summarize-profile-line {
-  font-size: 12px;
-  opacity: 0.75;
-  margin: 4px 0 10px;
+.bindings-actions--inline {
+  margin-top: 12px;
+}
+
+.bindings-actions .pill-btn.primary {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+}
+
+.bindings-actions .pill-btn.primary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel));
+}
+
+.bindings-actions .pill-btn.ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: transparent;
+}
+
+.bindings-actions .pill-btn.ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+}
+
+.bindings-footer {
+  margin: 14px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
   word-break: break-all;
 }
-.summarize-profile-line code {
-  font-size: 11px;
-  opacity: 0.8;
+
+.bindings-footer code {
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--text) 70%, var(--muted));
+}
+
+@media (max-width: 420px) {
+  .bindings-map-stage {
+    height: 220px;
+  }
+
+  .bindings-node {
+    min-width: 5.75rem;
+    max-width: 7.25rem;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .bindings-node--code {
+    left: 22%;
+  }
+
+  .bindings-node--agent {
+    left: 78%;
+  }
+
+  .bindings-node-label {
+    font-size: 0.78rem;
+  }
+
+  .bindings-node-state {
+    display: none;
+  }
+
+  .bindings-map-mark {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 /* ---------- AssistantMeta (kompakte Modell-/Provider-Statuszeile) ---------- */
+/* Trace line: secondary chrome under the answer (same family as Think/Steps) */
 .assistant-meta {
-  margin-top: 8px;
-  font-size: 12px;
-  opacity: 0.8;
+  margin-top: 10px;
+  font-size: 0.72rem;
+  opacity: 1;
+  color: color-mix(in srgb, var(--muted) 65%, var(--text));
 }
 .assistant-meta-line {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg, #131316);
-  border: 1px solid var(--line, #333);
-  border-radius: 8px;
-  padding: 4px 8px;
-  color: var(--fg, #eee);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--muted) 22%, var(--border));
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: color-mix(in srgb, var(--muted) 55%, var(--text));
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.72rem;
 }
-.assistant-meta-line:hover { border-color: var(--accent, #3d7fff); }
+.assistant-meta-line:hover {
+  border-color: color-mix(in srgb, var(--muted) 40%, var(--border));
+  color: color-mix(in srgb, var(--muted) 35%, var(--text));
+}
 .assistant-meta-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent, #3d7fff);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
   display: inline-block;
 }
-.assistant-meta-toggle { opacity: 0.6; margin-left: 4px; }
+.assistant-meta-toggle { opacity: 0.55; margin-left: 4px; }
 .assistant-meta-details {
   margin-top: 6px;
-  background: var(--bg, #0f0f0f);
-  border: 1px solid var(--line, #333);
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--muted) 18%, var(--border));
+  border-radius: 6px;
   padding: 6px 10px;
+  color: color-mix(in srgb, var(--muted) 60%, var(--text));
 }
 .assistant-meta-details summary {
   cursor: pointer;
-  opacity: 0.7;
-  font-size: 11px;
+  opacity: 0.75;
+  font-size: 0.7rem;
   margin-bottom: 4px;
+  color: var(--muted);
 }
 .assistant-meta-list {
   margin: 0;
   padding-left: 16px;
-  font-size: 11px;
-  opacity: 0.85;
+  font-size: 0.7rem;
+  opacity: 0.9;
 }
 .assistant-meta-list li { margin: 1px 0; }
 .assistant-meta-list ul { padding-left: 14px; }
+
+/* ^_Code permission modal — gold allow, danger reject, no extra hues */
+.permission-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: color-mix(in srgb, var(--bg) 72%, #000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.permission-modal {
+  width: min(520px, 100%);
+  max-width: 100%;
+  min-width: 0;
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--border));
+  border-radius: 12px;
+  padding: 16px 18px 14px;
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.permission-modal h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.permission-modal-kind {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.permission-modal-preview {
+  margin: 0 0 14px;
+  max-height: 280px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.permission-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+@media (min-width: 520px) {
+  .permission-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+}
+.permission-btn {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  min-height: 44px;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--bg);
+  color: inherit;
+}
+.permission-btn--allow {
+  /* Own accent fill — must NOT share send tokens (send is --bg / no gold plate) */
+  background: color-mix(in srgb, var(--gold) 46%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 62%, var(--border));
+  color: var(--gold-bright, var(--gold));
+}
+.permission-btn--reject {
+  background: color-mix(in srgb, var(--danger) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: var(--danger-bright, var(--danger));
+}
+.permission-btn:hover {
+  filter: brightness(1.08);
+}
+.permission-btn--quiet {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+.permission-modal-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  border-left: 2px solid var(--gold);
+  padding: 4px 0 4px 10px;
+}
+.permission-scope {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.permission-scope legend {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 4px;
+}
+.permission-scope-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.permission-scope-field input,
+.permission-scope-field textarea {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+.permission-scope-field textarea {
+  min-height: 64px;
+  resize: vertical;
+  font-family: ui-monospace, "IBM Plex Mono", Menlo, monospace;
+  font-size: 12px;
+}
+.permission-scope-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+.permission-scope-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  min-height: 44px;
+}
+.permission-scope-note {
+  margin: 0;
+  flex: 1 1 100%;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tool-card-why {
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.tool-card-why::before {
+  content: "· ";
+  opacity: 0.6;
+}
+.active-task-meta {
+  margin: 0;
+  padding: 0 0 8px 18px;
+  font-size: 13px;
+  color: var(--text);
+}
+.active-task-meta li {
+  margin: 2px 0;
+}
+.permission-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* —— Graph · pechschwarz (dark) / Papierfeld (light) —— */
+.lage-stage {
+  --lage-ink: #000000;
+  --lage-shade: #000000;
+  --lage-fill: #000000;
+  --lage-fg: color-mix(in srgb, var(--gold) 78%, #fff);
+  --lage-line: color-mix(in srgb, var(--gold) 42%, var(--lage-shade));
+  --lage-line-hot: color-mix(in srgb, var(--gold) 86%, #fff);
+  --lage-mute: color-mix(in srgb, var(--gold) 34%, #5c5648);
+  --lage-face-ink: #000000;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 48px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--lage-ink);
+  color: var(--lage-fg);
+}
+
+.lage-pending {
+  margin: auto;
+  padding: 0 1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lage-mute);
+}
+
+:root[data-theme="light"] .lage-stage {
+  --lage-ink: var(--bg);
+  --lage-shade: var(--text);
+  --lage-fill: #ffffff;
+  --lage-fg: var(--text);
+  --lage-line: color-mix(in srgb, var(--gold) 48%, var(--text));
+  --lage-line-hot: color-mix(in srgb, var(--gold) 72%, #000);
+  --lage-mute: var(--muted);
+  --lage-face-ink: #000000;
+  background: var(--lage-ink);
+  color: var(--lage-fg);
+}
+
+.lage-kicker {
+  margin: 0;
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lage-mute);
+}
+
+.lage-dock-card h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+}
+
+.lage-close,
+.lage-tool,
+.lage-attach button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--lage-mute);
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+}
+
+.lage-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 6;
+}
+
+.lage-edge-key {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.7rem;
+  z-index: 4;
+  display: flex;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lage-mute);
+}
+
+.lage-edge-key-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.lage-edge-key-item::before {
+  content: "";
+  width: 1.35rem;
+  border-top: 1.5px solid color-mix(in srgb, var(--gold) 62%, var(--lage-shade));
+}
+
+.lage-edge-key-item.is-r::before {
+  border-top-style: dashed;
+}
+
+.lage-edge-key-item.is-private::before {
+  border-top-style: dotted;
+  border-top-color: color-mix(in srgb, var(--gold) 34%, var(--lage-shade));
+}
+
+.lage-filter {
+  position: absolute;
+  top: 2.65rem;
+  left: 0.7rem;
+  z-index: 5;
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  max-width: min(22rem, calc(100% - 6rem));
+}
+
+.lage-filter input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 28%, var(--lage-shade));
+  background: transparent;
+  color: var(--lage-fg);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.lage-filter-btn {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--lage-shade));
+  background: transparent;
+  color: var(--lage-mute);
+  font: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  min-height: 36px;
+  padding: 0 0.6rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lage-filter-btn.is-on,
+.lage-filter-btn:hover {
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--lage-shade));
+}
+
+.lage-guard-retry {
+  margin: 0.4rem 1rem 0;
+}
+
+.lage-bind-open {
+  margin-top: 0.75rem;
+  min-height: 44px;
+}
+
+.lage-close:hover,
+.lage-tool:hover,
+.lage-attach button:hover:not(:disabled) {
+  color: var(--gold);
+}
+
+.lage-close:focus-visible,
+.lage-tool:focus-visible,
+.lage-node:focus-visible,
+.lage-attach input:focus-visible,
+.lage-attach button:focus-visible,
+.lage-link:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  outline-offset: 3px;
+}
+
+.lage-alert {
+  margin: 0;
+  padding: 0.55rem 3.5rem 0 1rem;
+  color: var(--gold);
+  font-size: var(--type-secondary);
+}
+
+.lage-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.lage-canvas {
+  --lage-fw: 1200;
+  --lage-fh: 780;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: var(--lage-fw) / var(--lage-fh);
+  width: min(100%, calc(100dvh * var(--lage-fw) / var(--lage-fh)));
+  max-height: 100%;
+  margin: auto;
+  overflow: visible;
+}
+
+.lage-node--hub.is-idle-glyph .lage-node-core,
+.lage-node--hub.is-holding .lage-node-core,
+.lage-node--hub.is-center .lage-node-core {
+  min-width: 0;
+  padding: 0;
+}
+
+.lage-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.glyph-medal-fill {
+  fill: color-mix(in srgb, var(--gold) 38%, #ffffff);
+}
+
+.glyph-medal-ring {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.35;
+}
+
+:root[data-theme="light"] .glyph-medal-fill {
+  fill: color-mix(in srgb, var(--text) 82%, var(--gold));
+}
+
+.lage-stone {
+  fill: var(--gold);
+}
+
+.lage-stone.is-gold-bright {
+  fill: var(--gold-bright);
+}
+
+.lage-stone.is-gold {
+  fill: var(--gold);
+}
+
+.lage-stone.is-gold-dim {
+  fill: var(--gold-dim);
+}
+
+.lage-stone.is-gold-deep {
+  fill: var(--gold-deep);
+}
+
+.lage-stone.is-gray {
+  fill: color-mix(in srgb, var(--muted) 42%, var(--border));
+}
+
+.lage-stone.is-dark {
+  fill: color-mix(in srgb, var(--border) 78%, var(--lage-shade));
+}
+
+.lage-cable {
+  fill: none;
+  stroke: var(--lage-line);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 160ms ease, opacity 160ms ease, stroke-width 160ms ease;
+}
+
+.lage-cable.is-axis {
+  stroke: color-mix(in srgb, var(--gold) 28%, var(--lage-shade));
+  stroke-dasharray: 16 12;
+  opacity: 0.42;
+}
+
+.lage-cable.is-r {
+  stroke: var(--lage-line);
+  stroke-dasharray: 4 5.2;
+  opacity: 0.92;
+}
+
+.lage-cable.is-rw {
+  stroke: color-mix(in srgb, var(--gold) 62%, var(--lage-shade));
+  stroke-dasharray: none;
+  opacity: 0.96;
+}
+
+.lage-cable.is-private {
+  stroke: color-mix(in srgb, var(--gold) 34%, var(--lage-shade));
+  stroke-dasharray: 0.75 3.8;
+  opacity: 0.9;
+}
+
+.lage-cable.is-active {
+  opacity: 1;
+  stroke: var(--lage-line-hot);
+}
+
+.lage-cable.is-dim {
+  opacity: 0.12;
+}
+
+.lage-cable.is-axis.is-dim {
+  opacity: 0.08;
+}
+
+.lage-node.is-dim {
+  opacity: 0.18;
+}
+
+.lage-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.lage-node:hover,
+.lage-node:focus-visible,
+.lage-node.is-hot,
+.lage-node.is-selected,
+.lage-node.is-current {
+  z-index: 3;
+}
+
+.lage-node-core {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--lage-ink);
+  color: var(--gold);
+}
+
+.lage-node--hub .lage-node-core,
+.lage-node--profile .lage-node-core {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--gold) 48%, var(--lage-shade));
+}
+
+.lage-node--hub .lage-node-core {
+  width: 3.35rem;
+  height: 3.35rem;
+  border-color: color-mix(in srgb, var(--gold) 62%, var(--lage-shade));
+}
+
+.lage-node--hub.is-holding .lage-node-core,
+.lage-node--profile.is-selected .lage-node-core,
+.lage-node--hub.is-selected .lage-node-core,
+.lage-node--profile.is-current .lage-node-core,
+.lage-node--profile:hover .lage-node-core,
+.lage-node--hub:hover .lage-node-core {
+  border-color: var(--gold);
+}
+
+.lage-node--vault,
+.lage-node--workspace,
+.lage-node--plug {
+  width: 44px;
+  height: 44px;
+}
+
+.lage-node--vault .lage-node-core,
+.lage-node--workspace .lage-node-core {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.lage-folder-mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  overflow: visible;
+}
+
+.lage-folder-o {
+  fill: color-mix(in srgb, var(--gold) 8%, var(--lage-fill));
+  stroke: color-mix(in srgb, var(--gold) 42%, var(--lage-shade));
+  stroke-width: 1.15;
+}
+
+.lage-folder-mark.is-step-dim .lage-folder-o {
+  fill: color-mix(in srgb, var(--gold) 3%, var(--lage-fill));
+  stroke: color-mix(in srgb, var(--gold) 22%, var(--lage-shade));
+}
+
+.lage-folder-star {
+  fill: var(--gold);
+}
+
+.lage-folder-mark line {
+  stroke: var(--gold);
+  stroke-width: 1.35;
+  stroke-linecap: square;
+}
+
+.lage-folder-dot {
+  fill: color-mix(in srgb, var(--gold) 72%, var(--lage-shade));
+}
+
+.lage-node--vault:hover .lage-folder-o,
+.lage-node--workspace:hover .lage-folder-o,
+.lage-node--vault.is-hot .lage-folder-o,
+.lage-node--workspace.is-hot .lage-folder-o {
+  stroke: var(--gold);
+}
+
+.lage-node.is-star,
+.lage-node.is-primary,
+.lage-node.is-selected {
+  z-index: 6;
+}
+
+.lage-node.is-star .lage-folder-star {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gold) 70%, transparent));
+}
+
+.lage-folder {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--gold) 55%, #3a2a08);
+}
+
+.lage-gate {
+  position: absolute;
+  left: 1.35rem;
+  bottom: 0.12rem;
+  display: flex;
+  color: color-mix(in srgb, var(--gold) 70%, #3a2a08);
+}
+
+.lage-gate.is-private {
+  color: color-mix(in srgb, var(--danger) 70%, #3a2a08);
+}
+
+
+
+.lage-node.is-selected .lage-node-core,
+.lage-node.is-working .lage-node-core,
+.lage-node--hub.is-reach:not(.is-dim) .lage-node-core,
+.lage-node--profile.is-reach:not(.is-dim) .lage-node-core {
+  border-color: var(--gold);
+}
+
+.lage-inspect.is-right {
+  left: auto;
+  right: 1rem;
+}
+
+.lage-heads {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.lage-head-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.lage-head-name {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lage-mute);
+}
+
+.lage-head-modes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.3rem;
+}
+
+.lage-head-modes.is-three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.lage-head-modes .lage-right {
+  min-height: 44px;
+  padding: 0.32rem 0.08rem 0.28rem;
+  font-size: 0.6rem;
+}
+
+.lage-node-label {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  color: var(--gold);
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.lage-node:hover .lage-node-label,
+.lage-node:focus-visible .lage-node-label,
+.lage-node.is-selected .lage-node-label,
+.lage-node.is-hot .lage-node-label,
+.lage-node.is-current .lage-node-label {
+  opacity: 1;
+}
+
+.lage-node.is-selected .lage-node-label,
+.lage-node.is-current .lage-node-label {
+  max-width: min(16rem, 72vw);
+}
+
+.lage-node-mode {
+  display: flex;
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--gold) 70%, var(--muted));
+}
+
+.lage-node-mode.is-private {
+  color: color-mix(in srgb, var(--danger) 75%, var(--muted));
+}
+
+.lage-tool--mode {
+  gap: 0.35rem;
+}
+
+.lage-mark {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.lage-star {
+  flex-shrink: 0;
+  color: var(--gold);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.egypt-plate {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  color: var(--gold);
+}
+
+.egypt-plate-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.egypt-plate-slot {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  line-height: 0;
+  pointer-events: none;
+}
+
+.lage-arrive {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  line-height: 0;
+}
+
+.lage-node.is-selected .lage-cartouche .egypt-plate-frame {
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--gold) 42%, transparent));
+}
+
+.graph-face--apple .snack-apple-body {
+  fill: color-mix(in srgb, var(--danger) 48%, #2a2630);
+}
+
+.graph-face--apple .snack-apple-pit {
+  fill: color-mix(in srgb, var(--bg) 30%, #000);
+}
+
+.graph-face--apple .snack-apple-stem {
+  fill: color-mix(in srgb, #000 88%, var(--text));
+}
+
+.scarab-cut {
+  fill: none;
+  stroke: color-mix(in srgb, var(--bg) 26%, #000);
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.graph-face {
+  display: block;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.graph-ink {
+  fill: color-mix(in srgb, var(--bg) 10%, #000);
+}
+
+/* Send idle ~28px / 1x: punchier ink so eyes/mouth read without growing the stone */
+button.send .graph-ink {
+  fill: #050505;
+}
+
+/* Pixel glance / blink: transform only, steps (no interpolation), long idle.
+   Cheap: compositor, no JS, paused while the send-head is morphing out. */
+.graph-pupils,
+.graph-lids {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.graph-pupils {
+  animation: graph-glance 8.4s steps(1, end) infinite;
+}
+
+.graph-face--agent .graph-pupils {
+  animation-delay: -3.2s;
+}
+
+.graph-face--code .graph-pupils {
+  animation-delay: -6.1s;
+}
+
+.graph-face--agent .graph-lids,
+.graph-face--code .graph-lids {
+  animation: graph-blink 5.6s steps(1, end) infinite;
+}
+
+.graph-face--code .graph-lids {
+  animation-delay: -2.4s;
+}
+
+@keyframes graph-glance {
+  0%,
+  22% {
+    transform: translate(0, 0);
+  }
+  24%,
+  34% {
+    transform: translate(2px, 0);
+  }
+  36%,
+  54% {
+    transform: translate(0, 0);
+  }
+  56%,
+  66% {
+    transform: translate(-2px, 1px);
+  }
+  68%,
+  84% {
+    transform: translate(0, 0);
+  }
+  86%,
+  91% {
+    transform: translate(1px, -1px);
+  }
+  93%,
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes graph-blink {
+  0%,
+  86%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  88%,
+  91% {
+    transform: scaleY(0.12);
+  }
+}
+
+button.send:hover:not(:disabled):not(.send--working) .graph-pupils,
+button.send:hover:not(:disabled):not(.send--working) .send-tail-stone {
+  animation-duration: 3.2s;
+}
+
+button.send.send--working .graph-pupils,
+button.send.send--working .graph-lids,
+button.send.send--working .send-tail-stone,
+button.send.send--morph-out .graph-pupils,
+button.send.send--morph-out .graph-lids,
+button.send.send--morph-out .send-tail-stone {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-pupils,
+  .graph-lids,
+  .send-tail-stone {
+    animation: none;
+  }
+}
+
+/* ---- Glyph-Momente (2026-08-30): Prompt-Apfel, Ausspucken, Charakter ----
+   Idee: Enter frisst den Prompt (Apfel fliegt zum Kopf), der Denkprozess
+   jagt ihn (SnackBoard), die Antwort wird als Apfel ausgespuckt.
+   Charakter: Gähnen bei langer Wartezeit, Augen weg bei Fehler,
+   unregelmäßiges Blinzeln (organischer Takt statt Metronom). */
+
+/* --- 1) Apfel fliegt beim Senden vom Composer zum Kopf --- */
+@keyframes apple-fly-to-send {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(0, -6px) scale(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    /* Endpunkt via CSS-Variablen (--apple-fly-x/y) gesetzt in App.jsx */
+    transform: translate(var(--apple-fly-x, -120px), var(--apple-fly-y, -20px))
+      scale(0.5);
+  }
+}
+
+.apple-fly {
+  position: fixed;
+  width: 12px;
+  height: 12px;
+  z-index: 90;
+  background:
+    /* Stiel */ linear-gradient(#7a5230, #7a5230) 5px 0 / 2px 3px no-repeat,
+    /* Blatt */ linear-gradient(#5e9c3f, #5e9c3f) 7px 0 / 2px 2px no-repeat,
+    /* Fruchtkörper (rot) */ var(--snack-stop, #d94a4a) 0 2px/12px 10px no-repeat;
+  border-radius: 2px;
+  image-rendering: pixelated;
+  animation: apple-fly-to-send 0.55s cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
+  pointer-events: none;
+}
+
+/* --- 2) Ausspucken am Ende: Apfel hüpft vom Kopf in den Chat --- */
+@keyframes apple-spit {
+  0% {
+    opacity: 0;
+    transform: translate(0, 2px) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(6px, -6px) scale(1);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(34px, 2px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(58px, 12px) scale(0.35);
+  }
+}
+
+.send-spit-apple {
+  position: fixed;
+  width: 12px;
+  height: 12px;
+  z-index: 90;
+  pointer-events: none;
+  background:
+    /* Stiel */ linear-gradient(#7a5230, #7a5230) 5px 0 / 2px 3px no-repeat,
+    /* Blatt */ linear-gradient(#5e9c3f, #5e9c3f) 7px 0 / 2px 2px no-repeat,
+    /* Frucht (rot) */ var(--snack-stop, #d94a4a) 0 2px/12px 10px no-repeat;
+  image-rendering: pixelated;
+  animation: apple-spit 0.9s steps(6, end) forwards;
+}
+
+/* --- 3) Charakter-Momente --- */
+/* Fehler: Augen weg (nach links-unten), kurz */
+@keyframes snake-eyes-away {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20%,
+  80% {
+    transform: translate(-2.5px, 1.5px);
+  }
+}
+
+button.send.send-eyes-away .graph-pupils {
+  animation: snake-eyes-away 1.4s steps(1, end) 1;
+}
+
+/* Organisches Blinzeln: Doppelschlag statt Metronom — wirkt lebendig.
+   Zufälliger Phasenversatz via --blink-seed (App setzt ihn pro Mount). */
+@keyframes snake-blink-organic {
+  0%,
+  91% {
+    transform: scaleY(1);
+  }
+  92%,
+  94% {
+    transform: scaleY(0.12);
+  }
+  95%,
+  97% {
+    transform: scaleY(1);
+  }
+  97% {
+    transform: scaleY(0.12);
+  }
+}
+
+.tablet-plate {
+  fill: color-mix(in srgb, var(--gold) 38%, #ffffff);
+}
+
+.tablet-sign {
+  fill: color-mix(in srgb, var(--bg) 22%, #000000);
+}
+
+:root[data-theme="light"] .tablet-plate {
+  fill: color-mix(in srgb, var(--text) 82%, var(--gold));
+}
+
+:root[data-theme="light"] .tablet-sign {
+  fill: color-mix(in srgb, var(--gold) 16%, #ffffff);
+}
+
+.vaults-mode-glyph-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  line-height: 0;
+}
+
+.lage-stage .glyph-medal-fill {
+  fill: var(--lage-face-ink);
+}
+
+.lage-stage .glyph-medal-ring {
+  stroke: var(--gold);
+  stroke-width: 1.05;
+}
+
+.lage-stage .tablet-sign {
+  fill: var(--gold);
+}
+
+.lage-stage .graph-ink {
+  fill: var(--lage-face-ink);
+}
+
+.lage-node--profile:not(.is-center) .lage-node-core {
+  min-width: 0;
+  padding: 0;
+}
+
+.lage-node.is-center .graph-face {
+  color: var(--gold);
+}
+
+.lage-key {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.65rem;
+  font-size: var(--type-secondary);
+  color: var(--muted);
+}
+
+.lage-key-row {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.lage-key input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.lage-bind {
+  margin-top: 0.35rem;
+}
+
+.lage-inspect {
+  position: absolute;
+  top: 3.1rem;
+  left: 1rem;
+  z-index: 5;
+  width: min(19.5rem, calc(100% - 2rem));
+  max-height: calc(100% - 4.2rem);
+  overflow: auto;
+  padding: 0.95rem 1.05rem 1.15rem;
+  background: var(--lage-ink);
+  border: 1px solid color-mix(in srgb, var(--gold) 22%, var(--lage-shade));
+}
+
+.lage-dock {
+  min-width: 0;
+}
+
+.lage-deps {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, var(--lage-shade));
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.lage-deps .lage-link {
+  min-height: 36px;
+  font-size: 0.74rem;
+  color: var(--lage-mute);
+}
+
+.lage-deps .lage-link:hover {
+  color: var(--gold);
+}
+
+.lage-dock-empty {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+}
+
+.lage-dock-card h3 {
+  margin: 0.15rem 0 0.25rem;
+}
+
+.lage-path,
+.lage-hint,
+.lage-lede,
+.lage-live {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--lage-mute);
+}
+
+.lage-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lage-lede code {
+  font-size: 0.74rem;
+  color: var(--text);
+}
+
+.lage-rights {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem;
+  margin: 0.9rem 0 0;
+}
+
+.lage-rights--tools {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+.lage-right.is-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.lage-right.is-danger {
+  color: var(--muted);
+}
+
+.lage-right.is-danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.lage-right-mark {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.lage-right {
+  appearance: none;
+  text-decoration: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  min-height: 44px;
+  padding: 0.45rem 0.2rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--gold) 18%, var(--lage-shade));
+  border-radius: 2px;
+  background: transparent;
+  color: var(--lage-mute);
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.lage-right:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+}
+
+.lage-right.is-on,
+.lage-right.is-on:disabled {
+  color: var(--gold);
+  background: transparent;
+  border: 1.5px solid var(--gold);
+  opacity: 1;
+}
+
+.lage-right:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.lage-fact {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  color: var(--gold);
+}
+
+.lage-fact.is-off {
+  color: var(--lage-mute);
+}
+
+.lage-keyline {
+  margin-top: 1.15rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, var(--lage-shade));
+}
+
+.lage-keyline-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.lage-keyline-head strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.lage-field-label {
+  display: block;
+  margin: 0.65rem 0 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--lage-mute);
+}
+
+.lage-pill {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.lage-pill.is-on {
+  color: color-mix(in srgb, var(--gold) 70%, var(--text));
+}
+
+.lage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.85rem;
+  margin-top: 0.7rem;
+}
+
+.lage-provider {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+
+.lage-provider-opt {
+  appearance: none;
+  text-decoration: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0.3rem 0.15rem;
+  border: 1px solid color-mix(in srgb, var(--gold) 18%, var(--lage-shade));
+  border-radius: 2px;
+  background: transparent;
+  color: var(--lage-mute);
+  font: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.lage-provider-opt:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+}
+
+.lage-provider-opt.is-on,
+.lage-provider-opt.is-on:disabled {
+  color: var(--gold);
+  border: 1.5px solid var(--gold);
+  opacity: 1;
+}
+
+.lage-provider-opt:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.lage-pill--warn {
+  color: var(--danger, #e07a5f);
+}
+
+.lage-link {
+  appearance: none;
+  border: 0;
+  padding: 0.35rem 0;
+  min-height: 36px;
+  background: transparent;
+  color: color-mix(in srgb, var(--gold) 70%, var(--lage-fg));
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.lage-link:hover:not(:disabled) {
+  color: var(--gold-bright, var(--gold));
+}
+
+.lage-link.is-star {
+  color: var(--gold);
+}
+
+.lage-link:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lage-link.is-danger {
+  color: var(--muted);
+}
+
+.lage-link.is-danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.lage-key-reveal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.45rem;
+}
+
+.lage-key-reveal input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  min-height: 36px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 35%, var(--border));
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.lage-keylist {
+  list-style: none;
+  margin: 1.4rem 0 0;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.lage-keylist li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.lage-live {
+  color: var(--gold-bright, var(--gold));
+}
+
+.lage-checks {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: var(--type-secondary);
+}
+
+.lage-checks li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  color: var(--text);
+}
+
+.lage-checks .is-bad {
+  color: var(--muted);
+}
+
+.lage-checks .is-ok span {
+  color: var(--gold);
+}
+
+.lage-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem;
+  margin-top: 0.7rem;
+}
+
+.lage-tool {
+  padding: 0.3rem 0.55rem;
+}
+
+.lage-tool.is-danger {
+  color: var(--danger);
+  margin-left: auto;
+}
+
+.lage-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.4rem 0 0;
+  font-size: var(--type-secondary);
+}
+
+.lage-pins {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--type-secondary);
+}
+
+.lage-attach {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, var(--lage-shade));
+}
+
+.lage-attach input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 28%, var(--lage-shade));
+  border-radius: 0;
+  background: transparent;
+  color: var(--lage-fg);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.lage-attach button:disabled {
+  opacity: 0.4;
+}
+
+@media (max-width: 720px) {
+  .lage-stage {
+    left: 0;
+    top: 52px;
+  }
+
+  .lage-body {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: hidden;
+    padding-top: 0.35rem;
+    container-type: size;
+  }
+
+  .lage-canvas {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    margin: 0 auto;
+    aspect-ratio: var(--lage-fw) / var(--lage-fh);
+  }
+
+  @supports (width: 1cqi) {
+    .lage-canvas {
+      width: min(100cqi, calc(100cqh * var(--lage-fw) / var(--lage-fh)));
+    }
+  }
+
+  .lage-node--hub .lage-node-core {
+    width: 4.25rem;
+    height: 4.25rem;
+  }
+
+  .lage-node--profile .lage-node-core {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
+  .lage-inspect {
+    top: auto;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    max-height: 32%;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    padding-bottom: calc(1.15rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .lage-inspect:has(.is-bind-sheet) {
+    max-height: 52%;
+  }
+
+  .lage-edge-key {
+    top: 0.4rem;
+    left: 0.5rem;
+    gap: 0.55rem;
+  }
+
+  .lage-filter {
+    top: 2.4rem;
+    left: 0.5rem;
+    right: 3.5rem;
+    max-width: none;
+  }
+
+  .lage-node-label {
+    font-size: 0.62rem;
+  }
+
+  .lage-node--vault .lage-node-label {
+    left: 0;
+    transform: none;
+    max-width: 7.2rem;
+  }
+
+  .lage-node--workspace .lage-node-label {
+    left: auto;
+    right: 0;
+    transform: none;
+    max-width: 7.2rem;
+  }
+
+  .lage-node.is-selected.lage-node--vault .lage-node-label,
+  .lage-node.is-selected.lage-node--workspace .lage-node-label,
+  .lage-node.is-current .lage-node-label {
+    max-width: min(16rem, 88vw);
+  }
+
+  .lage-gate {
+    display: none;
+  }
+}
+
+/* Web-Fläche (glyph-ui.com): one maximized Agent chat, no Admin-Chrome */
+.app.app--web {
+  max-width: none;
+}
+
+.app--web .app-main {
+  max-width: min(44rem, 100%);
+  margin: 0 auto;
+  padding: 10px 16px 12px;
+  gap: 8px;
+}
+
+.app--web .top {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.app--web .top h1 {
+  font-size: 1.05rem;
+}
+
+.app--web .messages {
+  padding-top: 4px;
+}
+
+.app--web .empty {
+  max-width: 22rem;
+}
+
+.web-gate {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Optical center: a touch more bottom padding pulls the block down */
+  padding: 10vh 16px 14vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.web-gate-card {
+  /* Ticket 7: ~320–360px wide */
+  width: min(340px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.web-gate-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  /* Ticket 5: AA small text vs near-black */
+  color: color-mix(in srgb, var(--text) 68%, var(--muted));
+}
+
+.web-gate-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.web-gate-copy {
+  margin: 0 0 6px;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  /* Ticket 5: brighter subline */
+  color: color-mix(in srgb, var(--text) 64%, var(--muted));
+}
+
+.web-gate-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.web-gate-input:focus {
+  /* Ticket 7: subtler password focus ring */
+  outline: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  outline-offset: 1px;
+  border-color: color-mix(in srgb, var(--gold) 38%, var(--border));
+}
+
+.web-gate-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--type-secondary);
+}
+
+.web-gate-submit {
+  min-height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--gold-bright) 55%, var(--border));
+  /* Ticket 6: real primary — lighter fill + dark readable label */
+  background: var(--gold-bright);
+  color: #1a1408;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.web-gate-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.web-gate-submit:not(:disabled):hover {
+  background: color-mix(in srgb, var(--gold-bright) 72%, #ffffff);
+  color: #120e06;
+}
+
+.web-password-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  background: color-mix(in srgb, var(--bg) 78%, #000);
+}
+
+.web-password-dialog {
+  width: min(22rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.web-password-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.web-password-copy {
+  margin: 0 0 4px;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: var(--muted);
+}
+
+.web-password-ok {
+  margin: 0;
+  color: var(--gold-bright);
+  font-size: var(--type-secondary);
+}
+
+.web-password-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.web-password-cancel {
+  min-height: 2.75rem;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.web-password-cancel:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.web-password-actions .web-gate-submit {
+  width: auto;
+  padding: 0 18px;
+}
+
+/*
+  Web-Fläche on a phone: desktop .app--web rules (44rem column, 1.05rem title)
+  beat the generic ≤640px pass, so chrome and type read like a shrunk desktop.
+  Bump this surface only — :root tokens stay for Admin / themes / profiles.
+  Last in file so it wins over .app--web and .web-gate bases.
+
+  iOS: 100dvh stops above the home indicator, so the pill floated in a black
+  band. Fill 100lvh / -webkit-fill-available; safe-area is inside the pill.
+*/
+html.web-surface,
+html.web-surface body,
+html.web-surface #root {
+  height: 100%;
+  min-height: 100%;
+  min-height: -webkit-fill-available;
+  min-height: 100lvh;
+}
+
+@media (max-width: 640px) {
+  html.web-surface,
+  html.web-surface body,
+  html.web-surface #root {
+    height: 100lvh;
+    max-height: 100lvh;
+    min-height: 100lvh;
+    min-height: -webkit-fill-available;
+  }
+
+  html.web-surface .app.app--web {
+    --type-chat: 0.95rem;
+    --type-chat-leading: 1.5;
+    --type-user: 0.95rem;
+    --type-user-leading: 1.45;
+    --type-secondary: 0.82rem;
+    --composer-font-size: 16px;
+    --composer-min-h: 2.75rem;
+    --composer-pad-y: 12px;
+    height: 100%;
+    max-height: none;
+    min-height: 100%;
+    padding-bottom: 0;
+  }
+
+  .app--web .app-main {
+    max-width: none;
+    width: 100%;
+    padding: 4px 10px 0;
+    /* Footer is fixed to the screen edge; keep transcript clear of it. */
+    padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px) * 0.5);
+    gap: 6px;
+  }
+
+  .app--web .top {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .app--web .top > div:first-child {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .app--web .top h1 {
+    font-size: 1.28rem;
+    justify-content: center;
+    gap: 0.35rem 0.45rem;
+  }
+
+  .app--web .sub.sub--inline {
+    font-size: 0.92rem;
+  }
+
+  .app--web .top-actions {
+    width: 100%;
+    max-width: 24rem;
+    margin-inline: auto;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .app--web button.pill-btn.pill-btn--icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .app--web .empty {
+    max-width: 19rem;
+  }
+
+  .app--web .empty-soft {
+    margin-top: 10px;
+  }
+
+  .app--web .composer-vault-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    right: 12px;
+    bottom: calc(100% + 6px);
+  }
+
+  .app--web .composer-plus-btn,
+  .app--web .voice-mic-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .app--web .composer.composer--grok .send {
+    width: 3rem;
+    height: 3rem;
+    min-height: 3rem;
+  }
+
+  .app--web .composer.composer--grok {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    /* Lift the rounded pill above the home indicator — not the full
+       34px inset (floats) and not 0 (clips the curve). */
+    padding: 0 10px max(14px, calc(env(safe-area-inset-bottom, 0px) * 0.5));
+    gap: 4px;
+    background: var(--bg);
+    z-index: 6;
+  }
+
+  .app--web .composer-box {
+    margin-bottom: 0;
+  }
+
+  .app--web .composer-row {
+    padding: 8px 10px 10px;
+  }
+
+  .app.app--web:has(.composer-box:focus-within) .composer.composer--grok,
+  .app.app--web:has(textarea:focus) .composer.composer--grok,
+  .app.app--web:has(input:focus) .composer.composer--grok {
+    padding-bottom: 10px;
+  }
+
+  .web-gate {
+    padding: 28px 18px;
+  }
+
+  .web-gate-title {
+    font-size: 1.5rem;
+  }
+
+  .web-gate-input,
+  .web-gate-submit,
+  .web-password-cancel {
+    min-height: 3rem;
+  }
+}
+
+
+/* ========== P3 UI polish (tickets 1–13) ========== */
+
+/* Shared focus-ring utility (gate, composer, modal, header) */
+.web-gate-input:focus,
+.web-gate-input:focus-visible,
+.composer-textarea--overlay:focus,
+.composer-textarea--overlay:focus-visible,
+.overview-search:focus,
+.overview-search:focus-visible,
+.overview-panel:focus-visible,
+.side-rail-btn:focus-visible,
+.pill-btn:focus-visible,
+.composer-mode-btn:focus-visible,
+.composer-plus-btn:focus-visible,
+.composer-vault-btn:focus-visible,
+.voice-mic-btn:focus-visible,
+.empty-starter-chip:focus-visible,
+.top-actions-more-btn:focus-visible,
+.top-actions-menu-item:focus-visible,
+.extensions-reset-filter:focus-visible,
+.web-gate-submit:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.web-gate-input:focus {
+  /* Override older 1px gate ring */
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--border));
+}
+
+/* Ticket 1 — header groups + separators */
+.top-actions-groups {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.top-actions-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.top-actions-sep {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: color-mix(in srgb, var(--border) 85%, var(--muted));
+  flex-shrink: 0;
+}
+
+.top-actions-more-wrap {
+  display: none;
+  position: relative;
+}
+
+.top-actions-more-btn {
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+.top-actions-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 70%, #000);
+}
+
+.top-actions-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.top-actions-menu-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.top-actions-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Ticket 2 — LVL thinner / reveal on composer hover·focus; apple de-emphasized */
+.context-lvl-row {
+  opacity: 0.55;
+  transition: opacity 0.18s ease;
+}
+
+.context-lvl-bar {
+  padding: 3px 6px;
+}
+
+.context-lvl-bar-meta {
+  opacity: 0.65;
+}
+
+.composer:hover .context-lvl-row,
+.composer:focus-within .context-lvl-row,
+.context-lvl-row:hover,
+.context-lvl-row:focus-within {
+  opacity: 1;
+}
+
+.composer:hover .context-lvl-bar-meta,
+.composer:focus-within .context-lvl-bar-meta,
+.context-lvl-row:hover .context-lvl-bar-meta,
+.context-lvl-row:focus-within .context-lvl-bar-meta {
+  opacity: 1;
+}
+
+/* Idle: no static red apple above send — spit/fly/rain stay intentional-only.
+   Off-state reveals on composer/LVL hover·focus so Ordner-Suche stays reachable. */
+.composer-vault-btn {
+  opacity: 0;
+  filter: brightness(0.78) saturate(0.75);
+  width: 1.5rem;
+  height: 1.5rem;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    filter 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.composer:hover .composer-vault-btn:not(.is-on):not(:disabled),
+.composer:focus-within .composer-vault-btn:not(.is-on):not(:disabled),
+.context-lvl-row:hover .composer-vault-btn:not(.is-on):not(:disabled),
+.context-lvl-row:focus-within .composer-vault-btn:not(.is-on):not(:disabled) {
+  opacity: 0.42;
+  pointer-events: auto;
+}
+
+.composer-vault-btn:hover:not(:disabled),
+.composer-vault-btn:focus-visible:not(:disabled) {
+  opacity: 0.55;
+  pointer-events: auto;
+}
+
+.composer-vault-btn.is-on {
+  opacity: 0.92;
+  pointer-events: auto;
+  filter: none;
+  /* Keep Send primary — softer pulse */
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent),
+    0 0 6px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+
+/* Touch / no-hover: faint idle apple so Ordner-Suche stays findable without hover */
+@media (hover: none) {
+  .composer-vault-btn:not(.is-on):not(:disabled) {
+    opacity: 0.22;
+    pointer-events: auto;
+  }
+}
+
+
+/* Ticket 3 — readable mode label + hint */
+.composer-mode-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.composer-mode-label {
+  display: inline-block;
+  min-width: 2.4rem;
+  font-weight: 650;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+}
+
+.composer-mode-hint {
+  display: none;
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 16rem;
+  margin-right: auto;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+@media (min-width: 900px) {
+  .composer-mode-hint {
+    display: inline-block;
+  }
+}
+
+/* Ticket 4 — empty starter chips (keep P0 contrast on .empty / .empty-soft) */
+.empty-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.empty-starter-chip {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.empty-starter-chip:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--border));
+  background: color-mix(in srgb, var(--gold) 8%, var(--panel));
+}
+
+/* Ticket 5 — bubble hierarchy + discreet timestamps */
+.msg-user-bubble {
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  border-color: color-mix(in srgb, var(--user-rim) 80%, var(--gold) 12%);
+}
+
+.msg-assistant {
+  background: color-mix(in srgb, var(--panel) 22%, transparent);
+  border-radius: 12px 12px 12px 4px;
+  padding: 8px 10px 10px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.role-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.msg-time {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.62rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.msg-user .msg-time {
+  text-align: right;
+  margin-top: 8px;
+}
+
+.msg-assistant .role-row .msg-time {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+/* Ticket 6–7 — calm gate error + caps + autofill */
+.web-gate-error {
+  color: color-mix(in srgb, var(--danger-bright) 70%, var(--text));
+  font-weight: 500;
+}
+
+.web-gate-input--error {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.web-gate-caps {
+  margin: 0;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: color-mix(in srgb, var(--gold-bright) 55%, var(--muted));
+}
+
+.web-gate-input:-webkit-autofill,
+.web-gate-input:-webkit-autofill:hover,
+.web-gate-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  box-shadow: 0 0 0 1000px var(--panel) inset;
+  transition: background-color 99999s ease-out;
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+}
+
+/* Ticket 8 — unified SKILL/UI/USER badges */
+.slash-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 1.25rem;
+  min-width: 2.6rem;
+  padding: 0 7px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+}
+
+.slash-badge--skill {
+  border-color: color-mix(in srgb, var(--gold) 50%, var(--border));
+  color: var(--gold-bright, var(--gold));
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+}
+
+.slash-badge--ui {
+  border-color: color-mix(in srgb, var(--text) 28%, var(--border));
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.slash-badge--user,
+.slash-badge--command {
+  border-color: color-mix(in srgb, var(--muted) 55%, var(--border));
+  color: color-mix(in srgb, var(--muted) 90%, var(--text));
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+}
+
+/* Ticket 9–10 — modal chrome + filter empty */
+.extensions-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extensions-search-row .overview-search {
+  flex: 1 1 auto;
+}
+
+.extensions-filter-hint {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.extensions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 4px 16px;
+}
+
+.extensions-reset-filter {
+  font-size: 0.8rem;
+}
+
+.overview-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 85%, var(--bg));
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text);
+}
+
+/* Ticket 12 — narrow header overflow + composer stack + PWA standalone */
+@media (max-width: 640px) {
+  .top-actions-groups {
+    display: none;
+  }
+
+  .top-actions-more-wrap {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .composer-mode-hint {
+    display: none;
+  }
+
+  .composer-row {
+    flex-wrap: wrap;
+  }
+
+  .composer-input-wrap {
+    flex: 1 1 100%;
+    order: -1;
+    width: 100%;
+  }
+
+}
+
+@media (display-mode: standalone) {
+  .app {
+    padding-top: max(env(safe-area-inset-top, 0px), 0px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+  }
+
+  .app--web .top {
+    padding-top: 2px;
+  }
+}
+
+/* Ticket 13 — modal motion 150–200ms; hover via opacity/color only */
+.overview-scrim {
+  animation: overview-scrim-in 160ms ease;
+}
+
+.overview-panel {
+  animation: overview-panel-in 180ms ease;
+}
+
+@keyframes overview-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overview-panel-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-scrim,
+  .overview-panel {
+    animation: none;
+  }
+}
+
+button.pill-btn {
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+button.pill-btn:hover:not(:disabled) {
+  transform: none;
+}
+
+.side-rail-btn:hover:not(:disabled) {
+  transform: none;
+}
