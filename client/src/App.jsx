@@ -3878,7 +3878,7 @@ export default function App() {
                       onClick={() => {
                         // One-click send: pass text into send() — setInput+send would be stale.
                         const prompt =
-                          "Was ist Glyph? Erklär kurz und klar: die Web-Fläche glyph-ui.com (°_Agent), den Schreibtisch auf dem Mac, und wofür man Glyph nutzt. Nutze die Wiki falls vorhanden.";
+                          "Was ist Glyph? Erklär kurz und klar auf Nutzerebene: Web-Fläche glyph-ui.com (°_Agent) und dass der Schreibtisch auf dem Mac bleibt. Keine Ports, Pfade, Auth- oder Technik-Internals.";
                         send(prompt);
                       }}
                     >
