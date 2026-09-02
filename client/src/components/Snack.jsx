@@ -181,8 +181,8 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
     cell = Math.max(SNACK_CELL, cell);
     const boardW = cols * cell;
     const boardH = rows * cell;
-    // Stuffed: same body length as hunt max (5) — longer coils look oversized in the send button
-    const maxLen = 5;
+    // Stuffed: same body length as hunt max (4) — head + 2–3 body (CEO: not 5)
+    const maxLen = 4;
     layoutRef.current = { cell, boardW, boardH, cols, rows };
 
     const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
@@ -207,7 +207,6 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
         { x: 2, y: 1 },
         { x: 2, y: 2 },
         { x: 1, y: 2 },
-        { x: 0, y: 2 },
       ];
       return path.slice(0, maxLen);
     };

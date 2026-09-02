@@ -1438,7 +1438,7 @@ button.send .send-seg {
   animation: graph-glance 8.4s steps(1, end) infinite;
 }
 
-/* 8 → 6 → 4px along the chin — soft green-gold Raupe segments. */
+/* 8 → 6px along the chin — soft green-gold Raupe segments (head + 2 = 3 total). */
 button.send .send-tail-stone--a,
 button.send .send-seg--a {
   left: calc(var(--send-head-right) - 10px);
@@ -1455,15 +1455,6 @@ button.send .send-seg--b {
   height: calc(var(--snack-pixel) - var(--snack-pixel-gap));
   background: var(--snack-caterpillar-body, var(--snack-snake-body));
   animation-delay: -0.12s;
-}
-
-button.send .send-tail-stone--c,
-button.send .send-seg--c {
-  left: calc(var(--send-head-right) + 6px);
-  width: calc(var(--snack-pixel) * 0.5);
-  height: calc(var(--snack-pixel) * 0.5);
-  background: color-mix(in srgb, var(--snack-caterpillar-body, var(--snack-snake-body)) 65%, #fff);
-  animation-delay: 0.12s;
 }
 
 button.send:disabled:not(.send--working) .send-face--head .graph-face {

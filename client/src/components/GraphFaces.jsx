@@ -344,6 +344,7 @@ export function SnakeHead(props) {
  * Graph itself stays head-only.
  */
 export function SendCaterpillar({ size = 28, face = "grok" }) {
+  // Head + 2 body stones = 3 total (aligned with busy 3–4, not 4–5)
   return (
     <span className="send-caterpillar send-snake">
       <span className="send-caterpillar-head send-snake-head">
@@ -352,7 +353,6 @@ export function SendCaterpillar({ size = 28, face = "grok" }) {
       <span className="send-segs send-tail" aria-hidden="true">
         <span className="send-seg send-seg--a send-tail-stone send-tail-stone--a" />
         <span className="send-seg send-seg--b send-tail-stone send-tail-stone--b" />
-        <span className="send-seg send-seg--c send-tail-stone send-tail-stone--c" />
       </span>
     </span>
   );
