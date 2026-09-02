@@ -1,10 +1,11 @@
 /**
- * Extensions-Modal: Skills + Agent-Commands (insert into composer only).
+ * Befehle & Skills — content for the shared right side drawer.
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { rankCatalog, slashItemLabel, withoutHiddenAgentCommands } from "../utils/slash.js";
+import { SideDrawer } from "./SideDrawer.jsx";
 
 /** Unified badge label: SKILL / UI / USER */
 function badgeMeta(item) {
@@ -28,7 +29,8 @@ function badgeMeta(item) {
  * @param {string | null} [props.skillsHint]
  * @param {boolean} [props.loading]
  * @param {string} [props.error]
- * @param {(item: { name: string, kind: string }) => void} props.onPick
+ * @param {(item: { name: string, kind: string }, opts?: { close?: boolean }) => void} props.onPick
+ * @param {string} [props.initialQuery]  seed filter (e.g. from composer `/query`)
  */
 function ExtensionsModal({
   open,
@@ -40,11 +42,11 @@ function ExtensionsModal({
   loading = false,
   error = "",
   onPick,
+  initialQuery = "",
 }) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchRef = useRef(null);
-  const panelRef = useRef(null);
   const rowRefs = useRef(new Map());
 
   const skillItems = useMemo(
@@ -78,9 +80,10 @@ function ExtensionsModal({
 
   useEffect(() => {
     if (!open) return;
-    setQuery("");
+    setQuery(String(initialQuery || ""));
     setSelectedIndex(0);
-    requestAnimationFrame(() => searchRef.current?.focus());
+    // Seed once per open — further typing stays in the filter field
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialQuery at open
   }, [open]);
 
   useEffect(() => {
@@ -99,33 +102,101 @@ function ExtensionsModal({
     el?.scrollIntoView({ block: "nearest" });
   }, [open, selectedIndex, items]);
 
-  if (!open) return null;
-
-  const pick = (item) => {
+  const pick = (item, { close = false } = {}) => {
     if (!item) return;
-    onPick?.(item);
-    onClose();
+    onPick?.(item, { close });
+    if (close) {
+      onClose?.();
+      return;
+    }
+    requestAnimationFrame(() => searchRef.current?.focus());
   };
 
+  const selected = items[selectedIndex] || null;
+
   return (
-    <div className="overview-scrim" role="presentation" onClick={onClose}>
-      <section
-        ref={panelRef}
-        className="overview-panel extensions-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Erweiterungen und Befehle"
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      kicker="Extensions"
+      title="Befehle & Skills"
+      className="app-drawer--extensions"
+      ariaLabel="Erweiterungen und Befehle"
+      initialFocusRef={searchRef}
+      meta={
+        <>
+          {profileLabel ? `Profil: ${profileLabel} · ` : ""}
+          Auswahl fügt <code>/name</code> in den Composer ein — sendet nicht.
+          Panel bleibt offen; Esc oder „Einfügen &amp; zu“ schließt.
+        </>
+      }
+      headExtra={
+        <button
+          type="button"
+          className="ghost"
+          disabled={!selected}
+          title="Ausgewählten Eintrag einfügen und Panel schließen"
+          onClick={() => pick(selected, { close: true })}
+        >
+          Einfügen &amp; zu
+        </button>
+      }
+    >
+      <p className="overview-hint app-drawer-hint">
+        Filtern · <kbd>↑</kbd>/<kbd>↓</kbd> + <kbd>Enter</kbd> fügt ein (bleibt
+        offen) · <kbd>Esc</kbd> / Schließen · <kbd>/</kbd> im Composer öffnet
+        dasselbe Panel. UI-Bedienung: <strong>Buch → Legende</strong>.
+      </p>
+
+      <div className="extensions-search-row">
+        <input
+          ref={searchRef}
+          className="overview-search"
+          type="search"
+          placeholder="Skills und Agent-Commands filtern…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Befehle und Skills filtern"
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setSelectedIndex((i) =>
+                Math.min(i + 1, Math.max(0, items.length - 1)),
+              );
+              return;
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setSelectedIndex((i) => Math.max(i - 1, 0));
+              return;
+            }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              pick(items[selectedIndex], { close: e.metaKey || e.ctrlKey });
+            }
+          }}
+        />
+        <span className="extensions-filter-hint" title="Filterfeld (Fokus hier)">
+          Filter
+        </span>
+      </div>
+
+      {error ? <p className="overview-hint overview-hint--error">{error}</p> : null}
+      {loading ? <p className="overview-hint">Skills werden geladen…</p> : null}
+      {!loading && skillsHint && skillItems.length === 0 ? (
+        <p className="overview-hint">{skillsHint}</p>
+      ) : null}
+
+      <div
+        className="overview-list extensions-list"
+        role="listbox"
+        aria-label="Skills und Befehle"
         onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            onClose();
-            return;
-          }
           if (e.key === "ArrowDown") {
             e.preventDefault();
-            setSelectedIndex((i) => Math.min(i + 1, Math.max(0, items.length - 1)));
+            setSelectedIndex((i) =>
+              Math.min(i + 1, Math.max(0, items.length - 1)),
+            );
             return;
           }
           if (e.key === "ArrowUp") {
@@ -135,94 +206,52 @@ function ExtensionsModal({
           }
           if (e.key === "Enter") {
             e.preventDefault();
-            pick(items[selectedIndex]);
+            pick(items[selectedIndex], { close: e.metaKey || e.ctrlKey });
           }
         }}
       >
-        <header className="overview-head">
-          <div>
-            <p className="overview-kicker">Extensions</p>
-            <h2>Befehle &amp; Skills</h2>
-            <p className="overview-meta">
-              {profileLabel ? `Profil: ${profileLabel} · ` : ""}
-              Ausführbare Liste (Skills + Agent-Commands). Auswahl fügt{" "}
-              <code>/name</code> in den Composer ein — sendet nicht.
-            </p>
-          </div>
-          <div className="overview-head-actions">
-            <button type="button" className="ghost" onClick={onClose}>
-              Schließen
+        {filterEmpty ? (
+          <div className="extensions-empty">
+            <p className="slash-popup-empty">Keine Treffer</p>
+            <button
+              type="button"
+              className="ghost extensions-reset-filter"
+              onClick={() => {
+                setQuery("");
+                requestAnimationFrame(() => searchRef.current?.focus());
+              }}
+            >
+              Filter zurücksetzen
             </button>
           </div>
-        </header>
-
-        <p className="overview-hint">
-          Filtern und auswählen · <kbd>↑</kbd>/<kbd>↓</kbd> + <kbd>Enter</kbd> ·{" "}
-          <kbd>Esc</kbd> schließt · <kbd>/</kbd> im Composer öffnet dasselbe
-          (Popup). UI-Bedienung steht im <strong>Buch → Legende</strong>.
-        </p>
-
-        <div className="extensions-search-row">
-          <input
-            ref={searchRef}
-            className="overview-search"
-            type="search"
-            placeholder="Skills und Agent-Commands filtern…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Befehle und Skills filtern"
-          />
-          <span className="extensions-filter-hint" title="Filterfeld (Fokus hier)">
-            Filter
-          </span>
-        </div>
-
-        {error ? <p className="overview-hint overview-hint--error">{error}</p> : null}
-        {loading ? <p className="overview-hint">Skills werden geladen…</p> : null}
-        {!loading && skillsHint && skillItems.length === 0 ? (
-          <p className="overview-hint">{skillsHint}</p>
-        ) : null}
-
-        <div className="overview-list extensions-list" role="listbox">
-          {filterEmpty ? (
-            <div className="extensions-empty">
-              <p className="slash-popup-empty">Keine Treffer</p>
-              <button
-                type="button"
-                className="ghost extensions-reset-filter"
-                onClick={() => {
-                  setQuery("");
-                  requestAnimationFrame(() => searchRef.current?.focus());
-                }}
+        ) : items.length === 0 && !loading ? (
+          <p className="slash-popup-empty" style={{ padding: 12 }}>
+            Keine Einträge
+            {commandItems.length === 0
+              ? " — Agent-Commands erscheinen nach Verbindung."
+              : ""}
+          </p>
+        ) : (
+          items.map((item, i) => {
+            const key = `${item.kind}:${item.name}`;
+            const isSel = i === selectedIndex;
+            const badge = badgeMeta(item);
+            return (
+              <div
+                key={key}
+                className={`session-row extensions-row${isSel ? " is-selected" : ""}`}
+                onMouseEnter={() => setSelectedIndex(i)}
               >
-                Filter zurücksetzen
-              </button>
-            </div>
-          ) : items.length === 0 && !loading ? (
-            <p className="slash-popup-empty" style={{ padding: 12 }}>
-              Keine Einträge
-              {commandItems.length === 0
-                ? " — Agent-Commands erscheinen nach Verbindung."
-                : ""}
-            </p>
-          ) : (
-            items.map((item, i) => {
-              const key = `${item.kind}:${item.name}`;
-              const selected = i === selectedIndex;
-              const badge = badgeMeta(item);
-              return (
                 <button
-                  key={key}
                   type="button"
                   role="option"
-                  aria-selected={selected}
-                  className={`session-row extensions-row${selected ? " is-selected" : ""}`}
+                  aria-selected={isSel}
+                  className="extensions-row-main"
                   ref={(el) => {
                     if (el) rowRefs.current.set(key, el);
                     else rowRefs.current.delete(key);
                   }}
-                  onMouseEnter={() => setSelectedIndex(i)}
-                  onClick={() => pick(item)}
+                  onClick={() => pick(item, { close: false })}
                 >
                   <div className="session-main">
                     <div className="extensions-row-title">
@@ -242,12 +271,21 @@ function ExtensionsModal({
                     ) : null}
                   </div>
                 </button>
-              );
-            })
-          )}
-        </div>
-      </section>
-    </div>
+                <button
+                  type="button"
+                  className="ghost extensions-row-zu"
+                  title="Einfügen & schließen"
+                  aria-label={`${slashItemLabel(item)} einfügen und schließen`}
+                  onClick={() => pick(item, { close: true })}
+                >
+                  zu
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </SideDrawer>
   );
 }
 

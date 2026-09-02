@@ -26,7 +26,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Befehle und Skills",
         need: "optional",
-        desc: "Leisten-Button (Mitte) / ⌘/Ctrl+K: ausführbare Skills + Agent-Commands. Auswahl fügt /name in den Composer ein — sendet nicht. Live-Katalog, keine Doku-Liste.",
+        desc: "Seitenpanel rechts (Chat bleibt). Leisten-Button / ⌘/Ctrl+K / `/` im Composer: Skills + Agent-Commands. Auswahl fügt /name ein — sendet nicht; Panel bleibt offen (Einfügen & zu / Esc schließt). Live-Katalog.",
       },
       {
         cmd: "Buch · Handbuch / Legende",
@@ -36,7 +36,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Glyph · Plan & Aktivität",
         need: "optional",
-        desc: "Kalender-Icon: Tab Plan = übergebene Aufgaben (Beleg Meldung+Antwort, Was ist zu tun, Übernehmen, Fertig mit Pfad/Ort) plus wiederkehrende To-dos (Fertig wenn, täglich/wöchentlich, Pause/Jetzt/Löschen; Fertig-Klick löscht erledigte; LEER ≠ Erfolg). Neue To-do erst 1× mit Plan-Freigabe (Skill einmal-job), dann hier. Tab Aktivität = Heatmap (Grok). ACP-Session-Plan bleibt die Leiste über dem Composer.",
+        desc: "Kalender-Icon → Seitenpanel rechts (Chat bleibt; Graph = Vollfläche-Ausnahme). Tab Plan = Aufgaben + To-dos (Übernehmen → Composer, Panel darf offen bleiben). Tab Aktivität = Heatmap (Grok). ACP-Session-Plan = Leiste über dem Composer.",
       },
       {
         cmd: "Wiki (i)",
@@ -69,9 +69,9 @@ const COMMAND_LEGEND = [
         desc: "Desk: Senden (ohne Shift), Shift+Enter = Zeile. Handy: Tastatur-Enter = Zeile, Kopf sendet beim ersten Tap. Slash-Popup: Enter = auswählen. Agent arbeitet → Warteschlange.",
       },
       {
-        cmd: "/ · Slash-Popup",
+        cmd: "/ · Skills-Seitenpanel",
         need: "empfohlen",
-        desc: "/ am Zeilenanfang oder nach Leerzeichen → Skills & Agent-Commands. ↑↓ Enter, Esc. Fügt /name ein, sendet nicht.",
+        desc: "Öffnet dasselbe Skills-Seitenpanel wie der Leisten-Button (kein separates Popup). Filter, Einfügen, Esc.",
       },
       {
         cmd: "Warteschlange",
@@ -213,7 +213,7 @@ const COMMAND_HINTS = {
     {
       cmd: "Befehle und Skills",
       need: "hilfreich",
-      desc: "Live Skills + Agent-Commands: Leisten-Button „Befehle und Skills“ oder ⌘/Ctrl+K (oder / im Composer). Nicht in dieser Legende ausführen.",
+      desc: "Live Skills + Agent-Commands im Seitenpanel: Leiste, ⌘/Ctrl+K oder / im Composer. Nicht in dieser Legende ausführen.",
     },
     {
       cmd: "Slash in dieser UI",
@@ -297,7 +297,7 @@ const SHORT_HANDBOOK = [
     id: "layout",
     title: "Oberfläche",
     body: [
-      "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, UI neu laden, **Buch** (Handbuch · UI-Legende).",
+      "Links: Kalender, Lupe, **Graph**, Neuer Chat, **Befehle und Skills**, Wiki, Workspace, Theme, UI neu laden, **Buch** (Handbuch · UI-Legende). Kalender & Skills = **Seitenpanel** (Chat bleibt); **Graph** = Vollfläche.",
       "Header links: Glyph #0.9.0 · Term · ACP. cwd nicht in der Zeile (Tooltip / Workspace-Button). Rechts: Profil · Modell-Pille (eingesetztes Modell, nicht Primary→Reserve) · Kette.",
       "glyph-ui.com: Header Stift · Befehle · Theme · Schloss · **UI neu laden**. Keine Kette (Beenden).",
       "Mitte: Chat-Verlauf (Markdown). Rechts: Snack-Scrollbar (Schlange / Apfel).",
@@ -312,7 +312,7 @@ const SHORT_HANDBOOK = [
       ["Graph", "Direkt unter der Lupe · Köpfe um Glyph · Punkt → Legende"],
       ["Stift", "Neuer Chat (wie TUI /new — Disk bleibt)"],
       ["Buch", "Handbuch · UI-Legende"],
-      ["Kalender", "Plan: Aufgaben + To-dos · Aktivität: Heatmap (Grok)"],
+      ["Kalender", "Seitenpanel Plan/Aktivität (Chat bleibt) · Heatmap (Grok)"],
       ["Wiki", "Wiki-Index (.md) in Obsidian / Standard-App"],
       ["Ordner", "Aktuellen Workspace (cwd) im Finder öffnen"],
       ["Theme", "Hell / Dunkel"],
@@ -454,7 +454,7 @@ function CommandLegend({
   open,
   onClose,
   initialTab = "handbook",
-  /** @deprecated Live-Katalog nur noch im Modal „Befehle und Skills“; prop bleibt für Call-Sites. */
+  /** @deprecated Live-Katalog nur noch im Seitenpanel „Befehle und Skills“; prop bleibt für Call-Sites. */
   agentCommands = [],
   agentProfileId = "",
   onOpenLage,
@@ -474,7 +474,7 @@ function CommandLegend({
     }
   }, [open, initialTab]);
 
-  // Nur UI-Legende + Hinweise. Live Skills/Agent-Commands → Modal „Befehle und Skills“.
+  // Nur UI-Legende + Hinweise. Live Skills/Agent-Commands → Seitenpanel „Befehle und Skills“.
   const commandGroups = useMemo(
     () => [...COMMAND_LEGEND, COMMAND_HINTS],
     [],

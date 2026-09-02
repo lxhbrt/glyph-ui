@@ -43,6 +43,8 @@ Für Power-User mit lokalem Zugriff auf eigene Dateien (z. B. Mac Mini). Kein 
 
 In der App: **Buch** → Tabs **Handbuch** · **Befehle** · **Anbindung** (kein extra Leisten-Icon).
 
+**Seitenpanel (rechts):** Befehle & Skills sowie Plan & Aktivität — Chat bleibt sichtbar. **Graph** = Vollfläche (Ausnahme). `/` im Composer öffnet dasselbe Skills-Panel.
+
 ### Brauchst du
 
 - **Node.js 22+** (Mac, Windows, Linux)
@@ -186,7 +188,7 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 | **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
 | **Buch** (unten) | Handbuch | Tabs: Kurzhandbuch · Befehle · **Anbindung** (Keys/OAuth-Status) |
-| **4 Kästchen** | Kalender | Tab **Plan** = Aufgaben + wiederkehrende To-dos · Tab **Aktivität** = Heatmap (Grok) |
+| **4 Kästchen** | Kalender | **Seitenpanel** Plan/Aktivität (Chat bleibt) · Graph = Vollfläche-Ausnahme |
 | **Wiki (i)** | Wiki | Öffnet den Wiki-Index (`.md`) in Obsidian / Standard-App |
 | **Workspace** | Ordner | Öffnet den aktuellen Arbeitsordner (`cwd`) im Finder |
 | **Theme** | Hell/Dunkel | Darstellung umschalten |
@@ -365,7 +367,9 @@ Schließen löscht den Ordner unter `~/.grok/sessions`. Ins Wiki schreibt das ni
 
 ## 8. Aktivitäts-Kalender
 
-Symbol: **4 Kästchen** in der linken Leiste. Zwei Tabs: **Plan** und **Aktivität**.
+Symbol: **4 Kästchen** in der linken Leiste. Öffnet ein **Seitenpanel rechts** (Chat bleibt sichtbar; Composer nutzbar). Esc / Schließen. Zwei Tabs: **Plan** und **Aktivität**.
+
+**Ausnahme:** Der **Graph** bleibt Vollfläche (nicht Seitenpanel) — öffnet den Graph, schließt jedes Seitenpanel.
 
 ### Tab Plan (Aufgaben + wiederkehrende To-dos)
 
