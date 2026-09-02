@@ -17,9 +17,30 @@ const SNACK_BODY_GAP = SNACK_STEP - SNACK_PIXEL; // 2
 const SNACK_BODY_TRAIL = SNACK_BODY_N * SNACK_STEP; // head → last body slot
 const SNACK_RAIL_W = SNACK_PIXEL + 4;
 
+function snackRoundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/** Soft-pixel stone dab — matches GraphFaces painterly cells (slight round + bleed). */
 function snackDrawSquare(ctx, x, y, fill) {
+  const ix = Math.round(x);
+  const iy = Math.round(y);
+  const s = SNACK_PIXEL;
+  const r = Math.max(1.2, s * 0.28);
   ctx.fillStyle = fill;
-  ctx.fillRect(Math.round(x), Math.round(y), SNACK_PIXEL, SNACK_PIXEL);
+  ctx.globalAlpha = 0.35;
+  snackRoundRect(ctx, ix - 0.4, iy - 0.35, s + 0.9, s + 0.8, r + 0.3);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  snackRoundRect(ctx, ix, iy, s, s, r);
+  ctx.fill();
 }
 
 function snackDrawApple(ctx, x, y, stop, stopInner) {
@@ -364,11 +385,20 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
 
     const drawCell = (x, y, fill, gapRatio = 0.14) => {
       // Same inset math as SNACK_PIXEL / SNACK_GAP (unified stone size)
+      // Soft dab corners — same painterly language as GraphFaces stones
       const gap = Math.max(1, Math.floor(cell * gapRatio));
       const s = cell - gap * 2;
+      const px = x * cell + gap;
+      const py = y * cell + gap;
+      const r = Math.max(1.2, s * 0.28);
       ctx.fillStyle = fill;
-      ctx.fillRect(x * cell + gap, y * cell + gap, s, s);
-      return { gap, size: s, px: x * cell + gap, py: y * cell + gap };
+      ctx.globalAlpha = 0.32;
+      snackRoundRect(ctx, px - 0.35, py - 0.3, s + 0.8, s + 0.7, r + 0.25);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      snackRoundRect(ctx, px, py, s, s, r);
+      ctx.fill();
+      return { gap, size: s, px, py };
     };
 
 
