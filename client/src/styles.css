@@ -1253,7 +1253,7 @@ button:disabled {
 }
 
 button.send {
-  --send-morph: 0.48s cubic-bezier(0.34, 1.25, 0.64, 1);
+  --send-morph: 0.72s cubic-bezier(0.22, 1.15, 0.36, 1);
   touch-action: manipulation;
   /* Calm idle: soft accent tint, not a solid neon block */
   background: var(--send-idle-bg);
@@ -1313,6 +1313,8 @@ button.send .send-face {
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  overflow: hidden; /* idle head + SnackBoard share one circular clip */
   transition:
     opacity var(--send-morph),
     transform var(--send-morph),
@@ -1352,6 +1354,7 @@ button.send .send-snake-head {
   height: var(--send-head);
   z-index: 2;
   overflow: hidden;
+  border-radius: 50%; /* idle stone clipped to circle — same as working snack */
 }
 
 button.send .send-snake-head .graph-face {
@@ -1417,8 +1420,8 @@ button.send:disabled:not(.send--working) .send-tail {
 
 button.send .send-face--snack {
   opacity: 0;
-  transform: scale(0.2) rotate(75deg);
-  filter: blur(2px);
+  transform: scale(0.35) rotate(48deg);
+  filter: blur(1.5px);
   z-index: 1;
   padding: 4px;
 }
@@ -1426,8 +1429,8 @@ button.send .send-face--snack {
 /* Working: Head collapses into Snack */
 button.send.send--working .send-face--head {
   opacity: 0;
-  transform: scale(0.15) rotate(-100deg);
-  filter: blur(3px);
+  transform: scale(0.28) rotate(-72deg);
+  filter: blur(2px);
   z-index: 1;
 }
 
@@ -1448,8 +1451,8 @@ button.send.send--morph-out .send-face--head {
 
 button.send.send--morph-out .send-face--snack {
   opacity: 0;
-  transform: scale(0.2) rotate(-75deg);
-  filter: blur(2px);
+  transform: scale(0.35) rotate(-48deg);
+  filter: blur(1.5px);
   z-index: 1;
 }
 
@@ -4338,16 +4341,16 @@ button.composer-sheet-head:hover {
   align-items: center;
   justify-content: center;
   order: 3;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 1.95rem;
+  height: 1.95rem;
   box-sizing: border-box;
   flex-shrink: 0;
   font: inherit;
   color: var(--muted);
   padding: 0;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  background: color-mix(in srgb, var(--bg) 28%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 36%, transparent);
   cursor: pointer;
   user-select: none;
 }
@@ -4379,11 +4382,16 @@ button.composer-sheet-head:hover {
 .composer-plus-btn,
 .voice-mic-btn:not(.is-recording),
 .composer-mode-btn {
-  opacity: 0.72;
-  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  opacity: 0.62;
+  color: color-mix(in srgb, var(--muted) 92%, var(--text));
   border-color: color-mix(in srgb, var(--border) 70%, transparent);
   background: color-mix(in srgb, var(--bg) 40%, transparent);
   font-weight: 500;
+}
+
+/* Mic stays secondary to snake/send — a hair quieter than + / mode */
+.voice-mic-btn:not(.is-recording) {
+  opacity: 0.52;
 }
 
 .composer-plus-btn:hover:not(:disabled),
@@ -6184,8 +6192,8 @@ button.cal-cell {
 
   .voice-mic-btn {
     order: 3;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.15rem;
+    height: 2.15rem;
   }
 
   .composer.composer--grok .send {
@@ -7775,7 +7783,12 @@ button.cal-cell {
 }
 
 .graph-ink {
-  fill: color-mix(in srgb, var(--bg) 22%, #000);
+  fill: color-mix(in srgb, var(--bg) 10%, #000);
+}
+
+/* Send idle ~28px / 1x: punchier ink so eyes/mouth read without growing the stone */
+button.send .graph-ink {
+  fill: #050505;
 }
 
 /* Pixel glance / blink: transform only, steps (no interpolation), long idle.
@@ -9047,24 +9060,54 @@ html.web-surface #root {
   opacity: 1;
 }
 
+/* Idle: no static red apple above send — spit/fly/rain stay intentional-only.
+   Off-state reveals on composer/LVL hover·focus so Ordner-Suche stays reachable. */
 .composer-vault-btn {
-  opacity: 0.28;
+  opacity: 0;
   filter: brightness(0.78) saturate(0.75);
   width: 1.5rem;
   height: 1.5rem;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    filter 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
-.composer-vault-btn:hover:not(:disabled) {
-  opacity: 0.5;
+.composer:hover .composer-vault-btn:not(.is-on):not(:disabled),
+.composer:focus-within .composer-vault-btn:not(.is-on):not(:disabled),
+.context-lvl-row:hover .composer-vault-btn:not(.is-on):not(:disabled),
+.context-lvl-row:focus-within .composer-vault-btn:not(.is-on):not(:disabled) {
+  opacity: 0.42;
+  pointer-events: auto;
+}
+
+.composer-vault-btn:hover:not(:disabled),
+.composer-vault-btn:focus-visible:not(:disabled) {
+  opacity: 0.55;
+  pointer-events: auto;
 }
 
 .composer-vault-btn.is-on {
   opacity: 0.92;
+  pointer-events: auto;
+  filter: none;
   /* Keep Send primary — softer pulse */
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent),
     0 0 6px color-mix(in srgb, var(--gold) 22%, transparent);
 }
+
+/* Touch / no-hover: faint idle apple so Ordner-Suche stays findable without hover */
+@media (hover: none) {
+  .composer-vault-btn:not(.is-on):not(:disabled) {
+    opacity: 0.22;
+    pointer-events: auto;
+  }
+}
+
 
 /* Ticket 3 — readable mode label + hint */
 .composer-mode-wrap {

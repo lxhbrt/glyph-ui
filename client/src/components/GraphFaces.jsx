@@ -20,6 +20,7 @@ function Stone({ size, face, children }) {
       width={size}
       height={size}
       viewBox={`0 0 ${S} ${S}`}
+      shapeRendering="crispEdges"
       aria-hidden="true"
     >
       <rect width={S} height={S} fill="currentColor" />
@@ -36,15 +37,15 @@ function Ink(props) {
 function GrokFace({ size }) {
   return (
     <Stone size={size} face="grok">
-      <Ink x="1.4" y="6.2" width="9.2" height="7.2" />
-      <Ink x="13.4" y="6.2" width="9.2" height="7.2" />
-      <Ink x="10.2" y="8.2" width="3.6" height="2.2" />
+      <Ink x="1.2" y="5.8" width="9.6" height="7.8" />
+      <Ink x="13.2" y="5.8" width="9.6" height="7.8" />
+      <Ink x="10" y="8" width="4" height="2.4" />
       <g className="graph-pupils">
-        <rect x="3.2" y="7.8" width="2.6" height="1.8" fill="currentColor" />
-        <rect x="15.2" y="7.8" width="2.6" height="1.8" fill="currentColor" />
+        <rect x="3" y="7.6" width="2.8" height="2" fill="currentColor" />
+        <rect x="15" y="7.6" width="2.8" height="2" fill="currentColor" />
       </g>
-      <Ink x="11.4" y="19.8" width="10.4" height="2.2" />
-      <Ink x="19.6" y="17.6" width="2.6" height="3.4" />
+      <Ink x="11" y="19.4" width="11" height="2.6" />
+      <Ink x="19.4" y="17.2" width="2.8" height="3.8" />
     </Stone>
   );
 }
@@ -54,14 +55,14 @@ function AgentFace({ size }) {
   return (
     <Stone size={size} face="agent">
       <g className="graph-lids">
-        <Ink x="1.6" y="6.2" width="8" height="8.4" />
-        <Ink x="14.2" y="7.6" width="6.4" height="5.4" />
+        <Ink x="1.4" y="5.8" width="8.4" height="9" />
+        <Ink x="14" y="7.2" width="6.8" height="6" />
         <g className="graph-pupils">
-          <rect x="3.4" y="8.2" width="2.4" height="2.4" fill="currentColor" />
-          <rect x="16" y="8.8" width="1.8" height="1.8" fill="currentColor" />
+          <rect x="3.2" y="8" width="2.6" height="2.6" fill="currentColor" />
+          <rect x="15.8" y="8.6" width="2" height="2" fill="currentColor" />
         </g>
       </g>
-      <Ink x="5" y="19.4" width="12" height="1.6" />
+      <Ink x="4.6" y="19" width="12.8" height="2" />
     </Stone>
   );
 }
@@ -70,16 +71,16 @@ function AgentFace({ size }) {
 function CodeFace({ size }) {
   return (
     <Stone size={size} face="code">
-      <Ink x="2" y="7.4" width="6.4" height="1.6" />
+      <Ink x="1.8" y="7" width="6.8" height="2" />
       <g className="graph-lids">
-        <Ink x="12.4" y="6.2" width="9.4" height="8.6" />
+        <Ink x="12.2" y="5.8" width="9.8" height="9.2" />
         <g className="graph-pupils">
-          <rect x="14.2" y="8" width="2.4" height="2.4" fill="currentColor" />
+          <rect x="14" y="7.8" width="2.6" height="2.6" fill="currentColor" />
         </g>
       </g>
-      <Ink x="4.4" y="20" width="15.2" height="2.4" />
-      <rect x="8.4" y="20" width="1.6" height="2.4" fill="currentColor" />
-      <rect x="13.2" y="20" width="1.6" height="2.4" fill="currentColor" />
+      <Ink x="4" y="19.6" width="16" height="2.8" />
+      <rect x="8.2" y="19.6" width="1.8" height="2.8" fill="currentColor" />
+      <rect x="13" y="19.6" width="1.8" height="2.8" fill="currentColor" />
     </Stone>
   );
 }
