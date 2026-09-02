@@ -1,5 +1,5 @@
 /**
- * Snack heads: gold stone, dark ink face — soft-pixel painterly Raupe 🐛.
+ * Snack heads: gold/brown stone, dark ink face — soft-pixel painterly Raupe 🐛.
  * Coarse grid, each cell a soft brush dab (watercolor/marker bleed),
  * not hard flat pixels. Organic texture within squares.
  * Grok = Boss · Agent = Arbeiter · Code = Hacker
@@ -182,43 +182,23 @@ function Stone({ size, face, children }) {
 }
 
 /**
- * Boss Raupe — soft confident lids (not heavy snake sunglasses),
- * sideways smirk, upright antennae. Cool without fighting cuteness.
+ * Boss Raupe — sunglasses OK (CEO), sideways smirk, blush, upright antennae.
+ * Still clearly caterpillar head (antennae + stone), not snake.
  */
 function GrokFace({ size }) {
   return (
     <Stone size={size} face="grok">
       <Antennae mood="up" />
-      {/* Soft half-lids — cool, not opaque shades */}
-      <Ink x="2.0" y="6.4" width="8.4" height="5.6" rx="1.35" />
-      <InkWash x="2.3" y="6.7" w="7.8" h="4.9" opacity={0.4} />
-      <Ink x="13.6" y="6.4" width="8.4" height="5.6" rx="1.35" />
-      <InkWash x="13.9" y="6.7" w="7.8" h="4.9" opacity={0.4} />
-      {/* Soft brow bridge */}
-      <Ink x="9.6" y="7.5" width="4.8" height="1.8" rx="0.7" bleed={0.25} />
+      {/* Sunglasses — opaque soft shades + bridge */}
+      <Ink x="1.55" y="6.15" width="9.1" height="6.0" rx="1.45" />
+      <InkWash x="1.9" y="6.45" w="8.4" h="5.3" opacity={0.5} />
+      <Ink x="13.35" y="6.15" width="9.1" height="6.0" rx="1.45" />
+      <InkWash x="13.7" y="6.45" w="8.4" h="5.3" opacity={0.5} />
+      <Ink x="9.35" y="7.55" width="5.3" height="2.15" rx="0.75" bleed={0.25} />
+      {/* Lens glints (not pupils through the shades) */}
       <g className="graph-pupils">
-        <rect
-          className="graph-pupil-core"
-          x="4.15"
-          y="8.35"
-          width="2.45"
-          height="2.45"
-          rx="0.7"
-          ry="0.7"
-          fill="currentColor"
-        />
-        <Sparkle x="4.55" y="8.55" w="1.05" h="1.05" />
-        <rect
-          className="graph-pupil-core"
-          x="15.75"
-          y="8.35"
-          width="2.45"
-          height="2.45"
-          rx="0.7"
-          ry="0.7"
-          fill="currentColor"
-        />
-        <Sparkle x="16.15" y="8.55" w="1.05" h="1.05" />
+        <Sparkle x="3.9" y="7.55" w="1.35" h="1.2" />
+        <Sparkle x="15.7" y="7.55" w="1.35" h="1.2" />
       </g>
       <Blush />
       {/* Sideways smirk */}
@@ -344,15 +324,25 @@ export function SnakeHead(props) {
  * Graph itself stays head-only.
  */
 export function SendCaterpillar({ size = 28, face = "grok" }) {
-  // Head + 2 body stones = 3 total (aligned with busy 3–4, not 4–5)
+  // Idle: head + 2 body stones = 3 total. Little feet under body segs (≠ snake).
   return (
     <span className="send-caterpillar send-snake">
       <span className="send-caterpillar-head send-snake-head">
         <CaterpillarHead size={size} face={face} />
       </span>
       <span className="send-segs send-tail" aria-hidden="true">
-        <span className="send-seg send-seg--a send-tail-stone send-tail-stone--a" />
-        <span className="send-seg send-seg--b send-tail-stone send-tail-stone--b" />
+        <span className="send-seg send-seg--a send-tail-stone send-tail-stone--a">
+          <span className="send-feet">
+            <i />
+            <i />
+          </span>
+        </span>
+        <span className="send-seg send-seg--b send-tail-stone send-tail-stone--b">
+          <span className="send-feet">
+            <i />
+            <i />
+          </span>
+        </span>
       </span>
     </span>
   );

@@ -75,7 +75,7 @@
   --ok: var(--gold-bright);
 
   --send-fg: color-mix(in srgb, var(--gold) 12%, #000000);
-  /* D = material A: container = composer/--bg. Gold / soft Raupe greens ONLY on
+  /* D = material A: container = composer/--bg. Gold/brown ONLY on
      stones/segments, never a fill plate. button.send uses background-color: var(--bg)
      directly (no bg transition) so theme flips cannot interpolate a circular gold
      disc behind the caterpillar. */
@@ -84,14 +84,16 @@
   --send-work-bg: var(--bg);
 
   /* Snack = Raupe (caterpillar) stones + danger apple stop.
-     Head gold → body soft green-gold → tip lighter (Enter board + scrollbar). */
+     Gold / brown family (NOT Luntik bright green primary). Soft dabs OK in-family.
+     Head gold → body brown-gold → tip lighter. Leaf green only on the Apfel. */
   --snack-snake-head: var(--gold);
-  --snack-snake-body: color-mix(in srgb, var(--gold-bright) 68%, #6a9e52 32%);
+  --snack-snake-body: color-mix(in srgb, var(--gold) 58%, #6b4423 42%);
   --snack-caterpillar-head: var(--snack-snake-head);
   --snack-caterpillar-body: var(--snack-snake-body);
+  --snack-foot: color-mix(in srgb, var(--gold-dim) 40%, #5c3d1e 60%);
   --snack-stop: var(--danger);
   --snack-stop-inner: var(--danger-bright);
-  /* KO face when hang / overate (pixel tongue + leaf) */
+  /* KO extras (tongue) + apple leaf only — leaf is not body primary */
   --snack-tongue: #e85a7a;
   --snack-tongue-tip: #ff8aa0;
   --snack-leaf: #5a9e4a;
@@ -136,14 +138,14 @@
   --send-idle-border: transparent;
   --send-work-bg: var(--bg);
 
-  /* Darker gold head on light surface; soft green-gold body ramp */
+  /* Darker gold head on light surface; brown-gold body ramp */
   --snack-snake-head: var(--gold-deep);
-  --snack-snake-body: color-mix(in srgb, var(--gold-dim) 70%, #4f7f3c 30%);
+  --snack-snake-body: color-mix(in srgb, var(--gold-dim) 62%, #5c3d1e 38%);
   --snack-caterpillar-head: var(--snack-snake-head);
   --snack-caterpillar-body: var(--snack-snake-body);
+  --snack-foot: color-mix(in srgb, var(--gold-deep) 35%, #4a3018 65%);
   --snack-stop: var(--danger);
   --snack-stop-inner: var(--danger-bright);
-  /* KO face when hang / overate (pixel tongue + leaf) */
   --snack-tongue: #e85a7a;
   --snack-tongue-tip: #ff8aa0;
   --snack-leaf: #5a9e4a;
@@ -1322,7 +1324,7 @@ button.send:hover:not(:disabled):not(.send--working) .send-caterpillar-head .gra
 
 button.send:hover:not(:disabled):not(.send--working) .send-tail-stone--a,
 button.send:hover:not(:disabled):not(.send--working) .send-seg--a {
-  background: color-mix(in srgb, var(--gold-bright) 75%, var(--snack-leaf) 25%);
+  background: color-mix(in srgb, var(--gold-bright) 72%, #6b4423 28%);
 }
 
 button.send:focus {
@@ -1438,7 +1440,7 @@ button.send .send-seg {
   animation: graph-glance 8.4s steps(1, end) infinite;
 }
 
-/* 8 → 6px along the chin — soft green-gold Raupe segments (head + 2 = 3 total). */
+/* 8 → 6px along the chin — soft gold-brown Raupe segments (head + 2 = 3 total). */
 button.send .send-tail-stone--a,
 button.send .send-seg--a {
   left: calc(var(--send-head-right) - 10px);
@@ -1455,6 +1457,30 @@ button.send .send-seg--b {
   height: calc(var(--snack-pixel) - var(--snack-pixel-gap));
   background: var(--snack-caterpillar-body, var(--snack-snake-body));
   animation-delay: -0.12s;
+}
+
+/* Little soft-pixel feet under idle body segs — Raupe ≠ snake */
+button.send .send-seg {
+  overflow: visible;
+}
+button.send .send-feet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 1px);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 1px;
+  height: 2px;
+  pointer-events: none;
+}
+button.send .send-feet i {
+  display: block;
+  width: 2px;
+  height: 2px;
+  border-radius: 45%;
+  background: var(--snack-foot, #6b4423);
+  opacity: 0.88;
 }
 
 button.send:disabled:not(.send--working) .send-face--head .graph-face {

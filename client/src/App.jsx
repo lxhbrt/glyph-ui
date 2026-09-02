@@ -3400,7 +3400,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showWorking]);
 
-  // Fehler: Augen weg — App.setError kennt der Snake nicht, also über error-State.
+  // Fehler: Augen weg — App.setError kennt die Raupe nicht, also über error-State.
   const errorSeenRef = useRef("");
   const [snakeEyesAway, setSnakeEyesAway] = useState(false);
   useEffect(() => {
@@ -3816,7 +3816,7 @@ export default function App() {
             <span className="banner-stuffed-steps">
               {snackDemo ? (
                 <>
-                  Runder Button: X-Augen, Zunge, Apfel auf den Kopf. Schließen:{" "}
+                  Runder Button: Raupe auf dem Rücken, Füße hoch, Apfel auf den Kopf. Schließen:{" "}
                   <a href="/">ohne Demo-Param</a>
                 </>
               ) : (

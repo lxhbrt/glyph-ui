@@ -352,7 +352,7 @@ const SHORT_HANDBOOK = [
     rows: [
       ["Idle", "Button zeigt den Kopf (Grok Build / °_Agent / ^_Code) → senden"],
       ["Arbeitet", "Runder Snack (Raupe jagt Pixel-Apfel)"],
-      ["Überfressen", "Raupe dick + X-Augen + Banner — Hänger, manuell neu starten"],
+      ["Überfressen", "Raupe auf dem Rücken, Füße hoch, Apfel auf dem Kopf + Banner — Hänger, manuell neu starten"],
       ["Text + Enter", "Follow-up → Warteschlange (WARTE)"],
       ["Leer / Snack", "Soft-Stop (ACP-Cancel) im Kreis-Button"],
       ["Arbeitsleiste", "Plan, Ordner-Suche, Aktiver Task: Gold-Rand, Label, × — über der LVL-Leiste, nicht Bildmitte. Freigabe bleibt eigenes Modal."],
