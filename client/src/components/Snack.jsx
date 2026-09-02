@@ -98,9 +98,9 @@ function snackMixColor(a, b, t) {
 }
 
 /**
- * Snack while Grok works: chases a coral STOP target on a dark arena.
- * Gold snake (accent family) stays visible in light + dark theme.
- * Board is square so it fills the round send/stop control cleanly.
+ * Snack while Grok works: chases a pixel apple (stem+leaf) on a --bg arena.
+ * Gold snake stones only — arena matches composer/--bg (no gold plate).
+ * Board is square so it fills the round send/stop hit-target cleanly.
  * Click = cancel turn.
  *
  * stuffed=true → KO cartoon: X eyes, stuck-out tongue, apples raining on head.
@@ -126,7 +126,8 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       (css.getPropertyValue(name) || "").trim() || fallback;
     // Fallbacks = same gold/danger hex as CSS tokens
     const palette = {
-      arena: col("--send-work-bg", "transparent"),
+      // Arena = send surface (--bg); never a gold/olive disc behind stones
+      arena: col("--send-work-bg", col("--bg", "transparent")),
       head: stuffed
         ? col("--snack-stuffed-head", "#c9a227")
         : col("--snack-snake-head", "#d4af37"),
@@ -370,50 +371,49 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       return { gap, size: s, px: x * cell + gap, py: y * cell + gap };
     };
 
-    /** Coral stop disc — round target, matches circular send/stop control */
-    const drawStop = (x, y) => {
-      const pad = Math.max(1, Math.floor(cell * 0.12));
-      const s = cell - pad * 2;
-      const cx = x * cell + pad + s / 2;
-      const cy = y * cell + pad + s / 2;
-      const r = s / 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = palette.stop;
-      ctx.fill();
-      const inn = Math.max(1.5, s * 0.22);
-      ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(1, r - inn), 0, Math.PI * 2);
-      ctx.fillStyle = palette.stopInner;
-      ctx.fill();
-    };
 
     /**
-     * Full snack-apple (same language as hunt target + scrollbar apple):
-     * solid coral square ≈ head stone, inner highlight, tiny leaf.
-     * Size should match head — this is the pixel design, not weather.
+     * Pixel apple (hunt stop + KO rain): stem + leaf — never a flat round ball.
+     * Size ≈ head stone so the stop target reads clearly on the busy board.
      */
     const drawPixelApple = (x, y, size) => {
       const s = Math.max(SNACK_PIXEL, Math.round(size));
       const ix = Math.round(x);
       const iy = Math.round(y);
-      // Fruchtkörper mit abgeschrägten oberen Ecken (runde Frucht-Form)
+      // Fruchtkörper: abgeschrägte Ecken (Apfel-Silhouette, kein Kreis-Disc)
       const corner = Math.max(1, Math.floor(s * 0.18));
       ctx.fillStyle = palette.stop;
       ctx.fillRect(ix + corner, iy + corner, s - corner * 2, s - corner); // Kern
       ctx.fillRect(ix, iy + corner, s, s - corner); // volle Breite unter den Ecken
+      // leichte untere Abrundung (Apfel, kein Ball-Disc)
+      ctx.fillRect(ix + corner, iy + s - 1, s - corner * 2, 1);
       // Glanzpunkt
       const pad = Math.max(1, Math.floor(s * 0.2));
       ctx.fillStyle = palette.stopInner;
       ctx.fillRect(ix + pad, iy + pad + 1, Math.max(1, Math.floor(s * 0.22)), Math.max(1, Math.floor(s * 0.14)));
-      // Stiel (braun)
+      // Stiel (braun) — taller so it reads at send-button scale
+      const stemH = Math.max(2, Math.floor(s * 0.28));
+      const stemW = Math.max(1, Math.floor(s * 0.14));
       ctx.fillStyle = "#7a5230";
-      ctx.fillRect(ix + Math.floor(s / 2), iy - Math.max(1, Math.floor(s * 0.22)), Math.max(1, Math.floor(s * 0.14)), Math.max(2, Math.floor(s * 0.25)));
-      // Blatt (grün, rechts vom Stiel)
+      ctx.fillRect(ix + Math.floor(s / 2), iy - stemH, stemW, stemH);
+      // Blatt (grün, rechts vom Stiel) — slightly larger for clarity
       if (s >= 6) {
         ctx.fillStyle = palette.leaf;
-        ctx.fillRect(ix + Math.floor(s / 2) + 1, iy - Math.max(1, Math.floor(s * 0.22)), Math.max(2, Math.floor(s * 0.3)), Math.max(1, Math.floor(s * 0.15)));
+        const leafW = Math.max(2, Math.floor(s * 0.36));
+        const leafH = Math.max(1, Math.floor(s * 0.18));
+        ctx.fillRect(ix + Math.floor(s / 2) + stemW, iy - stemH, leafW, leafH);
       }
+    };
+
+    /** Pixel apple stop target (stem+leaf) — never a flat coral disc / ball. */
+    const drawStop = (x, y) => {
+      const gap = Math.max(1, Math.floor(cell * 0.14));
+      const s = Math.max(SNACK_PIXEL, cell - gap * 2);
+      const px = x * cell + gap;
+      const py = y * cell + gap;
+      // Prefer full pixel apple language; fall back to shared 8px drawer
+      if (s >= SNACK_PIXEL + 2) drawPixelApple(px, py, s);
+      else snackDrawApple(ctx, px, py, palette.stop, palette.stopInner);
     };
 
     /** Dark pupil on head, aimed at the stop target (works light + dark). */
@@ -499,7 +499,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       const s = stateRef.current;
       if (!s) return;
 
-      // Transparent / same as button surface — no black fill takeover
+      // Transparent / --bg button surface — no gold plate, no black takeover
       ctx.clearRect(0, 0, boardW, boardH);
 
       if (!stuffed) {
@@ -556,7 +556,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
 
       const next = [{ x: nx, y: ny }, ...s.snake];
       if (nx === s.food.x && ny === s.food.y) {
-        // Hit stop disc in-game — just relocate; real stop is click
+        // Hit apple in-game — just relocate; real stop is click
         s.snake = next.slice(0, maxLen);
         s.food = placeFood(s.snake);
       } else {
@@ -624,7 +624,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       draw();
     };
 
-    // Any click on the snack board while working = stop (red disc is the cue)
+    // Any click on the snack board while working = stop (pixel apple is the cue)
     const onClick = (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
