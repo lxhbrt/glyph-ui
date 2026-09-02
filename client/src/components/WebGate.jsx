@@ -4,12 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function WebGate({ onUnlocked, hint }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  function syncCaps(e) {
+    try {
+      setCapsOn(Boolean(e.getModifierState?.("CapsLock")));
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -27,12 +41,17 @@ export function WebGate({ onUnlocked, hint }) {
       if (!res.ok || !json?.ok) {
         setError(json?.error || "Passwort falsch");
         setBusy(false);
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select?.();
+        });
         return;
       }
       onUnlocked?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Netzwerkfehler");
       setBusy(false);
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
 
@@ -47,18 +66,37 @@ export function WebGate({ onUnlocked, hint }) {
         <label className="web-gate-label">
           <span className="sr-only">Passwort</span>
           <input
+            ref={inputRef}
             type="password"
             name="password"
             autoComplete="current-password"
             autoFocus
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (error) setError("");
+            }}
+            onKeyDown={syncCaps}
+            onKeyUp={syncCaps}
             placeholder="Passwort"
-            className="web-gate-input"
+            className={`web-gate-input${error ? " web-gate-input--error" : ""}`}
+            aria-invalid={Boolean(error)}
+            aria-describedby={
+              error || capsOn ? "web-gate-field-hint" : undefined
+            }
           />
         </label>
+        {capsOn ? (
+          <p id="web-gate-field-hint" className="web-gate-caps" role="status">
+            Feststelltaste ist an
+          </p>
+        ) : null}
         {error ? (
-          <p className="web-gate-error" role="alert">
+          <p
+            id={capsOn ? "web-gate-error" : "web-gate-field-hint"}
+            className="web-gate-error"
+            role="alert"
+          >
             {error}
           </p>
         ) : null}

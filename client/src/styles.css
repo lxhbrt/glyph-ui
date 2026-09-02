@@ -32,6 +32,9 @@
   --composer-pad-x: 10px;
   --composer-min-h: 2.25rem;
   --composer-max-h: min(42vh, 28rem);
+  /* P3 shared focus ring — thin gold ~2px */
+  --focus-ring: 2px solid color-mix(in srgb, var(--gold, #d4af37) 70%, transparent);
+  --focus-ring-offset: 2px;
 }
 
 :root,
@@ -8586,4 +8589,461 @@ html.web-surface #root {
   .web-password-cancel {
     min-height: 3rem;
   }
+}
+
+
+/* ========== P3 UI polish (tickets 1–13) ========== */
+
+/* Shared focus-ring utility (gate, composer, modal, header) */
+.web-gate-input:focus,
+.web-gate-input:focus-visible,
+.composer-textarea--overlay:focus,
+.composer-textarea--overlay:focus-visible,
+.overview-search:focus,
+.overview-search:focus-visible,
+.overview-panel:focus-visible,
+.side-rail-btn:focus-visible,
+.pill-btn:focus-visible,
+.composer-mode-btn:focus-visible,
+.composer-plus-btn:focus-visible,
+.composer-vault-btn:focus-visible,
+.voice-mic-btn:focus-visible,
+.empty-starter-chip:focus-visible,
+.top-actions-more-btn:focus-visible,
+.top-actions-menu-item:focus-visible,
+.extensions-reset-filter:focus-visible,
+.web-gate-submit:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.web-gate-input:focus {
+  /* Override older 1px gate ring */
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--border));
+}
+
+/* Ticket 1 — header groups + separators */
+.top-actions-groups {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.top-actions-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.top-actions-sep {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: color-mix(in srgb, var(--border) 85%, var(--muted));
+  flex-shrink: 0;
+}
+
+.top-actions-more-wrap {
+  display: none;
+  position: relative;
+}
+
+.top-actions-more-btn {
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+.top-actions-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 70%, #000);
+}
+
+.top-actions-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.top-actions-menu-item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.top-actions-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Ticket 2 — LVL thinner / reveal on composer hover·focus; apple de-emphasized */
+.context-lvl-row {
+  opacity: 0.55;
+  transition: opacity 0.18s ease;
+}
+
+.context-lvl-bar {
+  padding: 3px 6px;
+}
+
+.context-lvl-bar-meta {
+  opacity: 0.65;
+}
+
+.composer:hover .context-lvl-row,
+.composer:focus-within .context-lvl-row,
+.context-lvl-row:hover,
+.context-lvl-row:focus-within {
+  opacity: 1;
+}
+
+.composer:hover .context-lvl-bar-meta,
+.composer:focus-within .context-lvl-bar-meta,
+.context-lvl-row:hover .context-lvl-bar-meta,
+.context-lvl-row:focus-within .context-lvl-bar-meta {
+  opacity: 1;
+}
+
+.composer-vault-btn {
+  opacity: 0.28;
+  filter: brightness(0.78) saturate(0.75);
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.composer-vault-btn:hover:not(:disabled) {
+  opacity: 0.5;
+}
+
+.composer-vault-btn.is-on {
+  opacity: 0.92;
+  /* Keep Send primary — softer pulse */
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent),
+    0 0 6px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+
+/* Ticket 3 — readable mode label + hint */
+.composer-mode-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.composer-mode-label {
+  display: inline-block;
+  min-width: 2.4rem;
+  font-weight: 650;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+}
+
+.composer-mode-hint {
+  display: none;
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 16rem;
+  margin-right: auto;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+@media (min-width: 900px) {
+  .composer-mode-hint {
+    display: inline-block;
+  }
+}
+
+/* Ticket 4 — empty starter chips (keep P0 contrast on .empty / .empty-soft) */
+.empty-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.empty-starter-chip {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.empty-starter-chip:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--border));
+  background: color-mix(in srgb, var(--gold) 8%, var(--panel));
+}
+
+/* Ticket 5 — bubble hierarchy + discreet timestamps */
+.msg-user-bubble {
+  background: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  border-color: color-mix(in srgb, var(--user-rim) 80%, var(--gold) 12%);
+}
+
+.msg-assistant {
+  background: color-mix(in srgb, var(--panel) 22%, transparent);
+  border-radius: 12px 12px 12px 4px;
+  padding: 8px 10px 10px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.role-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.msg-time {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.62rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.msg-user .msg-time {
+  text-align: right;
+  margin-top: 8px;
+}
+
+.msg-assistant .role-row .msg-time {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+/* Ticket 6–7 — calm gate error + caps + autofill */
+.web-gate-error {
+  color: color-mix(in srgb, var(--danger-bright) 70%, var(--text));
+  font-weight: 500;
+}
+
+.web-gate-input--error {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.web-gate-caps {
+  margin: 0;
+  font-size: var(--type-secondary);
+  line-height: var(--type-secondary-leading);
+  color: color-mix(in srgb, var(--gold-bright) 55%, var(--muted));
+}
+
+.web-gate-input:-webkit-autofill,
+.web-gate-input:-webkit-autofill:hover,
+.web-gate-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  box-shadow: 0 0 0 1000px var(--panel) inset;
+  transition: background-color 99999s ease-out;
+  border-color: color-mix(in srgb, var(--gold) 35%, var(--border));
+}
+
+/* Ticket 8 — unified SKILL/UI/USER badges */
+.slash-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 1.25rem;
+  min-width: 2.6rem;
+  padding: 0 7px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+}
+
+.slash-badge--skill {
+  border-color: color-mix(in srgb, var(--gold) 50%, var(--border));
+  color: var(--gold-bright, var(--gold));
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+}
+
+.slash-badge--ui {
+  border-color: color-mix(in srgb, var(--text) 28%, var(--border));
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.slash-badge--user,
+.slash-badge--command {
+  border-color: color-mix(in srgb, var(--muted) 55%, var(--border));
+  color: color-mix(in srgb, var(--muted) 90%, var(--text));
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+}
+
+/* Ticket 9–10 — modal chrome + filter empty */
+.extensions-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extensions-search-row .overview-search {
+  flex: 1 1 auto;
+}
+
+.extensions-filter-hint {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.extensions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 4px 16px;
+}
+
+.extensions-reset-filter {
+  font-size: 0.8rem;
+}
+
+.overview-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 85%, var(--bg));
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text);
+}
+
+/* Ticket 12 — narrow header overflow + composer stack + PWA standalone */
+@media (max-width: 640px) {
+  .top-actions-groups {
+    display: none;
+  }
+
+  .top-actions-more-wrap {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .composer-mode-hint {
+    display: none;
+  }
+
+  .composer-row {
+    flex-wrap: wrap;
+  }
+
+  .composer-input-wrap {
+    flex: 1 1 100%;
+    order: -1;
+    width: 100%;
+  }
+
+}
+
+@media (display-mode: standalone) {
+  .app {
+    padding-top: max(env(safe-area-inset-top, 0px), 0px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+  }
+
+  .app--web .top {
+    padding-top: 2px;
+  }
+}
+
+/* Ticket 13 — modal motion 150–200ms; hover via opacity/color only */
+.overview-scrim {
+  animation: overview-scrim-in 160ms ease;
+}
+
+.overview-panel {
+  animation: overview-panel-in 180ms ease;
+}
+
+@keyframes overview-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overview-panel-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-scrim,
+  .overview-panel {
+    animation: none;
+  }
+}
+
+button.pill-btn {
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+button.pill-btn:hover:not(:disabled) {
+  transform: none;
+}
+
+.side-rail-btn:hover:not(:disabled) {
+  transform: none;
 }

@@ -157,6 +157,26 @@ const SNACK_STALE_MS = 120_000;
 /** Grok context poll while a turn is running (signals.json lag). */
 const CONTEXT_POLL_MS = 8_000;
 
+
+/** Discreet bubble clock (de-DE, local Europe/Berlin via browser zone). */
+function formatMsgClock(at) {
+  if (at == null || at === "") return "";
+  try {
+    const d = typeof at === "number" ? new Date(at) : new Date(String(at));
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+const COMPOSER_MODE_HELP = {
+  chat: "Normale Nachricht an den Agenten",
+  "deep-search": "Hintergrund-Recherche mit Quellen",
+  fork: "Session branchen — Text = optionale Directive",
+  swarm: "Planer, Suche und Synthese mit Quellen",
+};
+
 export default function App() {
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -380,6 +400,27 @@ export default function App() {
     return "handbook";
   });
   const [showExtensions, setShowExtensions] = useState(false);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!headerMenuOpen) return undefined;
+    const onDoc = (e) => {
+      const t = e.target;
+      if (t && typeof t.closest === "function" && t.closest(".top-actions-more-wrap")) {
+        return;
+      }
+      setHeaderMenuOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setHeaderMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [headerMenuOpen]);
+
   const [skills, setSkills] = useState([]);
   const [skillsHint, setSkillsHint] = useState(null);
   const [skillsLoading, setSkillsLoading] = useState(false);
@@ -1132,6 +1173,7 @@ export default function App() {
         drafts,
         streaming: true,
         protocolCollapsed: false,
+        at: Date.now(),
       });
       return next;
     });
@@ -1157,6 +1199,7 @@ export default function App() {
         drafts,
         streaming: true,
         protocolCollapsed: false,
+        at: Date.now(),
       });
       return next;
     });
@@ -1727,6 +1770,7 @@ export default function App() {
           role: "user",
           text: displayText,
           streaming: false,
+          at: Date.now(),
           ...(wire.length ? { attachments: wire } : {}),
         },
       ]);
@@ -2506,6 +2550,7 @@ export default function App() {
           role: m.role === "user" ? "user" : "assistant",
           text: m.text || "",
           streaming: false,
+          ...(m.at != null ? { at: m.at } : m.createdAt != null ? { at: m.createdAt } : {}),
         })),
       );
       assistantBuf.current = "";
@@ -3403,6 +3448,7 @@ export default function App() {
         >
           <IconLage />
         </button>
+        <span className="side-rail-sep" aria-hidden="true" title="Chat" />
         <button
           type="button"
           className="side-rail-btn"
@@ -3413,6 +3459,7 @@ export default function App() {
         >
           <IconCompose />
         </button>
+        <span className="side-rail-sep" aria-hidden="true" title="Tools" />
         <button
           type="button"
           className="side-rail-btn"
@@ -3422,7 +3469,7 @@ export default function App() {
         >
           <IconCommands />
         </button>
-        <span className="side-rail-sep" aria-hidden="true" />
+        <span className="side-rail-sep" aria-hidden="true" title="Workspace" />
         <button
           type="button"
           className="side-rail-btn"
@@ -3445,6 +3492,7 @@ export default function App() {
         >
           <IconWorkspace />
         </button>
+        <span className="side-rail-sep" aria-hidden="true" title="System" />
         <button
           type="button"
           className="side-rail-btn"
@@ -3505,54 +3553,88 @@ export default function App() {
           <div className="top-actions">
             {webSurface ? (
               <>
-                <button
-                  type="button"
-                  className="pill pill-btn pill-btn--icon"
-                  onClick={reset}
-                  disabled={!connected || busy}
-                  title="Neuer Chat"
-                  aria-label="Neuer Chat"
-                >
-                  <IconCompose size={18} />
-                </button>
-                <button
-                  type="button"
-                  className="pill pill-btn pill-btn--icon"
-                  onClick={() => setShowExtensions(true)}
-                  title="Befehle & Skills"
-                  aria-label="Befehle & Skills"
-                >
-                  <IconCommands size={18} />
-                </button>
-                <button
-                  type="button"
-                  className="pill pill-btn pill-btn--icon"
-                  onClick={toggleTheme}
-                  title="Theme"
-                  aria-label="Theme"
-                >
-                  <IconTheme size={18} />
-                </button>
-                <button
-                  type="button"
-                  className="pill pill-btn pill-btn--icon"
-                  onClick={() => setWebPasswordOpen(true)}
-                  title="Passwort"
-                  aria-label="Passwort"
-                >
-                  <IconLock size={18} />
-                </button>
-                {headerControls.reload ? (
+                <div className="top-actions-groups" role="group" aria-label="Header-Aktionen">
+                  <div className="top-actions-group" data-group="chat" title="Chat">
+                    <button
+                      type="button"
+                      className="pill pill-btn pill-btn--icon"
+                      onClick={reset}
+                      disabled={!connected || busy}
+                      title="Neuer Chat"
+                      aria-label="Neuer Chat"
+                    >
+                      <IconCompose size={18} />
+                    </button>
+                  </div>
+                  <span className="top-actions-sep" aria-hidden="true" />
+                  <div className="top-actions-group" data-group="tools" title="Tools">
+                    <button
+                      type="button"
+                      className="pill pill-btn pill-btn--icon"
+                      onClick={() => setShowExtensions(true)}
+                      title="Befehle & Skills"
+                      aria-label="Befehle & Skills"
+                    >
+                      <IconCommands size={18} />
+                    </button>
+                  </div>
+                  <span className="top-actions-sep" aria-hidden="true" />
+                  <div className="top-actions-group top-actions-group--system" data-group="system" title="System">
+                    <button
+                      type="button"
+                      className="pill pill-btn pill-btn--icon"
+                      onClick={toggleTheme}
+                      title="Theme"
+                      aria-label="Theme"
+                    >
+                      <IconTheme size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className="pill pill-btn pill-btn--icon"
+                      onClick={() => setWebPasswordOpen(true)}
+                      title="Passwort"
+                      aria-label="Passwort"
+                    >
+                      <IconLock size={18} />
+                    </button>
+                    {headerControls.reload ? (
+                      <button
+                        type="button"
+                        className="pill pill-btn pill-btn--icon"
+                        onClick={() => hardReloadUi()}
+                        title="UI neu laden"
+                        aria-label="UI neu laden"
+                      >
+                        <IconRefresh size={18} />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="top-actions-more-wrap">
                   <button
                     type="button"
-                    className="pill pill-btn pill-btn--icon"
-                    onClick={() => hardReloadUi()}
-                    title="UI neu laden"
-                    aria-label="UI neu laden"
+                    className={`pill pill-btn pill-btn--icon top-actions-more-btn${headerMenuOpen ? " is-open" : ""}`}
+                    aria-haspopup="menu"
+                    aria-expanded={headerMenuOpen}
+                    aria-label="Mehr Aktionen"
+                    title="Mehr"
+                    onClick={() => setHeaderMenuOpen((o) => !o)}
                   >
-                    <IconRefresh size={18} />
+                    ···
                   </button>
-                ) : null}
+                  {headerMenuOpen ? (
+                    <div className="top-actions-menu" role="menu" aria-label="System">
+                      <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { reset(); setHeaderMenuOpen(false); }} disabled={!connected || busy}>Neuer Chat</button>
+                      <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { setShowExtensions(true); setHeaderMenuOpen(false); }}>Befehle &amp; Skills</button>
+                      <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { toggleTheme(); setHeaderMenuOpen(false); }}>Theme</button>
+                      <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { setWebPasswordOpen(true); setHeaderMenuOpen(false); }}>Passwort</button>
+                      {headerControls.reload ? (
+                        <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { hardReloadUi(); setHeaderMenuOpen(false); }}>UI neu laden</button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </>
             ) : null}
             {!webSurface && agents.length > 1 ? (
@@ -3766,6 +3848,43 @@ export default function App() {
                       </>
                     )}
                   </span>
+                  <div className="empty-starters" role="group" aria-label="Schnellstart">
+                    {isAgentProfile ? (
+                      <button
+                        type="button"
+                        className="empty-starter-chip"
+                        onClick={() => {
+                          if (!vaultSearchOn) toggleVaultSearch();
+                          composerRef.current?.focus();
+                        }}
+                      >
+                        Vault suchen
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="empty-starter-chip"
+                      onClick={() => setShowExtensions(true)}
+                    >
+                      Skill starten
+                    </button>
+                    <button
+                      type="button"
+                      className="empty-starter-chip"
+                      onClick={() => {
+                        setInput("Erklär das kurz und klar: ");
+                        requestAnimationFrame(() => {
+                          const ta = composerRef.current;
+                          if (!ta) return;
+                          ta.focus();
+                          const n = ta.value.length;
+                          ta.setSelectionRange(n, n);
+                        });
+                      }}
+                    >
+                      Kurz erklären
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -3971,6 +4090,11 @@ export default function App() {
                                 markdownFallback
                               />
                             ) : null}
+                            {formatMsgClock(m.at) ? (
+                              <time className="msg-time" dateTime={new Date(m.at).toISOString()}>
+                                {formatMsgClock(m.at)}
+                              </time>
+                            ) : null}
                           </div>
                           {copyActions}
                         </>
@@ -3981,6 +4105,11 @@ export default function App() {
                               {roleLabel}
                               {m.streaming ? " …" : ""}
                             </span>
+                            {formatMsgClock(m.at) ? (
+                              <time className="msg-time" dateTime={new Date(m.at).toISOString()}>
+                                {formatMsgClock(m.at)}
+                              </time>
+                            ) : null}
                           </div>
                           {m.text || m.steps?.length || m.drafts?.length ? (
                             <AssistantText
@@ -4434,7 +4563,7 @@ export default function App() {
                   aria-haspopup="listbox"
                   aria-expanded={modeMenuOpen}
                   aria-label={`Modus: ${composerActionLabel(sendAction)}`}
-                  title="Sendemodus"
+                  title={COMPOSER_MODE_HELP[sendAction] || COMPOSER_MODE_HELP.chat}
                   disabled={!connected}
                   onClick={() => setModeMenuOpen((o) => !o)}
                 >
@@ -4455,25 +4584,22 @@ export default function App() {
                       {
                         id: "chat",
                         label: "Chat",
-                        title: `Normale Nachricht an ${agentLabel}`,
+                        title: COMPOSER_MODE_HELP.chat,
                       },
                       {
                         id: "deep-search",
                         label: "Deep Search",
-                        title:
-                          "TUI /deep-research — Hintergrund-Recherche mit Quellen",
+                        title: COMPOSER_MODE_HELP["deep-search"],
                       },
                       {
                         id: "fork",
                         label: "Fork",
-                        title:
-                          "Session branchen (TUI /fork). Text = optionale Directive",
+                        title: COMPOSER_MODE_HELP.fork,
                       },
                       {
                         id: "swarm",
                         label: "Swarm",
-                        title:
-                          "°_Agent und ^_Code: Planer, Suche, Synthese mit Quellen",
+                        title: COMPOSER_MODE_HELP.swarm,
                       },
                     ].map((opt) => {
                       const blocked =
@@ -4508,6 +4634,9 @@ export default function App() {
                   </div>
                 ) : null}
               </div>
+              <span className="composer-mode-hint" aria-live="polite">
+                {COMPOSER_MODE_HELP[sendAction] || COMPOSER_MODE_HELP.chat}
+              </span>
               <button
                 type="button"
                 className={`voice-mic-btn${recording ? " is-recording" : ""}${

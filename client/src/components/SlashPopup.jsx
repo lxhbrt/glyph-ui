@@ -76,8 +76,24 @@ function SlashPopup({
                 >
                   <span className="slash-popup-name">
                     {slashItemLabel(item)}
-                    <span className={`slash-badge slash-badge--${item.kind}`}>
-                      {item.kind === "skill" ? "Skill" : item.kind === "ui" ? "UI" : "Agent"}
+                    <span
+                      className={`slash-badge slash-badge--${
+                        item.kind === "ui"
+                          ? "ui"
+                          : item.kind === "skill"
+                            ? item.source === "user"
+                              ? "user"
+                              : "skill"
+                            : "user"
+                      }`}
+                    >
+                      {item.kind === "ui"
+                        ? "UI"
+                        : item.kind === "skill"
+                          ? item.source === "user"
+                            ? "USER"
+                            : "SKILL"
+                          : "USER"}
                     </span>
                   </span>
                   {item.description ? (
