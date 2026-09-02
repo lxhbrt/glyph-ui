@@ -4639,7 +4639,7 @@ button.danger {
   box-shadow: 12px 0 40px rgba(0, 0, 0, 0.28);
   transform: translateX(-12px);
 }
-/* Web: overlay on the right; .app--web.app--drawer-open shifts .app-main into left gutter */
+/* Web: overlay on the right — chat/header stay centered (no .app-main reflow) */
 .app-drawer--side-right {
   right: 0;
   left: auto;
@@ -8862,26 +8862,28 @@ button.send.send-eyes-away .graph-pupils {
 }
 
 /* Web-Fläche (glyph-ui.com): one maximized Agent chat, no Admin-Chrome */
-/* P6: web drawer stays overlay-right; shift/center chat in remaining width so
-   empty + composer + top-actions are not under the drawer (max-width stays). */
-.app.app--web.app--drawer-open .app-main {
-  width: 100%;
-  max-width: min(44rem, calc(100% - var(--drawer-width)));
-  margin-left: auto;
-  margin-right: var(--drawer-width);
-  box-sizing: border-box;
-  transition: margin var(--drawer-motion), max-width var(--drawer-motion);
-}
-/* Narrow: sheet almost full width — leave chat under sheet (no tiny gutter). */
-@media (max-width: 719px) {
-  .app.app--web.app--drawer-open .app-main {
-    max-width: min(44rem, 100%);
-    margin-left: auto;
-    margin-right: auto;
-  }
-}
+/* P6: web drawer is always overlay-right — never reflow .app-main (chat+menu fixed). */
 .app.app--web {
   max-width: none;
+  /* Prefer drawer fitting in the right centering gutter when wide enough;
+     still clamps to the usual min so narrow viewports overlay (OK). Desk untouched. */
+  --drawer-width: min(
+    clamp(320px, 28vw, 400px),
+    max(320px, calc((100vw - 44rem) / 2))
+  );
+}
+@media (min-width: 1400px) {
+  .app.app--web {
+    --drawer-width: min(
+      clamp(360px, 24vw, 420px),
+      max(320px, calc((100vw - 44rem) / 2))
+    );
+  }
+}
+@media (max-width: 719px) {
+  .app.app--web {
+    --drawer-width: min(100vw - 12px, 100%);
+  }
 }
 
 .app--web .app-main {
@@ -8889,7 +8891,6 @@ button.send.send-eyes-away .graph-pupils {
   margin: 0 auto;
   padding: 10px 16px 12px;
   gap: 8px;
-  transition: margin var(--drawer-motion), max-width var(--drawer-motion);
 }
 
 .app--web .top {
