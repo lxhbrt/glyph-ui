@@ -90,7 +90,10 @@
   --snack-snake-body: color-mix(in srgb, var(--gold) 58%, #6b4423 42%);
   --snack-caterpillar-head: var(--snack-snake-head);
   --snack-caterpillar-body: var(--snack-snake-body);
-  --snack-foot: color-mix(in srgb, var(--gold-dim) 40%, #5c3d1e 60%);
+  --snack-foot: color-mix(in srgb, var(--gold-dim) 22%, #3a2410 78%);
+  /* Antennae: light on dark theme so they read on gold stones */
+  --raupe-antenna: color-mix(in srgb, #fff6df 78%, var(--gold-bright) 22%);
+  --snack-antenna: var(--raupe-antenna);
   --snack-stop: var(--danger);
   --snack-stop-inner: var(--danger-bright);
   /* KO extras (tongue) + apple leaf only — leaf is not body primary */
@@ -143,7 +146,10 @@
   --snack-snake-body: color-mix(in srgb, var(--gold-dim) 62%, #5c3d1e 38%);
   --snack-caterpillar-head: var(--snack-snake-head);
   --snack-caterpillar-body: var(--snack-snake-body);
-  --snack-foot: color-mix(in srgb, var(--gold-deep) 35%, #4a3018 65%);
+  --snack-foot: color-mix(in srgb, var(--gold-deep) 18%, #2e1c0c 82%);
+  /* Antennae: dark on light theme */
+  --raupe-antenna: color-mix(in srgb, #1a1208 88%, var(--gold-deep) 12%);
+  --snack-antenna: var(--raupe-antenna);
   --snack-stop: var(--danger);
   --snack-stop-inner: var(--danger-bright);
   --snack-tongue: #e85a7a;
@@ -1327,6 +1333,11 @@ button.send:hover:not(:disabled):not(.send--working) .send-seg--a {
   background: color-mix(in srgb, var(--gold-bright) 72%, #6b4423 28%);
 }
 
+button.send:hover:not(:disabled):not(.send--working) .send-tail-stone--c,
+button.send:hover:not(:disabled):not(.send--working) .send-seg--c {
+  background: color-mix(in srgb, var(--gold-bright) 55%, #6b4423 20%, #fff 25%);
+}
+
 button.send:focus {
   outline: none;
 }
@@ -1440,7 +1451,7 @@ button.send .send-seg {
   animation: graph-glance 8.4s steps(1, end) infinite;
 }
 
-/* 8 → 6px along the chin — soft gold-brown Raupe segments (head + 2 = 3 total). */
+/* 8 → 6 → 4px along the chin — soft gold-brown Raupe (head + 3 body = 4). */
 button.send .send-tail-stone--a,
 button.send .send-seg--a {
   left: calc(var(--send-head-right) - 10px);
@@ -1459,7 +1470,20 @@ button.send .send-seg--b {
   animation-delay: -0.12s;
 }
 
-/* Little soft-pixel feet under idle body segs — Raupe ≠ snake */
+button.send .send-tail-stone--c,
+button.send .send-seg--c {
+  left: calc(var(--send-head-right) + 6px);
+  width: calc(var(--snack-pixel) * 0.5);
+  height: calc(var(--snack-pixel) * 0.5);
+  background: color-mix(
+    in srgb,
+    var(--snack-caterpillar-body, var(--snack-snake-body)) 65%,
+    #fff
+  );
+  animation-delay: 0.12s;
+}
+
+/* Little soft-pixel feet under idle body segs — one couple per stone */
 button.send .send-seg {
   overflow: visible;
 }
@@ -1479,8 +1503,8 @@ button.send .send-feet i {
   width: 2px;
   height: 2px;
   border-radius: 45%;
-  background: var(--snack-foot, #6b4423);
-  opacity: 0.88;
+  background: var(--snack-foot, #3a2410);
+  opacity: 0.95;
 }
 
 button.send:disabled:not(.send--working) .send-face--head .graph-face {
@@ -4390,12 +4414,21 @@ button.composer-sheet-head:hover {
 }
 
 .composer.composer--grok .send.send--working .send-face--head {
+  pointer-events: none !important; /* morph layer must never eat Abbruch clicks */
+}
+
+/* Idle: snack face stays non-interactive (opacity 0 would still steal hits).
+   Working: whole snack board is the stop hit-target. */
+.composer.composer--grok .send .send-face--snack {
+  padding: 2px;
   pointer-events: none;
 }
 
-.composer.composer--grok .send .send-face--snack {
-  padding: 2px;
-  pointer-events: auto; /* whole snack board is the stop hit-target */
+.composer.composer--grok .send.send--working .send-face--snack,
+.composer.composer--grok .send.send--working .send-snack,
+.composer.composer--grok .send.send--working .snack-canvas--stop {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .composer.composer--grok .send.send--working .send-face--snack {
@@ -8117,6 +8150,25 @@ button.cal-cell {
 
 .graph-antennae {
   pointer-events: none;
+  color: var(--raupe-antenna, #f0e2c0);
+}
+
+.graph-antennae .graph-antenna-stem,
+.graph-antennae .graph-antenna-tip {
+  fill: currentColor;
+}
+
+/* Dark theme (default): light antennae; light theme: dark antennae */
+:root[data-theme="light"] .graph-antennae {
+  color: var(--raupe-antenna, #1a1208);
+}
+
+/* Send button: punchier antennae on the idle head */
+button.send .graph-antennae {
+  color: var(--raupe-antenna, #f0e2c0);
+}
+:root[data-theme="light"] button.send .graph-antennae {
+  color: var(--raupe-antenna, #0a0908);
 }
 
 .graph-stone-wash {

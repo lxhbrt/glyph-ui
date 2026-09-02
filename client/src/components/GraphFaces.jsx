@@ -86,16 +86,25 @@ function Sparkle({ x, y, w = 1.1, h = 1.1 }) {
 
 /**
  * Soft caterpillar antennae — the Raupe tell (not snake).
+ * Drawn INSIDE the top of the 24×24 stone (not negative-y) so overflow:hidden
+ * parents / viewBox clip cannot hide them. Theme via .graph-antennae currentColor.
  * mood: "up" | "droop" | "wink" (asymmetric)
  */
 function Antennae({ mood = "up" }) {
+  // Antennae use dedicated class (not graph-ink) so theme can flip light↔dark
+  const Stem = (props) => (
+    <Dab className="graph-antenna-stem" rx={0.75} bleed={0.22} {...props} />
+  );
+  const Tip = (props) => (
+    <Dab className="graph-antenna-tip" rx={0.9} bleed={0.28} {...props} />
+  );
   if (mood === "droop") {
     return (
       <g className="graph-antennae" aria-hidden="true">
-        <Ink x="4.2" y="0.15" width="1.35" height="2.6" rx="0.65" bleed={0.2} />
-        <Ink x="3.1" y="-0.15" width="2.2" height="1.55" rx="0.75" bleed={0.25} />
-        <Ink x="18.4" y="0.15" width="1.35" height="2.6" rx="0.65" bleed={0.2} />
-        <Ink x="18.6" y="-0.15" width="2.2" height="1.55" rx="0.75" bleed={0.25} />
+        <Stem x="4.0" y="0.55" width="1.55" height="3.1" />
+        <Tip x="2.7" y="0.2" width="2.55" height="1.85" />
+        <Stem x="18.45" y="0.55" width="1.55" height="3.1" />
+        <Tip x="18.75" y="0.2" width="2.55" height="1.85" />
       </g>
     );
   }
@@ -103,21 +112,21 @@ function Antennae({ mood = "up" }) {
     return (
       <g className="graph-antennae" aria-hidden="true">
         {/* Left droops with the wink */}
-        <Ink x="4.0" y="0.35" width="1.3" height="2.4" rx="0.65" bleed={0.2} />
-        <Ink x="2.9" y="0.05" width="2.0" height="1.45" rx="0.7" bleed={0.25} />
+        <Stem x="3.85" y="0.85" width="1.5" height="2.7" />
+        <Tip x="2.55" y="0.45" width="2.4" height="1.7" />
         {/* Right perks */}
-        <Ink x="18.5" y="-0.55" width="1.35" height="3.1" rx="0.65" bleed={0.2} />
-        <Ink x="17.85" y="-0.85" width="2.35" height="1.7" rx="0.8" bleed={0.25} />
+        <Stem x="18.5" y="0.15" width="1.55" height="3.5" />
+        <Tip x="17.7" y="-0.15" width="2.7" height="1.95" />
       </g>
     );
   }
-  // Boss / default — upright soft stubs
+  // Boss / default — upright soft stubs, clearly above the eyes
   return (
     <g className="graph-antennae" aria-hidden="true">
-      <Ink x="5.1" y="-0.55" width="1.4" height="3.0" rx="0.7" bleed={0.2} />
-      <Ink x="4.55" y="-0.85" width="2.35" height="1.7" rx="0.85" bleed={0.25} />
-      <Ink x="17.5" y="-0.55" width="1.4" height="3.0" rx="0.7" bleed={0.2} />
-      <Ink x="17.05" y="-0.85" width="2.35" height="1.7" rx="0.85" bleed={0.25} />
+      <Stem x="4.85" y="0.2" width="1.6" height="3.35" />
+      <Tip x="4.15" y="-0.15" width="2.7" height="1.95" />
+      <Stem x="17.55" y="0.2" width="1.6" height="3.35" />
+      <Tip x="17.0" y="-0.15" width="2.7" height="1.95" />
     </g>
   );
 }
@@ -138,8 +147,9 @@ function Stone({ size, face, children }) {
       className={`graph-face graph-face--${face} graph-face--soft graph-face--raupe`}
       width={size}
       height={size}
-      viewBox={`0 0 ${S} ${S}`}
+      viewBox={`0 -1.25 ${S} ${S + 1.25}`}
       aria-hidden="true"
+      overflow="visible"
     >
       {/* Layered soft stone — imperfect square coverage, slight bleed.
           Texture via overlapping translucent washes (no feTurbulence — graph may
@@ -324,7 +334,8 @@ export function SnakeHead(props) {
  * Graph itself stays head-only.
  */
 export function SendCaterpillar({ size = 28, face = "grok" }) {
-  // Idle: head + 2 body stones = 3 total. Little feet under body segs (≠ snake).
+  // Idle: head + 3 body stones (CEO: „3ten Stein an den Kopf“). One couple of
+  // feet under each body seg — not duplicated per side.
   return (
     <span className="send-caterpillar send-snake">
       <span className="send-caterpillar-head send-snake-head">
@@ -332,13 +343,19 @@ export function SendCaterpillar({ size = 28, face = "grok" }) {
       </span>
       <span className="send-segs send-tail" aria-hidden="true">
         <span className="send-seg send-seg--a send-tail-stone send-tail-stone--a">
-          <span className="send-feet">
+          <span className="send-feet" aria-hidden="true">
             <i />
             <i />
           </span>
         </span>
         <span className="send-seg send-seg--b send-tail-stone send-tail-stone--b">
-          <span className="send-feet">
+          <span className="send-feet" aria-hidden="true">
+            <i />
+            <i />
+          </span>
+        </span>
+        <span className="send-seg send-seg--c send-tail-stone send-tail-stone--c">
+          <span className="send-feet" aria-hidden="true">
             <i />
             <i />
           </span>

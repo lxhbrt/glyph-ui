@@ -166,7 +166,9 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       tongueTip: col("--snack-tongue-tip", "#ff8aa0"),
       leaf: col("--snack-leaf", "#5a9e4a"),
       // Soft brown foot dabs (gold-brown family — Raupe ≠ snake tell)
-      foot: col("--snack-foot", "#6b4423"),
+      foot: col("--snack-foot", "#4a3018"),
+      // Antennae: light on dark theme, dark on light (CSS token)
+      antenna: col("--raupe-antenna", col("--snack-antenna", "#f0e2c0")),
     };
 
     const parent = canvas.parentElement;
@@ -389,15 +391,15 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
 
     const drawCell = (x, y, fill, gapRatio = 0.14) => {
       // Same inset math as SNACK_PIXEL / SNACK_GAP (unified stone size)
-      // Soft dab corners — same painterly language as GraphFaces stones
+      // Soft dab corners — match idle send-seg (~32% radius), not hard snake-rects
       const gap = Math.max(1, Math.floor(cell * gapRatio));
       const s = cell - gap * 2;
       const px = x * cell + gap;
       const py = y * cell + gap;
-      const r = Math.max(1.2, s * 0.28);
+      const r = Math.max(1.6, s * 0.38); // rounder Raupe dab (was ~0.28 / snake-rect)
       ctx.fillStyle = fill;
-      ctx.globalAlpha = 0.32;
-      snackRoundRect(ctx, px - 0.35, py - 0.3, s + 0.8, s + 0.7, r + 0.25);
+      ctx.globalAlpha = 0.34;
+      snackRoundRect(ctx, px - 0.45, py - 0.4, s + 1.0, s + 0.9, r + 0.35);
       ctx.fill();
       ctx.globalAlpha = 1;
       snackRoundRect(ctx, px, py, s, s, r);
@@ -454,20 +456,33 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
     /** Soft caterpillar antennae on the head stone (busy board Raupe tell). */
     const drawAntennae = (stone, ko = false) => {
       const { px, py, size: sz } = stone;
-      const stemH = Math.max(2, Math.floor(sz * 0.32));
-      const stemW = Math.max(1, Math.floor(sz * 0.16));
-      const tip = Math.max(2, Math.floor(sz * 0.28));
-      const left = px + Math.max(0, Math.floor(sz * 0.12));
-      const right = px + sz - tip - Math.max(0, Math.floor(sz * 0.08));
-      const baseY = py - 1;
-      ctx.fillStyle = ko ? "rgba(0,0,0,0.55)" : palette.eye;
-      // Left stem + tip
-      ctx.fillRect(left + Math.floor(tip / 2), baseY - stemH, stemW, stemH);
-      ctx.fillRect(left, baseY - stemH - Math.floor(tip * 0.35), tip, tip);
-      // Right stem + tip (slightly taller when hunting)
+      // Keep stems inside/near the stone top so circular clip doesn't erase them
+      const stemH = Math.max(3, Math.floor(sz * 0.42));
+      const stemW = Math.max(2, Math.floor(sz * 0.2));
+      const tip = Math.max(3, Math.floor(sz * 0.36));
+      const left = px + Math.max(0, Math.floor(sz * 0.1));
+      const right = px + sz - tip - Math.max(0, Math.floor(sz * 0.06));
+      // Anchor just inside the stone so arena overflow:hidden can't hide them
+      const baseY = py + Math.max(1, Math.floor(sz * 0.08));
+      ctx.fillStyle = ko
+        ? palette.antenna
+        : palette.antenna;
+      ctx.globalAlpha = ko ? 0.75 : 1;
+      // Left stem + tip (soft dab via roundRect when large enough)
+      const paintStub = (sx, sy, sw, sh) => {
+        if (sw >= 2 && sh >= 2) {
+          snackRoundRect(ctx, sx, sy, sw, sh, Math.min(sw, sh) * 0.45);
+          ctx.fill();
+        } else {
+          ctx.fillRect(sx, sy, sw, sh);
+        }
+      };
+      paintStub(left + Math.floor(tip / 2), baseY - stemH, stemW, stemH);
+      paintStub(left, baseY - stemH - Math.floor(tip * 0.4), tip, tip);
       const rh = ko ? stemH : stemH + 1;
-      ctx.fillRect(right + Math.floor(tip / 2), baseY - rh, stemW, rh);
-      ctx.fillRect(right, baseY - rh - Math.floor(tip * 0.35), tip, tip);
+      paintStub(right + Math.floor(tip / 2), baseY - rh, stemW, rh);
+      paintStub(right, baseY - rh - Math.floor(tip * 0.4), tip, tip);
+      ctx.globalAlpha = 1;
     };
 
     /**
@@ -475,17 +490,25 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
      * 2 tiny dabs — the Raupe tell vs snake body.
      */
     const drawFeet = (stone, { up = false } = {}) => {
+      // Exactly one couple of feet under/above this stone (not L+R duplicate sets)
       const { px, py, size: sz } = stone;
-      const fw = Math.max(1, Math.floor(sz * 0.24));
-      const fh = Math.max(1, Math.floor(sz * 0.2));
-      const inset = Math.max(0, Math.floor(sz * 0.14));
+      const fw = Math.max(1, Math.floor(sz * 0.26));
+      const fh = Math.max(1, Math.floor(sz * 0.22));
+      const inset = Math.max(1, Math.floor(sz * 0.16));
       const left = px + inset;
       const right = px + sz - fw - inset;
       const fy = up ? py - fh - 1 : py + sz + 1;
       ctx.fillStyle = palette.foot;
-      ctx.globalAlpha = 0.9;
-      ctx.fillRect(left, fy, fw, fh);
-      ctx.fillRect(right, fy, fw, fh);
+      ctx.globalAlpha = 0.95;
+      if (fw >= 2 && fh >= 2) {
+        snackRoundRect(ctx, left, fy, fw, fh, Math.min(fw, fh) * 0.45);
+        ctx.fill();
+        snackRoundRect(ctx, right, fy, fw, fh, Math.min(fw, fh) * 0.45);
+        ctx.fill();
+      } else {
+        ctx.fillRect(left, fy, fw, fh);
+        ctx.fillRect(right, fy, fw, fh);
+      }
       ctx.globalAlpha = 1;
     };
 
@@ -703,17 +726,30 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       draw();
     };
 
-    // Any click on the snack board while working = stop (pixel apple is the cue)
+    // Any click/tap on the snack board while working = stop (pixel apple is the cue).
+    // Do NOT stopPropagation: morph layers / pointer-events quirks can swallow the
+    // canvas-only path; letting the event bubble keeps button.onClick as backup.
+    // Guard double-fire via a short latch (cancelTurn also guards `cancelling`).
+    let stopLatch = false;
+    const fireStop = () => {
+      if (stopLatch) return;
+      stopLatch = true;
+      try {
+        onStopRef.current?.();
+      } finally {
+        window.setTimeout(() => {
+          stopLatch = false;
+        }, 80);
+      }
+    };
     const onClick = (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      onStopRef.current?.();
+      // Don't preventDefault — allow bubble to send button as Abbruch backup
+      fireStop();
     };
     const onPointer = (ev) => {
       // pointerdown is more reliable than click inside nested button faces
-      ev.preventDefault();
-      ev.stopPropagation();
-      onStopRef.current?.();
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      fireStop();
     };
 
     canvas.addEventListener("click", onClick);
