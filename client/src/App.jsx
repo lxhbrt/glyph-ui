@@ -3872,7 +3872,11 @@ export default function App() {
                       type="button"
                       className="empty-starter-chip"
                       onClick={() => {
-                        setInput("Erklär das kurz und klar: ");
+                        // Complete prompt — bare „das“ left the agent with nothing to explain.
+                        // Fill + focus only: send() closes over `input`, so setInput+send is stale.
+                        const prompt =
+                          "Was ist Glyph? Erklär kurz und klar: die Web-Fläche glyph-ui.com (°_Agent), den Schreibtisch auf dem Mac, und wofür man Glyph nutzt. Nutze die Wiki falls vorhanden.";
+                        setInput(prompt);
                         requestAnimationFrame(() => {
                           const ta = composerRef.current;
                           if (!ta) return;
