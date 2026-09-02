@@ -119,14 +119,14 @@ function snackMixColor(a, b, t) {
 }
 
 /**
- * Snack while Grok works: chases a pixel apple (stem+leaf) on a --bg arena.
- * Gold snake stones only — arena matches composer/--bg (no gold plate).
- * Board is square so it fills the round send/stop hit-target cleanly.
- * Click = cancel turn.
+ * Snack while Grok works: cute caterpillar (Raupe) chases a pixel apple
+ * (stem+leaf) on a --bg arena. Gold / brown stones only (not Luntik green) —
+ * arena matches composer/--bg (no gold plate). Board is square so it fills
+ * the round send/stop hit-target cleanly. Click = cancel turn.
  *
- * stuffed=true → KO cartoon: X eyes, stuck-out tongue, apples raining on head.
- * Pixel trick: face is drawn as 1px rects *inside* the head stone; falling
- * apples use free-pixel coords (not the 4×4 grid) so they can bounce on skull.
+ * stuffed=true → Überfressen (CEO): Raupe on its BACK, little feet UP in the
+ * air, pixel apple falls onto the head (classic KO read, caterpillar pose).
+ * Face = soft X eyes inside the head stone; apple uses free-pixel coords.
  */
 function SnackBoard({ running, stuffed = false, onStopClick }) {
   const canvasRef = useRef(null);
@@ -165,6 +165,10 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       tongue: col("--snack-tongue", "#e85a7a"),
       tongueTip: col("--snack-tongue-tip", "#ff8aa0"),
       leaf: col("--snack-leaf", "#5a9e4a"),
+      // Soft brown foot dabs (gold-brown family — Raupe ≠ snake tell)
+      foot: col("--snack-foot", "#4a3018"),
+      // Antennae: light on dark theme, dark on light (CSS token)
+      antenna: col("--raupe-antenna", col("--snack-antenna", "#f0e2c0")),
     };
 
     const parent = canvas.parentElement;
@@ -180,8 +184,8 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
     cell = Math.max(SNACK_CELL, cell);
     const boardW = cols * cell;
     const boardH = rows * cell;
-    // Stuffed: same body length as hunt max (5) — longer coils look oversized in the send button
-    const maxLen = 5;
+    // Stuffed: same body length as hunt max (4) — head + 2–3 body (CEO: not 5)
+    const maxLen = 4;
     layoutRef.current = { cell, boardW, boardH, cols, rows };
 
     const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
@@ -197,16 +201,16 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
     const key = (x, y) => `${x},${y}`;
 
     /**
-     * Stuffed pose: head under free top row, short belly (same mass as hunt snake).
-     * Matches snack-ko-preview proportions — not a board-filling coil.
+     * Stuffed / Überfressen (CEO): belly-up on a mid row — head left, body right.
+     * Feet are drawn ABOVE the stones (= in the air). Room above for the apple.
+     * Not an upright coil with only X-eyes.
      */
-    const stuffedSnake = () => {
+    const stuffedCaterpillar = () => {
       const path = [
-        { x: 1, y: 1 }, // head — room above for one apple
-        { x: 2, y: 1 },
-        { x: 2, y: 2 },
+        { x: 0, y: 2 }, // head — apple falls onto this
         { x: 1, y: 2 },
-        { x: 0, y: 2 },
+        { x: 2, y: 2 },
+        { x: 3, y: 2 },
       ];
       return path.slice(0, maxLen);
     };
@@ -241,7 +245,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
 
     const reset = () => {
       if (stuffed) {
-        const snake = stuffedSnake();
+        const snake = stuffedCaterpillar();
         const head = snake[0];
         const gap = Math.max(1, Math.floor(cell * 0.14));
         const size = cell - gap * 2;
@@ -262,8 +266,10 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
         return;
       }
       const midY = Math.floor(rows / 2);
+      // Busy starts at idle mass (3), grows to max 4 when apple is “eaten”
       stateRef.current = {
         snake: [
+          { x: 2, y: midY },
           { x: 1, y: midY },
           { x: 0, y: midY },
         ],
@@ -385,15 +391,15 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
 
     const drawCell = (x, y, fill, gapRatio = 0.14) => {
       // Same inset math as SNACK_PIXEL / SNACK_GAP (unified stone size)
-      // Soft dab corners — same painterly language as GraphFaces stones
+      // Soft dab corners — match idle send-seg (~32% radius), not hard snake-rects
       const gap = Math.max(1, Math.floor(cell * gapRatio));
       const s = cell - gap * 2;
       const px = x * cell + gap;
       const py = y * cell + gap;
-      const r = Math.max(1.2, s * 0.28);
+      const r = Math.max(1.6, s * 0.38); // rounder Raupe dab (was ~0.28 / snake-rect)
       ctx.fillStyle = fill;
-      ctx.globalAlpha = 0.32;
-      snackRoundRect(ctx, px - 0.35, py - 0.3, s + 0.8, s + 0.7, r + 0.25);
+      ctx.globalAlpha = 0.34;
+      snackRoundRect(ctx, px - 0.45, py - 0.4, s + 1.0, s + 0.9, r + 0.35);
       ctx.fill();
       ctx.globalAlpha = 1;
       snackRoundRect(ctx, px, py, s, s, r);
@@ -444,6 +450,66 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       // Prefer full pixel apple language; fall back to shared 8px drawer
       if (s >= SNACK_PIXEL + 2) drawPixelApple(px, py, s);
       else snackDrawApple(ctx, px, py, palette.stop, palette.stopInner);
+    };
+
+
+    /** Soft caterpillar antennae on the head stone (busy board Raupe tell). */
+    const drawAntennae = (stone, ko = false) => {
+      const { px, py, size: sz } = stone;
+      // Keep stems inside/near the stone top so circular clip doesn't erase them
+      const stemH = Math.max(3, Math.floor(sz * 0.42));
+      const stemW = Math.max(2, Math.floor(sz * 0.2));
+      const tip = Math.max(3, Math.floor(sz * 0.36));
+      const left = px + Math.max(0, Math.floor(sz * 0.1));
+      const right = px + sz - tip - Math.max(0, Math.floor(sz * 0.06));
+      // Anchor just inside the stone so arena overflow:hidden can't hide them
+      const baseY = py + Math.max(1, Math.floor(sz * 0.08));
+      ctx.fillStyle = ko
+        ? palette.antenna
+        : palette.antenna;
+      ctx.globalAlpha = ko ? 0.75 : 1;
+      // Left stem + tip (soft dab via roundRect when large enough)
+      const paintStub = (sx, sy, sw, sh) => {
+        if (sw >= 2 && sh >= 2) {
+          snackRoundRect(ctx, sx, sy, sw, sh, Math.min(sw, sh) * 0.45);
+          ctx.fill();
+        } else {
+          ctx.fillRect(sx, sy, sw, sh);
+        }
+      };
+      paintStub(left + Math.floor(tip / 2), baseY - stemH, stemW, stemH);
+      paintStub(left, baseY - stemH - Math.floor(tip * 0.4), tip, tip);
+      const rh = ko ? stemH : stemH + 1;
+      paintStub(right + Math.floor(tip / 2), baseY - rh, stemW, rh);
+      paintStub(right, baseY - rh - Math.floor(tip * 0.4), tip, tip);
+      ctx.globalAlpha = 1;
+    };
+
+    /**
+     * Little soft-pixel feet under (hunt) or above (stuffed belly-up) a stone.
+     * 2 tiny dabs — the Raupe tell vs snake body.
+     */
+    const drawFeet = (stone, { up = false } = {}) => {
+      // Exactly one couple of feet under/above this stone (not L+R duplicate sets)
+      const { px, py, size: sz } = stone;
+      const fw = Math.max(1, Math.floor(sz * 0.26));
+      const fh = Math.max(1, Math.floor(sz * 0.22));
+      const inset = Math.max(1, Math.floor(sz * 0.16));
+      const left = px + inset;
+      const right = px + sz - fw - inset;
+      const fy = up ? py - fh - 1 : py + sz + 1;
+      ctx.fillStyle = palette.foot;
+      ctx.globalAlpha = 0.95;
+      if (fw >= 2 && fh >= 2) {
+        snackRoundRect(ctx, left, fy, fw, fh, Math.min(fw, fh) * 0.45);
+        ctx.fill();
+        snackRoundRect(ctx, right, fy, fw, fh, Math.min(fw, fh) * 0.45);
+        ctx.fill();
+      } else {
+        ctx.fillRect(left, fy, fw, fh);
+        ctx.fillRect(right, fy, fw, fh);
+      }
+      ctx.globalAlpha = 1;
     };
 
     /** Dark pupil on head, aimed at the stop target (works light + dark). */
@@ -549,6 +615,12 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
         if (i === 0) {
           if (stuffed) drawKOFace(stone, s.bonk);
           else drawEye(seg, s.food, stone);
+          // Tiny Raupe antennae — soft stubs above head stone
+          drawAntennae(stone, stuffed);
+        }
+        // Feet on 2–3 body segs: hunt = under, stuffed = UP (belly-up / CEO)
+        if (i > 0 && i < 4) {
+          drawFeet(stone, { up: stuffed });
         }
       });
 
@@ -654,17 +726,30 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       draw();
     };
 
-    // Any click on the snack board while working = stop (pixel apple is the cue)
+    // Any click/tap on the snack board while working = stop (pixel apple is the cue).
+    // Do NOT stopPropagation: morph layers / pointer-events quirks can swallow the
+    // canvas-only path; letting the event bubble keeps button.onClick as backup.
+    // Guard double-fire via a short latch (cancelTurn also guards `cancelling`).
+    let stopLatch = false;
+    const fireStop = () => {
+      if (stopLatch) return;
+      stopLatch = true;
+      try {
+        onStopRef.current?.();
+      } finally {
+        window.setTimeout(() => {
+          stopLatch = false;
+        }, 80);
+      }
+    };
     const onClick = (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      onStopRef.current?.();
+      // Don't preventDefault — allow bubble to send button as Abbruch backup
+      fireStop();
     };
     const onPointer = (ev) => {
       // pointerdown is more reliable than click inside nested button faces
-      ev.preventDefault();
-      ev.stopPropagation();
-      onStopRef.current?.();
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      fireStop();
     };
 
     canvas.addEventListener("click", onClick);
@@ -699,8 +784,8 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       }`}
       title={
         stuffed
-          ? "Glyph got lost… in space — tippen = Stopp · dann neu"
-          : "Stopp — roter Punkt / Klick bricht ab"
+          ? "Überfressen — Raupe auf dem Rücken, Füße hoch, Apfel auf Kopf · tippen = Stopp"
+          : "Stopp — Raupe jagt Apfel · Klick bricht ab"
       }
     />
   );
@@ -968,7 +1053,7 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        title="Scrollen · Apfel = Endpunkt · Schlange jagt · an Schnauze am Ziel"
+        title="Scrollen · Apfel = Endpunkt · Raupe jagt · am Kopf am Ziel"
       />
     </div>
   );

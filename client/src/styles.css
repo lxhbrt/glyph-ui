@@ -75,20 +75,28 @@
   --ok: var(--gold-bright);
 
   --send-fg: color-mix(in srgb, var(--gold) 12%, #000000);
-  /* D = material A: container = composer/--bg. Gold ONLY on stones, never a fill plate.
-     button.send uses background-color: var(--bg) directly (no bg transition) so theme
-     flips cannot interpolate a circular gold disc behind the snake. */
+  /* D = material A: container = composer/--bg. Gold/brown ONLY on
+     stones/segments, never a fill plate. button.send uses background-color: var(--bg)
+     directly (no bg transition) so theme flips cannot interpolate a circular gold
+     disc behind the caterpillar. */
   --send-idle-bg: var(--bg);
   --send-idle-border: transparent;
   --send-work-bg: var(--bg);
 
-  /* Snack = gold snake + danger stop (same hexes, only mix)
-     Head darker → tail lighter (Enter board + chat scrollbar). */
+  /* Snack = Raupe (caterpillar) stones + danger apple stop.
+     Gold / brown family (NOT Luntik bright green primary). Soft dabs OK in-family.
+     Head gold → body brown-gold → tip lighter. Leaf green only on the Apfel. */
   --snack-snake-head: var(--gold);
-  --snack-snake-body: var(--gold-bright);
+  --snack-snake-body: color-mix(in srgb, var(--gold) 58%, #6b4423 42%);
+  --snack-caterpillar-head: var(--snack-snake-head);
+  --snack-caterpillar-body: var(--snack-snake-body);
+  --snack-foot: color-mix(in srgb, var(--gold-dim) 22%, #3a2410 78%);
+  /* Antennae: light on dark theme so they read on gold stones */
+  --raupe-antenna: color-mix(in srgb, #fff6df 78%, var(--gold-bright) 22%);
+  --snack-antenna: var(--raupe-antenna);
   --snack-stop: var(--danger);
   --snack-stop-inner: var(--danger-bright);
-  /* KO face when hang / overate (pixel tongue + leaf) */
+  /* KO extras (tongue) + apple leaf only — leaf is not body primary */
   --snack-tongue: #e85a7a;
   --snack-tongue-tip: #ff8aa0;
   --snack-leaf: #5a9e4a;
@@ -133,12 +141,17 @@
   --send-idle-border: transparent;
   --send-work-bg: var(--bg);
 
-  /* Darker gold head on light surface; body/tail ramp lighter */
+  /* Darker gold head on light surface; brown-gold body ramp */
   --snack-snake-head: var(--gold-deep);
-  --snack-snake-body: var(--gold-dim);
+  --snack-snake-body: color-mix(in srgb, var(--gold-dim) 62%, #5c3d1e 38%);
+  --snack-caterpillar-head: var(--snack-snake-head);
+  --snack-caterpillar-body: var(--snack-snake-body);
+  --snack-foot: color-mix(in srgb, var(--gold-deep) 18%, #2e1c0c 82%);
+  /* Antennae: dark on light theme */
+  --raupe-antenna: color-mix(in srgb, #1a1208 88%, var(--gold-deep) 12%);
+  --snack-antenna: var(--raupe-antenna);
   --snack-stop: var(--danger);
   --snack-stop-inner: var(--danger-bright);
-  /* KO face when hang / overate (pixel tongue + leaf) */
   --snack-tongue: #e85a7a;
   --snack-tongue-tip: #ff8aa0;
   --snack-leaf: #5a9e4a;
@@ -1310,12 +1323,19 @@ button.send:hover:not(:disabled):not(.send--working) {
   color: var(--text);
 }
 
-button.send:hover:not(:disabled):not(.send--working) .send-snake-head .graph-face {
+button.send:hover:not(:disabled):not(.send--working) .send-snake-head .graph-face,
+button.send:hover:not(:disabled):not(.send--working) .send-caterpillar-head .graph-face {
   color: var(--gold-bright);
 }
 
-button.send:hover:not(:disabled):not(.send--working) .send-tail-stone--a {
-  background: var(--gold-bright);
+button.send:hover:not(:disabled):not(.send--working) .send-tail-stone--a,
+button.send:hover:not(:disabled):not(.send--working) .send-seg--a {
+  background: color-mix(in srgb, var(--gold-bright) 72%, #6b4423 28%);
+}
+
+button.send:hover:not(:disabled):not(.send--working) .send-tail-stone--c,
+button.send:hover:not(:disabled):not(.send--working) .send-seg--c {
+  background: color-mix(in srgb, var(--gold-bright) 55%, #6b4423 20%, #fff 25%);
 }
 
 button.send:focus {
@@ -1376,7 +1396,8 @@ button.send .send-face--head .send-icon {
   position: relative;
 }
 
-button.send .send-snake {
+button.send .send-snake,
+button.send .send-caterpillar {
   --send-head: 50%;
   --send-head-pad: 25%;
   --send-chin: calc(var(--send-head-pad) + var(--send-head) - 2px);
@@ -1385,19 +1406,21 @@ button.send .send-snake {
   inset: 0;
 }
 
-button.send .send-snake-head {
+button.send .send-snake-head,
+button.send .send-caterpillar-head {
   position: absolute;
   left: var(--send-head-pad);
   top: var(--send-head-pad);
   width: var(--send-head);
   height: var(--send-head);
   z-index: 2;
-  overflow: hidden;
+  overflow: visible; /* antennae may peek above the stone */
   /* Square stone (faces on stone) — do NOT round into a gold disc */
   border-radius: 0;
 }
 
-button.send .send-snake-head .graph-face {
+button.send .send-snake-head .graph-face,
+button.send .send-caterpillar-head .graph-face {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -1407,48 +1430,81 @@ button.send .send-snake-head .graph-face {
   color: var(--gold);
 }
 
-button.send .send-tail {
+button.send .send-tail,
+button.send .send-segs {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
 }
 
-button.send .send-tail-stone {
+button.send .send-tail-stone,
+button.send .send-seg {
   position: absolute;
   top: var(--send-chin);
-  /* Soft-pixel dabs — match painterly faces (not hard pixel squares) */
-  border-radius: 28%;
+  /* Soft-pixel Raupe segments — square-ish dabs, slightly rounder than hard pixels */
+  border-radius: 32%;
   image-rendering: auto;
   box-shadow:
-    inset 0 0 0 0.5px color-mix(in srgb, var(--gold-deep, #000) 18%, transparent),
-    0 0.5px 1px color-mix(in srgb, var(--gold) 22%, transparent);
+    inset 0 0 0 0.5px color-mix(in srgb, var(--gold-deep, #000) 16%, transparent),
+    0 0.5px 1px color-mix(in srgb, var(--snack-caterpillar-body, var(--gold)) 28%, transparent);
   animation: graph-glance 8.4s steps(1, end) infinite;
 }
 
-/* 8 → 6 → 4px along the chin, trailing right toward the rim. */
-button.send .send-tail-stone--a {
+/* 8 → 6 → 4px along the chin — soft gold-brown Raupe (head + 3 body = 4). */
+button.send .send-tail-stone--a,
+button.send .send-seg--a {
   left: calc(var(--send-head-right) - 10px);
   width: var(--snack-pixel);
   height: var(--snack-pixel);
-  background: var(--snack-snake-head);
+  background: var(--snack-caterpillar-head, var(--snack-snake-head));
   animation-delay: -0.35s;
 }
 
-button.send .send-tail-stone--b {
+button.send .send-tail-stone--b,
+button.send .send-seg--b {
   left: calc(var(--send-head-right) - 1px);
   width: calc(var(--snack-pixel) - var(--snack-pixel-gap));
   height: calc(var(--snack-pixel) - var(--snack-pixel-gap));
-  background: var(--snack-snake-body);
+  background: var(--snack-caterpillar-body, var(--snack-snake-body));
   animation-delay: -0.12s;
 }
 
-button.send .send-tail-stone--c {
+button.send .send-tail-stone--c,
+button.send .send-seg--c {
   left: calc(var(--send-head-right) + 6px);
   width: calc(var(--snack-pixel) * 0.5);
   height: calc(var(--snack-pixel) * 0.5);
-  background: color-mix(in srgb, var(--snack-snake-body) 70%, #fff);
+  background: color-mix(
+    in srgb,
+    var(--snack-caterpillar-body, var(--snack-snake-body)) 65%,
+    #fff
+  );
   animation-delay: 0.12s;
+}
+
+/* Little soft-pixel feet under idle body segs — one couple per stone */
+button.send .send-seg {
+  overflow: visible;
+}
+button.send .send-feet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 1px);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 1px;
+  height: 2px;
+  pointer-events: none;
+}
+button.send .send-feet i {
+  display: block;
+  width: 2px;
+  height: 2px;
+  border-radius: 45%;
+  background: var(--snack-foot, #3a2410);
+  opacity: 0.95;
 }
 
 button.send:disabled:not(.send--working) .send-face--head .graph-face {
@@ -1458,7 +1514,8 @@ button.send:disabled:not(.send--working) .send-face--head .graph-face {
 /* Disabled (leerer Input): Kopf + Schwanz gleichermaßen sichtbar halten —
    nur leicht gedimmt. Vorher 0.45: auf dunklem Grund wirkte der Schwanz
    wie verschwunden („Kopf ohne Schwanz“). */
-button.send:disabled:not(.send--working) .send-tail {
+button.send:disabled:not(.send--working) .send-tail,
+button.send:disabled:not(.send--working) .send-segs {
   opacity: 0.7;
 }
 
@@ -1708,7 +1765,7 @@ button.send.send--stuffed .send-snack {
 /*
   LVL-UP context Jagd-Bar — strip above the composer.
   Bar owns the height; text is a thin overlay (not a second row).
-  Gray = context fill; gold snake shrinks with scroll (when overflow).
+  Gray = context fill; gold Raupe shrinks with scroll (when overflow).
 */
 .context-lvl-bar {
   flex: 0 0 auto;
@@ -4357,12 +4414,21 @@ button.composer-sheet-head:hover {
 }
 
 .composer.composer--grok .send.send--working .send-face--head {
+  pointer-events: none !important; /* morph layer must never eat Abbruch clicks */
+}
+
+/* Idle: snack face stays non-interactive (opacity 0 would still steal hits).
+   Working: whole snack board is the stop hit-target. */
+.composer.composer--grok .send .send-face--snack {
+  padding: 2px;
   pointer-events: none;
 }
 
-.composer.composer--grok .send .send-face--snack {
-  padding: 2px;
-  pointer-events: auto; /* whole snack board is the stop hit-target */
+.composer.composer--grok .send.send--working .send-face--snack,
+.composer.composer--grok .send.send--working .send-snack,
+.composer.composer--grok .send.send--working .snack-canvas--stop {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .composer.composer--grok .send.send--working .send-face--snack {
@@ -4434,7 +4500,7 @@ button.composer-sheet-head:hover {
   font-weight: 500;
 }
 
-/* Mic stays secondary to snake/send — a hair quieter than + / mode */
+/* Mic stays secondary to Raupe/send — a hair quieter than + / mode */
 .voice-mic-btn:not(.is-recording) {
   opacity: 0.52;
 }
@@ -8077,6 +8143,34 @@ button.cal-cell {
   overflow: visible;
 }
 
+/* Raupe antennae may extend slightly past the 24×24 stone */
+.graph-face--raupe {
+  overflow: visible;
+}
+
+.graph-antennae {
+  pointer-events: none;
+  color: var(--raupe-antenna, #f0e2c0);
+}
+
+.graph-antennae .graph-antenna-stem,
+.graph-antennae .graph-antenna-tip {
+  fill: currentColor;
+}
+
+/* Dark theme (default): light antennae; light theme: dark antennae */
+:root[data-theme="light"] .graph-antennae {
+  color: var(--raupe-antenna, #1a1208);
+}
+
+/* Send button: punchier antennae on the idle head */
+button.send .graph-antennae {
+  color: var(--raupe-antenna, #f0e2c0);
+}
+:root[data-theme="light"] button.send .graph-antennae {
+  color: var(--raupe-antenna, #0a0908);
+}
+
 .graph-stone-wash {
   pointer-events: none;
 }
@@ -8192,23 +8286,27 @@ button.send .graph-sparkle {
 }
 
 button.send:hover:not(:disabled):not(.send--working) .graph-pupils,
-button.send:hover:not(:disabled):not(.send--working) .send-tail-stone {
+button.send:hover:not(:disabled):not(.send--working) .send-tail-stone,
+button.send:hover:not(:disabled):not(.send--working) .send-seg {
   animation-duration: 3.2s;
 }
 
 button.send.send--working .graph-pupils,
 button.send.send--working .graph-lids,
 button.send.send--working .send-tail-stone,
+button.send.send--working .send-seg,
 button.send.send--morph-out .graph-pupils,
 button.send.send--morph-out .graph-lids,
-button.send.send--morph-out .send-tail-stone {
+button.send.send--morph-out .send-tail-stone,
+button.send.send--morph-out .send-seg {
   animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .graph-pupils,
   .graph-lids,
-  .send-tail-stone {
+  .send-tail-stone,
+  .send-seg {
     animation: none;
   }
 }

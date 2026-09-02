@@ -3,7 +3,7 @@
  *
  * Single track (Snack pixel language):
  *   - Gray stones = context fill (truth / high-water front)
- *   - Gold snake  = scrollRatio × context fill (shrinks when scrolling up)
+ *   - Gold Raupe  = scrollRatio × context fill (shrinks when scrolling up)
  *   - Soft-cap tick at soft-cap ratio
  *
  * Copyright (c) 2026 Alexander Hubert
@@ -151,7 +151,7 @@ export function ContextLvlBar({
         ctx.fillRect(i * CELL + GAP, padY, STONE, STONE);
       }
 
-      // Gold snake — head at fill front (eye faces right / track end)
+      // Gold Raupe — head at fill front (eye faces right / track end)
       for (let i = 0; i < goldN; i++) {
         const fromHead = goldN - 1 - i; // 0 = head
         const t = goldN <= 1 ? 0 : fromHead / (goldN - 1);
@@ -270,7 +270,7 @@ export function ContextLvlBar({
       {open ? (
         <p className="context-lvl-bar-legend">
           <span>Steine = Kontext</span>
-          <span>Schlange = Leseposition</span>
+          <span>Raupe = Leseposition</span>
           <span>Strich = Soft-Cap</span>
           {compactEnabled && onCompact ? (
             <button

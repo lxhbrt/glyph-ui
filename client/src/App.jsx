@@ -9,7 +9,7 @@ import { AssistantMeta } from "./components/AssistantMeta.jsx";
 import { PlanBar } from "./components/PlanBar.jsx";
 import { ContextLvlBar } from "./components/ContextLvlBar.jsx";
 import { SnackBoard } from "./components/Snack.jsx";
-import { SendSnake } from "./components/GraphFaces.jsx";
+import { SendCaterpillar as SendSnake } from "./components/GraphFaces.jsx";
 import { profileHeadId } from "./utils/lageLayout.js";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
@@ -462,6 +462,7 @@ export default function App() {
   const [slashIndex, setSlashIndex] = useState(0);
   const composerRef = useRef(null);
   const [cancelling, setCancelling] = useState(false);
+  const cancellingRef = useRef(false);
   /**
    * Hang signal: busy but no thought/answer/tool chunks for a while.
    * Snack goes "stuffed" (X eyes) — user restarts; we don't auto-kill.
@@ -2284,12 +2285,29 @@ export default function App() {
   const cancelTurn = useCallback(async () => {
     if (vaultSearchBusy || vaultSearchAbortRef.current) {
       abortVaultSearch();
-      if (!busy && !streamingRef.current && !busyRef.current) return;
+      if (
+        !busy &&
+        !streamingRef.current &&
+        !busyRef.current &&
+        !messages.some((m) => m.streaming)
+      ) {
+        return;
+      }
     }
-    if (cancelling) return;
-    // Allow stop while streaming even if busy flag lagged
-    if (!busy && !streamingRef.current && !busyRef.current) return;
+    // Sync latch — pointerdown+click / canvas+button can double-fire before re-render
+    if (cancelling || cancellingRef.current) return;
+    // Allow stop while streaming / working chrome even if busy flag lagged
+    // (SnackBoard Abbruch must work whenever the busy face is showing)
+    if (
+      !busy &&
+      !streamingRef.current &&
+      !busyRef.current &&
+      !messages.some((m) => m.streaming)
+    ) {
+      return;
+    }
 
+    cancellingRef.current = true;
     setCancelling(true);
     setError("");
     // Keep working chrome until server confirms turn end
@@ -2331,6 +2349,7 @@ export default function App() {
         // Server already idle — clean local stream state
         busyRef.current = false;
         setBusy(false);
+        cancellingRef.current = false;
         setCancelling(false);
         finalizeStreaming();
         scheduleDrainQueue();
@@ -2341,11 +2360,13 @@ export default function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       // Cancel request failed — do NOT pretend work stopped; leave busy if server still works
+      cancellingRef.current = false;
       setCancelling(false);
       // Fall back: try WS cancel once more without clearing busy
       try {
         if (wsRef.current?.readyState === 1) {
           wsRef.current.send(JSON.stringify({ type: "cancel" }));
+          cancellingRef.current = true;
           setCancelling(true);
         }
       } catch {
@@ -2357,6 +2378,7 @@ export default function App() {
     busy,
     cancelling,
     finalizeStreaming,
+    messages,
     scheduleDrainQueue,
     vaultSearchBusy,
   ]);
@@ -2929,6 +2951,10 @@ export default function App() {
     streamingRef.current = messages.some((m) => m.streaming);
   }, [messages]);
 
+  useEffect(() => {
+    cancellingRef.current = cancelling;
+  }, [cancelling]);
+
   // Reset activity clock when a turn starts so we don't flash stuffed immediately
   useEffect(() => {
     if (snackDemo) return undefined;
@@ -3400,7 +3426,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [showWorking]);
 
-  // Fehler: Augen weg — App.setError kennt der Snake nicht, also über error-State.
+  // Fehler: Augen weg — App.setError kennt die Raupe nicht, also über error-State.
   const errorSeenRef = useRef("");
   const [snakeEyesAway, setSnakeEyesAway] = useState(false);
   useEffect(() => {
@@ -3816,7 +3842,7 @@ export default function App() {
             <span className="banner-stuffed-steps">
               {snackDemo ? (
                 <>
-                  Runder Button: X-Augen, Zunge, Apfel auf den Kopf. Schließen:{" "}
+                  Runder Button: Raupe auf dem Rücken, Füße hoch, Apfel auf den Kopf. Schließen:{" "}
                   <a href="/">ohne Demo-Param</a>
                 </>
               ) : (
@@ -4756,7 +4782,7 @@ export default function App() {
                           : "In Warteschlange (↵ Enter)"
                         : cancelling
                           ? "Bricht ab…"
-                          : "Stopp — leerer Snack / Klick bricht ab"
+                          : "Stopp — Raupe / Apfel · Klick bricht ab"
                       : sendAction === "deep-search"
                         ? seat === "phone"
                           ? "Deep Search starten"
@@ -4802,8 +4828,10 @@ export default function App() {
                         running={showWorking || snackAlive}
                         stuffed={showStuffed}
                         onStopClick={() => {
+                          // Demo board is visual-only; real working state must Abbruch
                           if (snackDemo) return;
-                          if (!cancelling) void cancelTurn();
+                          if (cancelling) return;
+                          void cancelTurn();
                         }}
                       />
                     </span>
