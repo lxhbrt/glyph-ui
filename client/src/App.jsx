@@ -3410,8 +3410,6 @@ export default function App() {
       <aside
         className="side-rail"
         aria-label="Hauptaktionen"
-        inert={showLage ? true : undefined}
-        aria-hidden={showLage || undefined}
       >
         <button
           type="button"

@@ -204,6 +204,9 @@ body,
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 55%, var(--bg));
   box-sizing: border-box;
+  /* Above Graph stage (z-index 60, left: 48px) so Theme/Reload stay clickable */
+  position: relative;
+  z-index: 70;
 }
 
 /* Push book / bottom actions to the foot of the rail */
@@ -7191,12 +7194,16 @@ button.cal-cell {
   outline-offset: 2px;
 }
 
-/* —— Graph · pechschwarz, Obsidian-Feld —— */
+/* —— Graph · pechschwarz (dark) / Papierfeld (light) —— */
 .lage-stage {
   --lage-ink: #000000;
-  --lage-line: color-mix(in srgb, var(--gold) 42%, #000);
+  --lage-shade: #000000;
+  --lage-fill: #000000;
+  --lage-fg: color-mix(in srgb, var(--gold) 78%, #fff);
+  --lage-line: color-mix(in srgb, var(--gold) 42%, var(--lage-shade));
   --lage-line-hot: color-mix(in srgb, var(--gold) 86%, #fff);
   --lage-mute: color-mix(in srgb, var(--gold) 34%, #5c5648);
+  --lage-face-ink: #000000;
   position: fixed;
   top: 0;
   right: 0;
@@ -7206,7 +7213,7 @@ button.cal-cell {
   display: flex;
   flex-direction: column;
   background: var(--lage-ink);
-  color: color-mix(in srgb, var(--gold) 78%, #fff);
+  color: var(--lage-fg);
 }
 
 .lage-pending {
@@ -7219,8 +7226,16 @@ button.cal-cell {
 }
 
 :root[data-theme="light"] .lage-stage {
+  --lage-ink: var(--bg);
+  --lage-shade: var(--text);
+  --lage-fill: #ffffff;
+  --lage-fg: var(--text);
+  --lage-line: color-mix(in srgb, var(--gold) 48%, var(--text));
+  --lage-line-hot: color-mix(in srgb, var(--gold) 72%, #000);
+  --lage-mute: var(--muted);
+  --lage-face-ink: #000000;
   background: var(--lage-ink);
-  color: color-mix(in srgb, var(--gold) 78%, #fff);
+  color: var(--lage-fg);
 }
 
 .lage-kicker {
@@ -7287,7 +7302,7 @@ button.cal-cell {
 .lage-edge-key-item::before {
   content: "";
   width: 1.35rem;
-  border-top: 1.5px solid color-mix(in srgb, var(--gold) 62%, #000);
+  border-top: 1.5px solid color-mix(in srgb, var(--gold) 62%, var(--lage-shade));
 }
 
 .lage-edge-key-item.is-r::before {
@@ -7296,7 +7311,7 @@ button.cal-cell {
 
 .lage-edge-key-item.is-private::before {
   border-top-style: dotted;
-  border-top-color: color-mix(in srgb, var(--gold) 34%, #000);
+  border-top-color: color-mix(in srgb, var(--gold) 34%, var(--lage-shade));
 }
 
 .lage-filter {
@@ -7315,16 +7330,16 @@ button.cal-cell {
   min-width: 0;
   min-height: 36px;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--gold) 28%, #000);
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 28%, var(--lage-shade));
   background: transparent;
-  color: color-mix(in srgb, var(--gold) 80%, #fff);
+  color: var(--lage-fg);
   font: inherit;
   font-size: 0.78rem;
 }
 
 .lage-filter-btn {
   appearance: none;
-  border: 1px solid color-mix(in srgb, var(--gold) 28%, #000);
+  border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--lage-shade));
   background: transparent;
   color: var(--lage-mute);
   font: inherit;
@@ -7340,7 +7355,7 @@ button.cal-cell {
 .lage-filter-btn.is-on,
 .lage-filter-btn:hover {
   color: var(--gold);
-  border-color: color-mix(in srgb, var(--gold) 55%, #000);
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--lage-shade));
 }
 
 .lage-guard-retry {
@@ -7452,7 +7467,7 @@ button.cal-cell {
 }
 
 .lage-stone.is-dark {
-  fill: color-mix(in srgb, var(--border) 78%, #000);
+  fill: color-mix(in srgb, var(--border) 78%, var(--lage-shade));
 }
 
 .lage-cable {
@@ -7464,7 +7479,7 @@ button.cal-cell {
 }
 
 .lage-cable.is-axis {
-  stroke: color-mix(in srgb, var(--gold) 28%, #000);
+  stroke: color-mix(in srgb, var(--gold) 28%, var(--lage-shade));
   stroke-dasharray: 16 12;
   opacity: 0.42;
 }
@@ -7476,13 +7491,13 @@ button.cal-cell {
 }
 
 .lage-cable.is-rw {
-  stroke: color-mix(in srgb, var(--gold) 62%, #000);
+  stroke: color-mix(in srgb, var(--gold) 62%, var(--lage-shade));
   stroke-dasharray: none;
   opacity: 0.96;
 }
 
 .lage-cable.is-private {
-  stroke: color-mix(in srgb, var(--gold) 34%, #000);
+  stroke: color-mix(in srgb, var(--gold) 34%, var(--lage-shade));
   stroke-dasharray: 0.75 3.8;
   opacity: 0.9;
 }
@@ -7540,13 +7555,13 @@ button.cal-cell {
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--gold) 48%, #000);
+  border: 1px solid color-mix(in srgb, var(--gold) 48%, var(--lage-shade));
 }
 
 .lage-node--hub .lage-node-core {
   width: 3.35rem;
   height: 3.35rem;
-  border-color: color-mix(in srgb, var(--gold) 62%, #000);
+  border-color: color-mix(in srgb, var(--gold) 62%, var(--lage-shade));
 }
 
 .lage-node--hub.is-holding .lage-node-core,
@@ -7582,14 +7597,14 @@ button.cal-cell {
 }
 
 .lage-folder-o {
-  fill: color-mix(in srgb, var(--gold) 8%, #000);
-  stroke: color-mix(in srgb, var(--gold) 42%, #000);
+  fill: color-mix(in srgb, var(--gold) 8%, var(--lage-fill));
+  stroke: color-mix(in srgb, var(--gold) 42%, var(--lage-shade));
   stroke-width: 1.15;
 }
 
 .lage-folder-mark.is-step-dim .lage-folder-o {
-  fill: color-mix(in srgb, var(--gold) 3%, #000);
-  stroke: color-mix(in srgb, var(--gold) 22%, #000);
+  fill: color-mix(in srgb, var(--gold) 3%, var(--lage-fill));
+  stroke: color-mix(in srgb, var(--gold) 22%, var(--lage-shade));
 }
 
 .lage-folder-star {
@@ -7603,7 +7618,7 @@ button.cal-cell {
 }
 
 .lage-folder-dot {
-  fill: color-mix(in srgb, var(--gold) 72%, #000);
+  fill: color-mix(in srgb, var(--gold) 72%, var(--lage-shade));
 }
 
 .lage-node--vault:hover .lage-folder-o,
@@ -8051,7 +8066,7 @@ button.send.send-eyes-away .graph-pupils {
 }
 
 .lage-stage .glyph-medal-fill {
-  fill: #000;
+  fill: var(--lage-face-ink);
 }
 
 .lage-stage .glyph-medal-ring {
@@ -8064,7 +8079,7 @@ button.send.send-eyes-away .graph-pupils {
 }
 
 .lage-stage .graph-ink {
-  fill: #000;
+  fill: var(--lage-face-ink);
 }
 
 .lage-node--profile:not(.is-center) .lage-node-core {
@@ -8115,7 +8130,7 @@ button.send.send-eyes-away .graph-pupils {
   overflow: auto;
   padding: 0.95rem 1.05rem 1.15rem;
   background: var(--lage-ink);
-  border: 1px solid color-mix(in srgb, var(--gold) 22%, #000);
+  border: 1px solid color-mix(in srgb, var(--gold) 22%, var(--lage-shade));
 }
 
 .lage-dock {
@@ -8126,7 +8141,7 @@ button.send.send-eyes-away .graph-pupils {
   list-style: none;
   margin: 0.7rem 0 0;
   padding: 0.55rem 0 0;
-  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, #000);
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, var(--lage-shade));
   display: flex;
   flex-direction: column;
   gap: 0.05rem;
@@ -8215,7 +8230,7 @@ button.send.send-eyes-away .graph-pupils {
   gap: 0.28rem;
   min-height: 44px;
   padding: 0.45rem 0.2rem 0.4rem;
-  border: 1px solid color-mix(in srgb, var(--gold) 18%, #000);
+  border: 1px solid color-mix(in srgb, var(--gold) 18%, var(--lage-shade));
   border-radius: 2px;
   background: transparent;
   color: var(--lage-mute);
@@ -8259,7 +8274,7 @@ button.send.send-eyes-away .graph-pupils {
 .lage-keyline {
   margin-top: 1.15rem;
   padding-top: 0.85rem;
-  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, #000);
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, var(--lage-shade));
 }
 
 .lage-keyline-head {
@@ -8315,7 +8330,7 @@ button.send.send-eyes-away .graph-pupils {
   justify-content: center;
   min-height: 36px;
   padding: 0.3rem 0.15rem;
-  border: 1px solid color-mix(in srgb, var(--gold) 18%, #000);
+  border: 1px solid color-mix(in srgb, var(--gold) 18%, var(--lage-shade));
   border-radius: 2px;
   background: transparent;
   color: var(--lage-mute);
@@ -8352,7 +8367,7 @@ button.send.send-eyes-away .graph-pupils {
   padding: 0.35rem 0;
   min-height: 36px;
   background: transparent;
-  color: color-mix(in srgb, var(--gold) 70%, #fff);
+  color: color-mix(in srgb, var(--gold) 70%, var(--lage-fg));
   font: inherit;
   font-size: 0.78rem;
   letter-spacing: 0.02em;
@@ -8485,7 +8500,7 @@ button.send.send-eyes-away .graph-pupils {
   gap: 0.25rem;
   margin-top: 1rem;
   padding-top: 0.75rem;
-  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, #000);
+  border-top: 1px solid color-mix(in srgb, var(--gold) 16%, var(--lage-shade));
 }
 
 .lage-attach input {
@@ -8493,10 +8508,10 @@ button.send.send-eyes-away .graph-pupils {
   min-width: 0;
   min-height: 40px;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--gold) 28%, #000);
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 28%, var(--lage-shade));
   border-radius: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--gold) 80%, #fff);
+  color: var(--lage-fg);
   font: inherit;
   font-size: 0.8rem;
 }

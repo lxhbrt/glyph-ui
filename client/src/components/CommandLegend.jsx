@@ -283,7 +283,7 @@ const SHORT_HANDBOOK = [
     id: "bind",
     title: "Anbindung (Keys / OAuth)",
     body: [
-      "**Graph** (Leiste): pechschwarz. Köpfe um Glyph; Vaults/Roots als Punkte. Klick → Legende.",
+      "**Graph** (Leiste): folgt Theme (Dunkel pechschwarz / Hell Papier). Köpfe um Glyph; Vaults/Roots als Punkte. Klick → Legende.",
       "**Grok Build:** OAuth im Terminal (`grok login`). Glyph speichert keinen OAuth-Token — nur Status.",
       "**^_Code / °_Agent:** Header-Pille oder Graph-Kopf → Host-URL, Direct-Key, OpenRouter-Key, Modell. Ohne Slash = Direct (`deepseek-v4-flash-vision-exp`), mit Slash = OpenRouter (`deepseek/deepseek-v4-flash-0731`).",
       "**Vaults (Kabelsalat):** Obsidian an °_Agent — Pfad / Name / `obsidian://` · r · r+w · 🔒 · Kabel an/ab. SoT: `~/.glyph/vaults.json`.",
