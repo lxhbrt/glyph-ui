@@ -1,5 +1,5 @@
 /**
- * Graph — pitch-black field. Glyph, three snake heads, Obsidian dots.
+ * Graph — pitch-black field. Glyph, three Raupe heads, Obsidian dots.
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */

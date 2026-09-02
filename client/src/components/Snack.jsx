@@ -119,14 +119,15 @@ function snackMixColor(a, b, t) {
 }
 
 /**
- * Snack while Grok works: chases a pixel apple (stem+leaf) on a --bg arena.
- * Gold snake stones only — arena matches composer/--bg (no gold plate).
- * Board is square so it fills the round send/stop hit-target cleanly.
- * Click = cancel turn.
+ * Snack while Grok works: cute caterpillar (Raupe) chases a pixel apple
+ * (stem+leaf) on a --bg arena. Gold / soft green-gold stones only —
+ * arena matches composer/--bg (no gold plate). Board is square so it fills
+ * the round send/stop hit-target cleanly. Click = cancel turn.
  *
- * stuffed=true → KO cartoon: X eyes, stuck-out tongue, apples raining on head.
- * Pixel trick: face is drawn as 1px rects *inside* the head stone; falling
- * apples use free-pixel coords (not the 4×4 grid) so they can bounce on skull.
+ * stuffed=true → KO cartoon: X eyes, stuck-out tongue, apples raining on head
+ * (overate Raupe). Pixel trick: face is drawn as 1px rects *inside* the head
+ * stone; falling apples use free-pixel coords (not the 4×4 grid) so they
+ * can bounce on skull.
  */
 function SnackBoard({ running, stuffed = false, onStopClick }) {
   const canvasRef = useRef(null);
@@ -446,6 +447,26 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       else snackDrawApple(ctx, px, py, palette.stop, palette.stopInner);
     };
 
+
+    /** Soft caterpillar antennae on the head stone (busy board Raupe tell). */
+    const drawAntennae = (stone, ko = false) => {
+      const { px, py, size: sz } = stone;
+      const stemH = Math.max(2, Math.floor(sz * 0.32));
+      const stemW = Math.max(1, Math.floor(sz * 0.16));
+      const tip = Math.max(2, Math.floor(sz * 0.28));
+      const left = px + Math.max(0, Math.floor(sz * 0.12));
+      const right = px + sz - tip - Math.max(0, Math.floor(sz * 0.08));
+      const baseY = py - 1;
+      ctx.fillStyle = ko ? "rgba(0,0,0,0.55)" : palette.eye;
+      // Left stem + tip
+      ctx.fillRect(left + Math.floor(tip / 2), baseY - stemH, stemW, stemH);
+      ctx.fillRect(left, baseY - stemH - Math.floor(tip * 0.35), tip, tip);
+      // Right stem + tip (slightly taller when hunting)
+      const rh = ko ? stemH : stemH + 1;
+      ctx.fillRect(right + Math.floor(tip / 2), baseY - rh, stemW, rh);
+      ctx.fillRect(right, baseY - rh - Math.floor(tip * 0.35), tip, tip);
+    };
+
     /** Dark pupil on head, aimed at the stop target (works light + dark). */
     const drawEye = (head, food, stone) => {
       const { px, py, size: sz } = stone;
@@ -549,6 +570,8 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
         if (i === 0) {
           if (stuffed) drawKOFace(stone, s.bonk);
           else drawEye(seg, s.food, stone);
+          // Tiny Raupe antennae — soft stubs above head stone
+          drawAntennae(stone, stuffed);
         }
       });
 
@@ -700,7 +723,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       title={
         stuffed
           ? "Glyph got lost… in space — tippen = Stopp · dann neu"
-          : "Stopp — roter Punkt / Klick bricht ab"
+          : "Stopp — Raupe jagt Apfel · Klick bricht ab"
       }
     />
   );
@@ -968,7 +991,7 @@ function SnackScrollbar({ scrollRef, deps = [] }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        title="Scrollen · Apfel = Endpunkt · Schlange jagt · an Schnauze am Ziel"
+        title="Scrollen · Apfel = Endpunkt · Raupe jagt · am Kopf am Ziel"
       />
     </div>
   );

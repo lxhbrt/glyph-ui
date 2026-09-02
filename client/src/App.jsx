@@ -9,7 +9,7 @@ import { AssistantMeta } from "./components/AssistantMeta.jsx";
 import { PlanBar } from "./components/PlanBar.jsx";
 import { ContextLvlBar } from "./components/ContextLvlBar.jsx";
 import { SnackBoard } from "./components/Snack.jsx";
-import { SendSnake } from "./components/GraphFaces.jsx";
+import { SendCaterpillar as SendSnake } from "./components/GraphFaces.jsx";
 import { profileHeadId } from "./utils/lageLayout.js";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
@@ -4756,7 +4756,7 @@ export default function App() {
                           : "In Warteschlange (↵ Enter)"
                         : cancelling
                           ? "Bricht ab…"
-                          : "Stopp — leerer Snack / Klick bricht ab"
+                          : "Stopp — Raupe / Apfel · Klick bricht ab"
                       : sendAction === "deep-search"
                         ? seat === "phone"
                           ? "Deep Search starten"
