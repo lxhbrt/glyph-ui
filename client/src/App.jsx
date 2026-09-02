@@ -13,7 +13,6 @@ import { SendSnake } from "./components/GraphFaces.jsx";
 import { profileHeadId } from "./utils/lageLayout.js";
 import { CommandOverview } from "./components/CommandOverview.jsx";
 import { ExtensionsModal } from "./components/ExtensionsModal.jsx";
-import { SlashPopup } from "./components/SlashPopup.jsx";
 import { PromptHistoryPopup } from "./components/PromptHistoryPopup.jsx";
 import { RewindPicker } from "./components/RewindPicker.jsx";
 import { SlashHighlightedText } from "./components/SlashHighlightedText.jsx";
@@ -399,7 +398,22 @@ export default function App() {
     }
     return "handbook";
   });
-  const [showExtensions, setShowExtensions] = useState(false);
+  /** P5: right drawer — null | "skills" | "plan" (XOR; Graph closes drawer). */
+  const [drawer, setDrawer] = useState(null);
+  const openDrawer = useCallback((kind, opts = {}) => {
+    if (kind !== "skills" && kind !== "plan") return;
+    setShowLage(false);
+    setSlashOpen(false);
+    if (kind === "skills") {
+      setSlashQuery(
+        opts.query != null ? String(opts.query) : "",
+      );
+    }
+    setDrawer(kind);
+  }, []);
+  const closeDrawer = useCallback(() => setDrawer(null), []);
+  const showExtensions = drawer === "skills";
+  const showCalendar = drawer === "plan";
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   useEffect(() => {
     if (!headerMenuOpen) return undefined;
@@ -430,15 +444,17 @@ export default function App() {
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
   const composerRef = useRef(null);
-  const [showCalendar, setShowCalendar] = useState(() => {
-    if (typeof window === "undefined") return false;
+  // Deep-link ?plan / ?cal → open Plan drawer once on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     try {
       const q = new URLSearchParams(window.location.search);
-      return q.has("plan") || q.has("cal");
+      if (q.has("plan") || q.has("cal")) openDrawer("plan");
     } catch {
-      return false;
+      /* ignore */
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
   const [cancelling, setCancelling] = useState(false);
   /**
    * Hang signal: busy but no thought/answer/tool chunks for a while.
@@ -3314,9 +3330,9 @@ export default function App() {
       setSlashQuery("");
       return;
     }
-    setSlashOpen(true);
-    setSlashQuery(token.query);
-  }, []);
+    // P5: `/` opens the Skills side drawer (one source of truth — no SlashPopup).
+    openDrawer("skills", { query: token.query });
+  }, [openDrawer]);
 
   // Cmd/Ctrl+K → Extensions-Modal
   useEffect(() => {
@@ -3324,12 +3340,12 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         // Don't steal when typing in non-composer fields with explicit handling
         e.preventDefault();
-        setShowExtensions(true);
+        openDrawer("skills");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [openDrawer]);
 
   // Keep Snack mounted briefly after work ends so Kopf←Snack morph can play
   const [snackAlive, setSnackAlive] = useState(false);
@@ -3405,7 +3421,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app${webSurface ? " app--web" : ""}`}>
+    <div className={`app${webSurface ? " app--web" : ""}${drawer ? " app--drawer-open" : ""}`}>
       {webSurface ? null : (
       <aside
         className="side-rail"
@@ -3414,9 +3430,10 @@ export default function App() {
         <button
           type="button"
           className="side-rail-btn"
-          onClick={() => setShowCalendar(true)}
+          onClick={() => (showCalendar ? closeDrawer() : openDrawer("plan"))}
           title="Plan & Aktivität — wiederkehrende To-dos + Heatmap"
           aria-label="Plan und Aktivität"
+          aria-pressed={showCalendar}
         >
           <IconCalendar />
         </button>
@@ -3438,6 +3455,7 @@ export default function App() {
           type="button"
           className={`side-rail-btn${showLage ? " side-rail-btn--plan-open" : ""}`}
           onClick={() => {
+            setDrawer(null);
             setShowLage((v) => !v);
             setLageFocus("");
           }}
@@ -3465,9 +3483,10 @@ export default function App() {
         <button
           type="button"
           className="side-rail-btn"
-          onClick={() => setShowExtensions(true)}
+          onClick={() => (showExtensions ? closeDrawer() : openDrawer("skills"))}
           title="Befehle & Skills (⌘/Ctrl+K)"
           aria-label="Befehle und Skills"
+          aria-pressed={showExtensions}
         >
           <IconCommands />
         </button>
@@ -3573,7 +3592,7 @@ export default function App() {
                     <button
                       type="button"
                       className="pill pill-btn pill-btn--icon"
-                      onClick={() => setShowExtensions(true)}
+                      onClick={() => openDrawer("skills")}
                       title="Befehle & Skills"
                       aria-label="Befehle & Skills"
                     >
@@ -3628,7 +3647,7 @@ export default function App() {
                   {headerMenuOpen ? (
                     <div className="top-actions-menu" role="menu" aria-label="System">
                       <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { reset(); setHeaderMenuOpen(false); }} disabled={!connected || busy}>Neuer Chat</button>
-                      <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { setShowExtensions(true); setHeaderMenuOpen(false); }}>Befehle &amp; Skills</button>
+                      <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { openDrawer("skills"); setHeaderMenuOpen(false); }}>Befehle &amp; Skills</button>
                       <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { toggleTheme(); setHeaderMenuOpen(false); }}>Theme</button>
                       <button type="button" role="menuitem" className="top-actions-menu-item" onClick={() => { setWebPasswordOpen(true); setHeaderMenuOpen(false); }}>Passwort</button>
                       {headerControls.reload ? (
@@ -3686,6 +3705,7 @@ export default function App() {
                         ? "code"
                         : "agent",
                   );
+                  setDrawer(null);
                   setShowLage(true);
                 }}
               >
@@ -3866,7 +3886,7 @@ export default function App() {
                     <button
                       type="button"
                       className="empty-starter-chip"
-                      onClick={() => setShowExtensions(true)}
+                      onClick={() => openDrawer("skills")}
                     >
                       Skill starten
                     </button>
@@ -4387,15 +4407,7 @@ export default function App() {
                   composerSlashHl ? " composer-input-wrap--slash-hl" : ""
                 }`}
               >
-                <SlashPopup
-                  open={slashOpen}
-                  items={slashItems}
-                  selectedIndex={slashIndex}
-                  query={slashQuery}
-                  onSelectIndex={setSlashIndex}
-                  onClose={() => setSlashOpen(false)}
-                  onPick={(item) => applySlashInsert(item)}
-                />
+                {/* Slash → Skills-Seitenpanel (P5); kein konkurrierendes Popup */}
                 <PromptHistoryPopup
                   open={historyOpen && !slashOpen}
                   items={historyItems}
@@ -4830,6 +4842,7 @@ export default function App() {
             agentProfileId={agent?.id || ""}
             onOpenLage={(which) => {
               setShowLegend(false);
+              setDrawer(null);
               setLageFocus(which || "");
               setShowLage(true);
             }}
@@ -4838,14 +4851,15 @@ export default function App() {
       ) : null}
       <ExtensionsModal
         open={showExtensions}
-        onClose={() => setShowExtensions(false)}
+        onClose={closeDrawer}
         skills={skills}
         agentCommands={agentCommands}
         profileLabel={agentLabel}
         skillsHint={skillsHint}
         loading={skillsLoading}
         error={skillsError}
-        onPick={(item) => {
+        initialQuery={slashQuery}
+        onPick={(item, opts = {}) => {
           if (isUiReloadItem(item)) {
             hardReloadUi();
             return;
@@ -4858,24 +4872,25 @@ export default function App() {
           const token = slashTokenAt(input, cursor);
           if (token) {
             applySlashInsert(item.name);
-            return;
+          } else {
+            const name = String(item.name || "").replace(/^\//, "");
+            const inserted = `/${name} `;
+            const next =
+              input.slice(0, cursor) + inserted + input.slice(cursor);
+            setInput(next);
+            requestAnimationFrame(() => {
+              const ta = composerRef.current;
+              if (!ta) return;
+              const pos = cursor + inserted.length;
+              try {
+                ta.setSelectionRange(pos, pos);
+              } catch {
+                /* ignore */
+              }
+            });
           }
-          const name = String(item.name || "").replace(/^\//, "");
-          const inserted = `/${name} `;
-          const next =
-            input.slice(0, cursor) + inserted + input.slice(cursor);
-          setInput(next);
-          requestAnimationFrame(() => {
-            const ta = composerRef.current;
-            if (!ta) return;
-            ta.focus();
-            const pos = cursor + inserted.length;
-            try {
-              ta.setSelectionRange(pos, pos);
-            } catch {
-              /* ignore */
-            }
-          });
+          // Stay open by default; „Einfügen & zu“ passes close:true (handled in modal)
+          if (opts.close) closeDrawer();
         }}
       />
       <CommandOverview
@@ -4884,10 +4899,10 @@ export default function App() {
         onOpenSession={handleOpenSession}
       />
       {showCalendar ? (
-        <Suspense fallback={<div className="overview-scrim" aria-busy="true" />}>
+        <Suspense fallback={null}>
           <ActivityCalendar
             open={showCalendar}
-            onClose={() => setShowCalendar(false)}
+            onClose={closeDrawer}
             onOpenSession={handleOpenSession}
             onUseTask={(prompt) => {
               setInput(prompt);

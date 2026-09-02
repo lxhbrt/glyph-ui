@@ -14,6 +14,7 @@ import {
   formatTaskMeta,
   tasksEndpointError,
 } from "../utils/tasks.js";
+import { SideDrawer } from "./SideDrawer.jsx";
 
 const WEEKDAYS = [
   { v: 0, l: "Mo" },
@@ -299,8 +300,6 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
     };
   }, [open, canSeeActivity, loadTodos, loadTasks]);
 
-  if (!open) return null;
-
   const dayLabels = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   const formatDay = (iso) => {
     if (!iso) return "—";
@@ -431,48 +430,35 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
         : "Aktivität · eingeschränkt";
 
   return (
-    <div className="overview-scrim" role="presentation" onClick={onClose}>
-      <section
-        ref={panelRef}
-        className="overview-panel cal-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Plan und Aktivität"
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            onClose();
-          }
-        }}
-      >
-        <header className="overview-head cal-panel-sticky">
-          <div>
-            <p className="overview-kicker">{kicker}</p>
-            <h2>Plan &amp; Aktivität</h2>
-            <p className="overview-meta">
-              {tab === "plan"
-                ? `${openTasks.length} offene Aufgabe${openTasks.length === 1 ? "" : "n"} · ${openTodos.length} offene To-do${openTodos.length === 1 ? "" : "s"}`
-                : canSeeActivity
-                  ? data
-                    ? `${data.activeDays} aktive Tage · ${data.totalEvents} Events · Peak ${data.peakDate || "—"}`
-                    : "Wann du gearbeitet hast — und woran"
-                  : "Nur im Grok-Profil sichtbar"}
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      kicker={kicker}
+      title="Plan & Aktivität"
+      className="app-drawer--plan"
+      ariaLabel="Plan und Aktivität"
+      initialFocusRef={panelRef}
+      meta={
+        <>
+          {tab === "plan"
+            ? `${openTasks.length} offene Aufgabe${openTasks.length === 1 ? "" : "n"} · ${openTodos.length} offene To-do${openTodos.length === 1 ? "" : "s"}`
+            : canSeeActivity
+              ? data
+                ? `${data.activeDays} aktive Tage · ${data.totalEvents} Events · Peak ${data.peakDate || "—"}`
+                : "Wann du gearbeitet hast — und woran"
+              : "Nur im Grok-Profil sichtbar"}
+          {tab === "plan" ? (
+            <p className="cal-plan-note">
+              Session-Plan = Leiste über dem Composer · hier: Aufgaben &amp; To-dos
             </p>
-            {tab === "plan" ? (
-              <p className="cal-plan-note">
-                Session-Plan = Leiste über dem Composer · hier: Aufgaben &amp; To-dos
-              </p>
-            ) : null}
-          </div>
-          <div className="overview-head-actions">
-            <button type="button" className="ghost" onClick={onClose}>
-              Schließen
-            </button>
-          </div>
-        </header>
-
+          ) : null}
+        </>
+      }
+    >
+      {/* focus landing for Esc/tab trap */}
+      <div ref={panelRef} tabIndex={-1} className="sr-only">
+        Plan und Aktivität
+      </div>
         <div className="cal-tabs cal-panel-sticky cal-panel-sticky--tabs" role="tablist" aria-label="Plan oder Aktivität">
           <button
             type="button"
@@ -1095,9 +1081,7 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
             </div>
           )}
         </div>
-      </section>
-    </div>
+    </SideDrawer>
   );
 }
-
 export { ActivityCalendar };

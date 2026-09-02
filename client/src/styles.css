@@ -35,6 +35,10 @@
   /* P3 shared focus ring — thin gold ~2px */
   --focus-ring: 2px solid color-mix(in srgb, var(--gold, #d4af37) 70%, transparent);
   --focus-ring-offset: 2px;
+  /* P5 side drawer */
+  --drawer-width: 360px;
+  --drawer-motion: 180ms ease;
+  --drawer-z: 55;
 }
 
 :root,
@@ -337,6 +341,16 @@ body,
   /* Chat etwas tiefer als knappes 16px, weniger als Draft 28px (Q17=C) */
   padding: 18px 16px 16px;
   box-sizing: border-box;
+}
+
+/* P5: chat column shrinks when right drawer is open (composer stays usable) */
+.app.app--drawer-open .app-main {
+  margin-right: var(--drawer-width);
+  max-width: min(920px, calc(100% - var(--drawer-width)));
+  transition: margin-right var(--drawer-motion), max-width var(--drawer-motion);
+}
+.app:not(.app--drawer-open) .app-main {
+  transition: margin-right var(--drawer-motion), max-width var(--drawer-motion);
 }
 
 .top {
@@ -4596,6 +4610,174 @@ button.danger {
   color: color-mix(in srgb, var(--danger-bright) 75%, var(--text));
 }
 
+
+/* —— P5 Side drawer (Skills / Plan; Graph stays full-bleed) —— */
+.app-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--drawer-width);
+  max-width: 100%;
+  z-index: var(--drawer-z); /* below side-rail (70); Graph is exclusive full-bleed */
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.28);
+  box-sizing: border-box;
+  padding: 12px 12px 14px;
+  overflow: hidden;
+  transform: translateX(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--drawer-motion),
+    opacity var(--drawer-motion);
+  will-change: transform, opacity;
+}
+.app-drawer.is-open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-drawer,
+  .app.app--drawer-open .app-main,
+  .app:not(.app--drawer-open) .app-main {
+    transition: none;
+  }
+}
+.app-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+.app-drawer-head h2 {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.app-drawer-head-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.app-drawer-meta {
+  margin-top: 6px;
+}
+.app-drawer-meta code {
+  font-size: 0.78rem;
+}
+.app-drawer-head-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.app-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  overflow: hidden;
+}
+.app-drawer-hint {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  padding: 8px 10px;
+}
+.app-drawer--extensions .extensions-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.app-drawer--plan {
+  /* keep --drawer-width; only flex the inner body */
+}
+.app-drawer--plan .app-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.app-drawer--plan .cal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.app-drawer--plan .cal-panel-sticky {
+  background: var(--bg);
+}
+/* Skills rows: main insert + optional „zu“ */
+.extensions-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+}
+.extensions-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 10px 8px 10px 12px;
+  cursor: pointer;
+}
+.extensions-row-zu {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-right: 6px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  opacity: 0.7;
+}
+.extensions-row-zu:hover {
+  opacity: 1;
+}
+.extensions-row.is-selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+.extensions-empty {
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Narrow: sheet nearly full-width from the right */
+@media (max-width: 719px) {
+  :root {
+    --drawer-width: min(100vw - 12px, 100%);
+  }
+  .app.app--drawer-open .app-main {
+    margin-right: 0;
+    max-width: 920px;
+  }
+  .app-drawer {
+    width: min(100vw - 8px, 100%);
+    left: auto;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid var(--border);
+    border-radius: 12px 0 0 12px;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  .app-drawer.is-open {
+    transform: translateX(0);
+  }
+}
+
 /* —— Command Overview (minimal) —— */
 .overview-scrim {
   position: fixed;
@@ -5164,6 +5346,18 @@ button.danger {
   padding: 0;
   flex-shrink: 0;
 }
+.app-drawer--plan .cal-grid-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.app-drawer--plan .cal-legend--compact {
+  font-size: 0.68rem;
+  gap: 6px;
+}
+.app-drawer--plan .cal-detail {
+  max-height: none;
+}
+
 
 .cal-activity-blocked {
   padding: 18px 14px;
@@ -8619,6 +8813,15 @@ button.send.send-eyes-away .graph-pupils {
 }
 
 /* Web-Fläche (glyph-ui.com): one maximized Agent chat, no Admin-Chrome */
+
+.app.app--web.app--drawer-open .app-main {
+  margin-right: var(--drawer-width);
+}
+@media (max-width: 719px) {
+  .app.app--web.app--drawer-open .app-main {
+    margin-right: 0;
+  }
+}
 .app.app--web {
   max-width: none;
 }
