@@ -5,11 +5,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatWhen } from "../utils/format.js";
 import { seatFetch } from "../utils/seat.js";
+import { SideDrawer } from "./SideDrawer.jsx";
 
 function CommandOverview({
   open,
   onClose,
   onOpenSession,
+  side = "right",
+  mode = "overlay",
 }) {
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -224,9 +227,11 @@ function CommandOverview({
         const s = filtered[selectedIndex];
         if (s) startRename(s);
       } else if (e.key === "Escape") {
-        e.preventDefault();
-        if (confirmId) setConfirmId(null);
-        else onClose();
+        if (confirmId) {
+          e.preventDefault();
+          setConfirmId(null);
+        }
+        /* else: SideDrawer closes on Esc */
       }
     },
     [
@@ -242,40 +247,34 @@ function CommandOverview({
     ],
   );
 
-  if (!open) return null;
+  const metaNode = data
+    ? `${data.count} on record · ${data.totalLabel} lokal`
+    : "…";
 
   return (
-    <div className="overview-scrim" role="presentation" onClick={onClose}>
-      <section
-        ref={panelRef}
-        className="overview-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command Overview"
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={onPanelKeyDown}
-      >
-        <header className="overview-head">
-          <div>
-            <p className="overview-kicker">Suche &amp; Sessions</p>
-            <h2>Sessions</h2>
-            <p className="overview-meta">
-              {data
-                ? `${data.count} on record · ${data.totalLabel} lokal`
-                : "…"}
-            </p>
-          </div>
-          <div className="overview-head-actions">
-            <button type="button" onClick={() => void load()} disabled={loading}>
-              {loading ? "…" : "Aktualisieren"}
-            </button>
-            <button type="button" className="ghost" onClick={onClose}>
-              Schließen
-            </button>
-          </div>
-        </header>
-
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      kicker="Suche & Sessions"
+      title="Sessions"
+      meta={metaNode}
+      className="app-drawer--search"
+      ariaLabel="Suche und Sessions"
+      initialFocusRef={searchRef}
+      side={side}
+      mode={mode}
+      headExtra={
+        <button type="button" onClick={() => void load()} disabled={loading}>
+          {loading ? "…" : "Aktualisieren"}
+        </button>
+      }
+    >
+        <div
+          ref={panelRef}
+          className="app-drawer-search-inner"
+          tabIndex={-1}
+          onKeyDown={onPanelKeyDown}
+        >
         <p className="overview-hint">
           <strong>Auswählen:</strong> Klick oder ↑↓ — Markierung (nicht „aktiv“).{" "}
           <strong>Laden:</strong> Enter oder Doppelklick (Verlauf öffnen).{" "}
@@ -491,9 +490,8 @@ function CommandOverview({
             })
           )}
         </div>
-      </section>
-
-    </div>
+        </div>
+    </SideDrawer>
   );
 }
 

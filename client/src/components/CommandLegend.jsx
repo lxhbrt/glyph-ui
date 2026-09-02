@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SideDrawer } from "./SideDrawer.jsx";
 
 const COMMAND_LEGEND = [
   {
@@ -11,7 +12,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "Lupe",
         need: "empfohlen",
-        desc: "Sessions suchen/öffnen; Schließen löscht den Disk-Ordner. Wissen: /merken.",
+        desc: "Suche & Sessions als Seitenpanel (Desk an der Rail / Web Overlay). Schließen löscht den Disk-Ordner. Wissen: /merken.",
       },
       {
         cmd: "Graph",
@@ -26,17 +27,17 @@ const COMMAND_LEGEND = [
       {
         cmd: "Befehle und Skills",
         need: "optional",
-        desc: "Seitenpanel rechts (Chat bleibt). Leisten-Button / ⌘/Ctrl+K / `/` im Composer: Skills + Agent-Commands. Auswahl fügt /name ein — sendet nicht; Panel bleibt offen (Einfügen & zu / Esc schließt). Live-Katalog.",
+        desc: "Seitenpanel an der Rail (Desk links) bzw. Overlay rechts (Web); Chat bleibt in der Breite. Leisten-Button / ⌘/Ctrl+K / `/` im Composer: Skills + Agent-Commands. Auswahl fügt /name ein — sendet nicht; Panel bleibt offen (Einfügen & zu / Esc schließt). Live-Katalog.",
       },
       {
         cmd: "Buch · Handbuch / Legende",
         need: "optional",
-        desc: "Kurzhandbuch und UI-Legende (Doku) ganz unten. Tab Legende = Bedienung erklären; Skills/Agent-Commands ausführen nur unter „Befehle und Skills“.",
+        desc: "Kurzhandbuch und UI-Legende als Seitenpanel (Desk an der Rail / Web Overlay). Tab Legende = Bedienung erklären; Skills/Agent-Commands ausführen nur unter „Befehle und Skills“.",
       },
       {
         cmd: "Glyph · Plan & Aktivität",
         need: "optional",
-        desc: "Kalender-Icon → Seitenpanel rechts (Chat bleibt; Graph = Vollfläche-Ausnahme). Tab Plan = Aufgaben + To-dos (Übernehmen → Composer, Panel darf offen bleiben). Tab Aktivität = Heatmap (Grok). ACP-Session-Plan = Leiste über dem Composer.",
+        desc: "Kalender-Icon → Seitenpanel (Desk links an der Rail / Web Overlay rechts; Chat bleibt; Graph = Vollfläche-Ausnahme). Tab Plan = Aufgaben + To-dos (Übernehmen → Composer, Panel darf offen bleiben). Tab Aktivität = Heatmap (Grok). ACP-Session-Plan = Leiste über dem Composer.",
       },
       {
         cmd: "Wiki (i)",
@@ -71,7 +72,7 @@ const COMMAND_LEGEND = [
       {
         cmd: "/ · Skills-Seitenpanel",
         need: "empfohlen",
-        desc: "Öffnet dasselbe Skills-Seitenpanel wie der Leisten-Button (kein separates Popup). Filter, Einfügen, Esc.",
+        desc: "Öffnet dasselbe Skills-Seitenpanel wie der Leisten-Button (Desk links / Web rechts Overlay). Filter, Einfügen, Esc.",
       },
       {
         cmd: "Warteschlange",
@@ -458,19 +459,20 @@ function CommandLegend({
   agentCommands = [],
   agentProfileId = "",
   onOpenLage,
+  side = "right",
+  mode = "overlay",
 }) {
   void agentProfileId;
   void onOpenLage;
   void agentCommands;
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState(() => normalizeHelpTab(initialTab));
-  const panelRef = useRef(null);
+  const searchRef = useRef(null);
 
   useEffect(() => {
     if (open) {
       setQuery("");
       setTab(normalizeHelpTab(initialTab));
-      requestAnimationFrame(() => panelRef.current?.focus());
     }
   }, [open, initialTab]);
 
@@ -512,41 +514,18 @@ function CommandLegend({
     });
   }, [query]);
 
-  if (!open) return null;
-
   return (
-    <div className="overview-scrim" role="presentation" onClick={onClose}>
-      <section
-        ref={panelRef}
-        className={`overview-panel legend-panel handbook-panel${
-          tab === "vaults" || tab === "workspaces" || tab === "bindings"
-            ? " handbook-panel--wide"
-            : ""
-        }`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Hilfe und Kurzhandbuch"
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            onClose();
-          }
-        }}
-      >
-        <header className="overview-head">
-          <div>
-            <p className="overview-kicker">In der App</p>
-            <h2>Buch</h2>
-          </div>
-          <div className="overview-head-actions">
-            <button type="button" className="ghost" onClick={onClose}>
-              Schließen
-            </button>
-          </div>
-        </header>
-
+    <SideDrawer
+      open={open}
+      onClose={onClose}
+      kicker="In der App"
+      title="Buch"
+      className="app-drawer--book"
+      ariaLabel="Hilfe und Kurzhandbuch"
+      initialFocusRef={searchRef}
+      side={side}
+      mode={mode}
+    >
         <div className="help-tabs" role="tablist" aria-label="Hilfe-Bereich">
           <button
             type="button"
@@ -589,6 +568,7 @@ function CommandLegend({
         )}
 
         <input
+          ref={searchRef}
           className="overview-search"
           type="search"
           placeholder={
@@ -598,7 +578,7 @@ function CommandLegend({
           }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          autoFocus
+          aria-label="Buch filtern"
         />
 
         {tab === "handbook" ? (
@@ -666,8 +646,7 @@ function CommandLegend({
             )}
           </div>
         )}
-      </section>
-    </div>
+    </SideDrawer>
   );
 }
 

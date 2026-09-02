@@ -35,8 +35,9 @@
   /* P3 shared focus ring — thin gold ~2px */
   --focus-ring: 2px solid color-mix(in srgb, var(--gold, #d4af37) 70%, transparent);
   --focus-ring-offset: 2px;
-  /* P5 side drawer */
-  --drawer-width: 360px;
+  /* P6 side drawer — width by viewport; rail stays 48px */
+  --rail-width: 48px;
+  --drawer-width: clamp(320px, 28vw, 400px);
   --drawer-motion: 180ms ease;
   --drawer-z: 55;
 }
@@ -201,7 +202,7 @@ body,
   flex-direction: column;
   gap: 6px;
   align-items: center;
-  width: 48px;
+  width: var(--rail-width, 48px);
   height: 100%;
   min-height: 0;
   padding: 12px 0 12px 0;
@@ -343,14 +344,10 @@ body,
   box-sizing: border-box;
 }
 
-/* P5: chat column shrinks when right drawer is open (composer stays usable) */
-.app.app--drawer-open .app-main {
-  margin-right: var(--drawer-width);
-  max-width: min(920px, calc(100% - var(--drawer-width)));
-  transition: margin-right var(--drawer-motion), max-width var(--drawer-motion);
-}
-.app:not(.app--drawer-open) .app-main {
-  transition: margin-right var(--drawer-motion), max-width var(--drawer-motion);
+/* P6: overlay drawers — chat max-width/centering unchanged (no squash) */
+.app.app--drawer-open.app--drawer-push .app-main {
+  /* push reserved for rare cases; default is overlay (zero reflow) */
+  transition: margin var(--drawer-motion);
 }
 
 .top {
@@ -4611,31 +4608,45 @@ button.danger {
 }
 
 
-/* —— P5 Side drawer (Skills / Plan; Graph stays full-bleed) —— */
+/* —— P6 Side drawer (Skills / Plan / Buch / Suche; Graph = full-bleed) —— */
 .app-drawer {
   position: fixed;
   top: 0;
-  right: 0;
   bottom: 0;
   width: var(--drawer-width);
   max-width: 100%;
-  z-index: var(--drawer-z); /* below side-rail (70); Graph is exclusive full-bleed */
+  z-index: var(--drawer-z); /* below side-rail (70); Graph exclusive full-bleed */
   display: flex;
   flex-direction: column;
   gap: 0;
   background: var(--bg);
-  border-left: 1px solid var(--border);
-  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.28);
   box-sizing: border-box;
   padding: 12px 12px 14px;
   overflow: hidden;
-  transform: translateX(10px);
   opacity: 0;
   pointer-events: none;
   transition:
     transform var(--drawer-motion),
     opacity var(--drawer-motion);
   will-change: transform, opacity;
+}
+/* Desk: dock/overlay immediately right of the 48px rail — slide from left */
+.app-drawer--side-left {
+  left: var(--rail-width, 48px);
+  right: auto;
+  border-right: 1px solid var(--border);
+  border-left: none;
+  box-shadow: 12px 0 40px rgba(0, 0, 0, 0.28);
+  transform: translateX(-12px);
+}
+/* Web: overlay on the right — no .app-main width reflow */
+.app-drawer--side-right {
+  right: 0;
+  left: auto;
+  border-left: 1px solid var(--border);
+  border-right: none;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.28);
+  transform: translateX(12px);
 }
 .app-drawer.is-open {
   transform: translateX(0);
@@ -4647,6 +4658,11 @@ button.danger {
   .app.app--drawer-open .app-main,
   .app:not(.app--drawer-open) .app-main {
     transition: none;
+  }
+}
+@media (min-width: 1400px) {
+  :root {
+    --drawer-width: clamp(360px, 24vw, 420px);
   }
 }
 .app-drawer-head {
@@ -4712,6 +4728,39 @@ button.danger {
 .app-drawer--plan .cal-panel-sticky {
   background: var(--bg);
 }
+
+.app-drawer--book .app-drawer-body,
+.app-drawer--search .app-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.app-drawer--book .overview-list,
+.app-drawer--search .overview-list,
+.app-drawer--book .handbook-list,
+.app-drawer--book .legend-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.app-drawer--book .help-tabs {
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+.app-drawer--book .overview-hint,
+.app-drawer--search .overview-hint {
+  flex: 0 0 auto;
+}
+
+.app-drawer-search-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  outline: none;
+}
+
 /* Skills rows: main insert + optional „zu“ */
 .extensions-row {
   display: flex;
@@ -4754,22 +4803,22 @@ button.danger {
   gap: 8px;
 }
 
-/* Narrow: sheet nearly full-width from the right */
+/* Narrow: sheet almost full width; desk keeps rail visible */
 @media (max-width: 719px) {
   :root {
     --drawer-width: min(100vw - 12px, 100%);
   }
-  .app.app--drawer-open .app-main {
-    margin-right: 0;
-    max-width: 920px;
+  .app-drawer--side-left {
+    left: var(--rail-width, 48px);
+    width: calc(100vw - var(--rail-width, 48px) - 8px);
+    max-width: none;
+    border-radius: 0 12px 12px 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
-  .app-drawer {
-    width: min(100vw - 8px, 100%);
+  .app-drawer--side-right {
     left: auto;
     right: 0;
-    top: 0;
-    bottom: 0;
-    border-left: 1px solid var(--border);
+    width: min(100vw - 8px, 100%);
     border-radius: 12px 0 0 12px;
     padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
@@ -8813,14 +8862,10 @@ button.send.send-eyes-away .graph-pupils {
 }
 
 /* Web-Fläche (glyph-ui.com): one maximized Agent chat, no Admin-Chrome */
-
+/* P6: web drawer is always overlay-right — never reflow .app-main */
 .app.app--web.app--drawer-open .app-main {
-  margin-right: var(--drawer-width);
-}
-@media (max-width: 719px) {
-  .app.app--web.app--drawer-open .app-main {
-    margin-right: 0;
-  }
+  margin-right: 0;
+  max-width: min(44rem, 100%);
 }
 .app.app--web {
   max-width: none;

@@ -1,5 +1,6 @@
 /**
- * Shared right side drawer — Skills / Plan stay beside chat (Graph stays full-bleed).
+ * Shared side drawer — Skills / Plan / Buch / Suche.
+ * Desk: left beside rail (overlay). Web: right overlay (no chat squash).
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
@@ -18,7 +19,8 @@ import { handleDialogTab } from "../utils/focusTrap.js";
  * @param {string} [props.className]  extra class on panel (e.g. extensions / cal)
  * @param {string} [props.ariaLabel]
  * @param {import("react").RefObject<HTMLElement | null>} [props.initialFocusRef]
- * @param {boolean} [props.mounted]  keep children mounted while exit anim plays
+ * @param {"left"|"right"} [props.side="right"]
+ * @param {"push"|"overlay"} [props.mode="overlay"]
  */
 function SideDrawer({
   open,
@@ -31,11 +33,15 @@ function SideDrawer({
   className = "",
   ariaLabel,
   initialFocusRef,
+  side = "right",
+  mode = "overlay",
 }) {
   const panelRef = useRef(null);
   const titleId = useId();
   const [present, setPresent] = useState(open);
   const [entered, setEntered] = useState(false);
+  const sideNorm = side === "left" ? "left" : "right";
+  const modeNorm = mode === "push" ? "push" : "overlay";
 
   useEffect(() => {
     if (open) {
@@ -105,17 +111,21 @@ function SideDrawer({
   if (!present) return null;
 
   const label = ariaLabel || title;
+  const sideClass = `app-drawer--side-${sideNorm}`;
+  const modeClass = `app-drawer--mode-${modeNorm}`;
 
   return (
     <aside
       ref={panelRef}
-      className={`app-drawer${entered && open ? " is-open" : ""}${className ? ` ${className}` : ""}`}
+      className={`app-drawer ${sideClass} ${modeClass}${entered && open ? " is-open" : ""}${className ? ` ${className}` : ""}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
       aria-label={label}
       tabIndex={-1}
       data-drawer-open={open ? "true" : "false"}
+      data-drawer-side={sideNorm}
+      data-drawer-mode={modeNorm}
     >
       <header className="app-drawer-head">
         <div className="app-drawer-head-text">
