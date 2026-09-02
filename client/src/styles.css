@@ -4639,7 +4639,7 @@ button.danger {
   box-shadow: 12px 0 40px rgba(0, 0, 0, 0.28);
   transform: translateX(-12px);
 }
-/* Web: overlay on the right — no .app-main width reflow */
+/* Web: overlay on the right; .app--web.app--drawer-open shifts .app-main into left gutter */
 .app-drawer--side-right {
   right: 0;
   left: auto;
@@ -8862,10 +8862,23 @@ button.send.send-eyes-away .graph-pupils {
 }
 
 /* Web-Fläche (glyph-ui.com): one maximized Agent chat, no Admin-Chrome */
-/* P6: web drawer is always overlay-right — never reflow .app-main */
+/* P6: web drawer stays overlay-right; shift/center chat in remaining width so
+   empty + composer + top-actions are not under the drawer (max-width stays). */
 .app.app--web.app--drawer-open .app-main {
-  margin-right: 0;
-  max-width: min(44rem, 100%);
+  width: 100%;
+  max-width: min(44rem, calc(100% - var(--drawer-width)));
+  margin-left: auto;
+  margin-right: var(--drawer-width);
+  box-sizing: border-box;
+  transition: margin var(--drawer-motion), max-width var(--drawer-motion);
+}
+/* Narrow: sheet almost full width — leave chat under sheet (no tiny gutter). */
+@media (max-width: 719px) {
+  .app.app--web.app--drawer-open .app-main {
+    max-width: min(44rem, 100%);
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 .app.app--web {
   max-width: none;
@@ -8876,6 +8889,7 @@ button.send.send-eyes-away .graph-pupils {
   margin: 0 auto;
   padding: 10px 16px 12px;
   gap: 8px;
+  transition: margin var(--drawer-motion), max-width var(--drawer-motion);
 }
 
 .app--web .top {

@@ -1,6 +1,6 @@
 /**
  * Shared side drawer — Skills / Plan / Buch / Suche.
- * Desk: left beside rail (overlay). Web: right overlay (no chat squash).
+ * Desk: left beside rail (overlay). Web: right overlay; chat recenters in remaining width.
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
