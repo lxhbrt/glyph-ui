@@ -669,8 +669,8 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
       }`}
       title={
         stuffed
-          ? "Überfressen (X_X + Zunge) — Äpfel auf den Kopf · tippen = Stopp"
-          : "Roter Punkt = Stopp (klicken)"
+          ? "Glyph got lost… in space — tippen = Stopp · dann neu"
+          : "Stopp — roter Punkt / Klick bricht ab"
       }
     />
   );

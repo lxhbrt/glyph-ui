@@ -3335,7 +3335,7 @@ export default function App() {
       return undefined;
     }
     if (!snackAlive) return undefined;
-    const t = setTimeout(() => setSnackAlive(false), 520);
+    const t = setTimeout(() => setSnackAlive(false), 780);
     return () => clearTimeout(t);
   }, [showWorking, snackAlive]);
 
@@ -4656,7 +4656,7 @@ export default function App() {
                 disabled={sttBusy}
                 onClick={toggleRecording}
               >
-                <IconMic size={18} />
+                <IconMic size={15} />
               </button>
               <div className="composer-send-stack">
               {appleSpit ? (
@@ -4707,25 +4707,25 @@ export default function App() {
                       ? input.trim() || pendingAttachments.length
                         ? seat === "phone"
                           ? "In Warteschlange"
-                          : "In Warteschlange (Enter)"
+                          : "In Warteschlange (↵ Enter)"
                         : cancelling
                           ? "Bricht ab…"
-                          : "Stopp: Snack / leerer Klick — Abbrechen"
+                          : "Stopp — leerer Snack / Klick bricht ab"
                       : sendAction === "deep-search"
                         ? seat === "phone"
                           ? "Deep Search starten"
-                          : "Deep Search starten (Enter)"
+                          : "Deep Search starten (↵ Enter)"
                         : sendAction === "swarm"
                           ? seat === "phone"
                             ? "Swarm starten"
-                            : "Swarm starten (Enter)"
+                            : "Swarm starten (↵ Enter)"
                           : sendAction === "fork"
                             ? seat === "phone"
                               ? "Session forken"
-                              : "Session forken (Enter)"
+                              : "Session forken (↵ Enter)"
                             : seat === "phone"
                               ? "Senden"
-                              : "Senden (Enter)"
+                              : "Senden (↵ Enter)"
                 }
                 aria-label={
                   showStuffed
