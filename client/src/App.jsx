@@ -347,7 +347,6 @@ export default function App() {
   const [wikiRoot, setWikiRoot] = useState("");
   /** Bridge meta from /api/health (version, build, host, port, root). */
   const [bridgeMeta, setBridgeMeta] = useState(null);
-  const [showOverview, setShowOverview] = useState(false);
   const [showLage, setShowLage] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -371,15 +370,6 @@ export default function App() {
       return "";
     }
   });
-  const [showLegend, setShowLegend] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const b = new URLSearchParams(window.location.search).get("buch");
-      return Boolean(b) && b !== "lage" && b !== "graph";
-    } catch {
-      return false;
-    }
-  });
   const [legendTab, setLegendTab] = useState(() => {
     if (typeof window === "undefined") return "handbook";
     try {
@@ -398,10 +388,29 @@ export default function App() {
     }
     return "handbook";
   });
-  /** P5: right drawer — null | "skills" | "plan" (XOR; Graph closes drawer). */
-  const [drawer, setDrawer] = useState(null);
+  /** P6: content drawer — null | skills | plan | book | search (XOR; Graph closes). */
+  const [drawer, setDrawer] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const q = new URLSearchParams(window.location.search);
+      if (q.has("plan") || q.has("cal")) return "plan";
+      const b = q.get("buch");
+      if (b && b !== "lage" && b !== "graph") return "book";
+      if (q.has("sessions") || q.has("suche") || q.has("search")) return "search";
+    } catch {
+      /* ignore */
+    }
+    return null;
+  });
   const openDrawer = useCallback((kind, opts = {}) => {
-    if (kind !== "skills" && kind !== "plan") return;
+    if (
+      kind !== "skills" &&
+      kind !== "plan" &&
+      kind !== "book" &&
+      kind !== "search"
+    ) {
+      return;
+    }
     setShowLage(false);
     setSlashOpen(false);
     if (kind === "skills") {
@@ -409,11 +418,19 @@ export default function App() {
         opts.query != null ? String(opts.query) : "",
       );
     }
+    if (kind === "book" && opts.tab) {
+      setLegendTab(opts.tab);
+    }
     setDrawer(kind);
   }, []);
   const closeDrawer = useCallback(() => setDrawer(null), []);
   const showExtensions = drawer === "skills";
   const showCalendar = drawer === "plan";
+  const showBook = drawer === "book";
+  const showSearch = drawer === "search";
+  /** Desk: left beside rail; Web: forced overlay-right (no chat squash). */
+  const drawerSide = webSurface ? "right" : "left";
+  const drawerMode = "overlay";
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   useEffect(() => {
     if (!headerMenuOpen) return undefined;
@@ -444,17 +461,6 @@ export default function App() {
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
   const composerRef = useRef(null);
-  // Deep-link ?plan / ?cal → open Plan drawer once on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const q = new URLSearchParams(window.location.search);
-      if (q.has("plan") || q.has("cal")) openDrawer("plan");
-    } catch {
-      /* ignore */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
-  }, []);
   const [cancelling, setCancelling] = useState(false);
   /**
    * Hang signal: busy but no thought/answer/tool chunks for a while.
@@ -2695,8 +2701,8 @@ export default function App() {
   // Same for panels that are open when the agent changes under them.
   // Kalender-Panel bleibt offen (Tab Plan gilt für alle Profile; Aktivität ggf. deaktiviert).
   useEffect(() => {
-    if (!canBrowseSessions) setShowOverview(false);
-  }, [canBrowseSessions]);
+    if (!canBrowseSessions && drawer === "search") setDrawer(null);
+  }, [canBrowseSessions, drawer]);
 
   // Working UI: server busy OR any in-flight stream (thought / answer / tools)
   const isWorking = useMemo(
@@ -3421,7 +3427,10 @@ export default function App() {
   }
 
   return (
-    <div className={`app${webSurface ? " app--web" : ""}${drawer ? " app--drawer-open" : ""}`}>
+    <div
+      className={`app${webSurface ? " app--web" : ""}${drawer ? " app--drawer-open" : ""}${drawer ? ` app--drawer-${drawerSide}` : ""}`}
+      data-drawer={drawer || ""}
+    >
       {webSurface ? null : (
       <aside
         className="side-rail"
@@ -3440,7 +3449,9 @@ export default function App() {
         <button
           type="button"
           className="side-rail-btn"
-          onClick={() => setShowOverview(true)}
+          onClick={() =>
+            showSearch ? closeDrawer() : openDrawer("search")
+          }
           disabled={!canBrowseSessions}
           title={
             canBrowseSessions
@@ -3448,6 +3459,7 @@ export default function App() {
               : unavailableFor("Die Sessions-Übersicht")
           }
           aria-label="Suche und Sessions"
+          aria-pressed={showSearch}
         >
           <IconSearch />
         </button>
@@ -3536,12 +3548,14 @@ export default function App() {
         <button
           type="button"
           className="side-rail-btn side-rail-btn--book"
-          onClick={() => {
-            setLegendTab("handbook");
-            setShowLegend(true);
-          }}
+          onClick={() =>
+            showBook
+              ? closeDrawer()
+              : openDrawer("book", { tab: "handbook" })
+          }
           title="Kurzhandbuch · UI-Legende"
           aria-label="Kurzhandbuch öffnen"
+          aria-pressed={showBook}
         >
           <IconBook />
         </button>
@@ -4832,16 +4846,17 @@ export default function App() {
           />
         </Suspense>
       ) : null}
-      {showLegend ? (
-        <Suspense fallback={<div className="overview-scrim" aria-busy="true" />}>
+      {showBook ? (
+        <Suspense fallback={null}>
           <CommandLegend
-            open={showLegend}
-            onClose={() => setShowLegend(false)}
+            open={showBook}
+            onClose={closeDrawer}
             initialTab={legendTab}
             agentCommands={agentCommands}
             agentProfileId={agent?.id || ""}
+            side={drawerSide}
+            mode={drawerMode}
             onOpenLage={(which) => {
-              setShowLegend(false);
               setDrawer(null);
               setLageFocus(which || "");
               setShowLage(true);
@@ -4852,6 +4867,8 @@ export default function App() {
       <ExtensionsModal
         open={showExtensions}
         onClose={closeDrawer}
+        side={drawerSide}
+        mode={drawerMode}
         skills={skills}
         agentCommands={agentCommands}
         profileLabel={agentLabel}
@@ -4894,9 +4911,11 @@ export default function App() {
         }}
       />
       <CommandOverview
-        open={showOverview}
-        onClose={() => setShowOverview(false)}
+        open={showSearch}
+        onClose={closeDrawer}
         onOpenSession={handleOpenSession}
+        side={drawerSide}
+        mode={drawerMode}
       />
       {showCalendar ? (
         <Suspense fallback={null}>
@@ -4904,6 +4923,8 @@ export default function App() {
             open={showCalendar}
             onClose={closeDrawer}
             onOpenSession={handleOpenSession}
+            side={drawerSide}
+            mode={drawerMode}
             onUseTask={(prompt) => {
               setInput(prompt);
               composerRef.current?.focus();

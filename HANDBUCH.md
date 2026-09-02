@@ -43,7 +43,7 @@ Für Power-User mit lokalem Zugriff auf eigene Dateien (z. B. Mac Mini). Kein 
 
 In der App: **Buch** → Tabs **Handbuch** · **Befehle** · **Anbindung** (kein extra Leisten-Icon).
 
-**Seitenpanel (rechts):** Befehle & Skills sowie Plan & Aktivität — Chat bleibt sichtbar. **Graph** = Vollfläche (Ausnahme). `/` im Composer öffnet dasselbe Skills-Panel.
+**Seitenpanel:** Befehle & Skills, Plan & Aktivität, Buch, Suche & Sessions — Desk links an der Rail, Web Overlay rechts; Chat-Breite bleibt. **Graph** = Vollfläche (Ausnahme). `/` im Composer öffnet dasselbe Skills-Panel. Nur ein Inhalts-Panel zugleich.
 
 ### Brauchst du
 
@@ -187,8 +187,8 @@ CSS-Tokens u. a. in `client/src/styles.css` (`--bg`, `--user`, `--assistant`, Sn
 | **Graph** | Graph | Köpfe um Glyph; Vaults/Roots als Punkte. Direkt unter der Lupe |
 | **Stift** | Neuer Chat | Frische ACP-Session, leerer Verlauf (TUI `/new` — Disk bleibt) |
 | **Befehle** | Legende | Filterbare Befehls-Legende (Slash, Composer, Leiste) |
-| **Buch** (unten) | Handbuch | Tabs: Kurzhandbuch · Befehle · **Anbindung** (Keys/OAuth-Status) |
-| **4 Kästchen** | Kalender | **Seitenpanel** Plan/Aktivität (Chat bleibt) · Graph = Vollfläche-Ausnahme |
+| **Buch** (unten) | Handbuch | Seitenpanel: Kurzhandbuch · Legende (Desk an der Rail / Web Overlay) |
+| **4 Kästchen** | Kalender | **Seitenpanel** Plan/Aktivität (Desk Rail / Web Overlay; Chat steht) · Graph = Vollfläche |
 | **Wiki (i)** | Wiki | Öffnet den Wiki-Index (`.md`) in Obsidian / Standard-App |
 | **Workspace** | Ordner | Öffnet den aktuellen Arbeitsordner (`cwd`) im Finder |
 | **Theme** | Hell/Dunkel | Darstellung umschalten |
@@ -367,7 +367,7 @@ Schließen löscht den Ordner unter `~/.grok/sessions`. Ins Wiki schreibt das ni
 
 ## 8. Aktivitäts-Kalender
 
-Symbol: **4 Kästchen** in der linken Leiste. Öffnet ein **Seitenpanel rechts** (Chat bleibt sichtbar; Composer nutzbar). Esc / Schließen. Zwei Tabs: **Plan** und **Aktivität**.
+Symbol: **4 Kästchen** in der linken Leiste. Öffnet ein **Seitenpanel** (Desk an der Rail links / Web Overlay rechts; Chat bleibt sichtbar; Composer nutzbar). Esc / Schließen. Zwei Tabs: **Plan** und **Aktivität**.
 
 **Ausnahme:** Der **Graph** bleibt Vollfläche (nicht Seitenpanel) — öffnet den Graph, schließt jedes Seitenpanel.
 

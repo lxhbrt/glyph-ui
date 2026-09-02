@@ -31,6 +31,8 @@ function badgeMeta(item) {
  * @param {string} [props.error]
  * @param {(item: { name: string, kind: string }, opts?: { close?: boolean }) => void} props.onPick
  * @param {string} [props.initialQuery]  seed filter (e.g. from composer `/query`)
+ * @param {"left"|"right"} [props.side]
+ * @param {"push"|"overlay"} [props.mode]
  */
 function ExtensionsModal({
   open,
@@ -43,6 +45,8 @@ function ExtensionsModal({
   error = "",
   onPick,
   initialQuery = "",
+  side = "right",
+  mode = "overlay",
 }) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -123,6 +127,8 @@ function ExtensionsModal({
       className="app-drawer--extensions"
       ariaLabel="Erweiterungen und Befehle"
       initialFocusRef={searchRef}
+      side={side}
+      mode={mode}
       meta={
         <>
           {profileLabel ? `Profil: ${profileLabel} · ` : ""}
@@ -145,7 +151,7 @@ function ExtensionsModal({
       <p className="overview-hint app-drawer-hint">
         Filtern · <kbd>↑</kbd>/<kbd>↓</kbd> + <kbd>Enter</kbd> fügt ein (bleibt
         offen) · <kbd>Esc</kbd> / Schließen · <kbd>/</kbd> im Composer öffnet
-        dasselbe Panel. UI-Bedienung: <strong>Buch → Legende</strong>.
+        dasselbe Panel. UI-Bedienung: <strong>Buch → Legende</strong> (Seitenpanel).
       </p>
 
       <div className="extensions-search-row">

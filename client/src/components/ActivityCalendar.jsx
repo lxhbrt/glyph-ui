@@ -160,7 +160,7 @@ function MoreMenu({ id, label = "Weitere Aktionen", disabled, items }) {
  *   canSeeActivity?: boolean,
  * }} props
  */
-function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActivity = true }) {
+function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActivity = true, side = "right", mode = "overlay" }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
@@ -435,6 +435,8 @@ function ActivityCalendar({ open, onClose, onOpenSession, onUseTask, canSeeActiv
       onClose={onClose}
       kicker={kicker}
       title="Plan & Aktivität"
+      side={side}
+      mode={mode}
       className="app-drawer--plan"
       ariaLabel="Plan und Aktivität"
       initialFocusRef={panelRef}
