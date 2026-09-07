@@ -228,6 +228,25 @@ export function formatTokenCount(n) {
 }
 
 /**
+ * On-bar LVL label (Option A): `LVL N · [~]P%`.
+ * Level digit = floor(pct/10) clamped 0..10. `~` when estimated and pct > 0.
+ * Empty → `LVL 0 · 0%` (no tilde even if estimated).
+ *
+ * @param {number} pct fill percent 0..100 (typically already rounded)
+ * @param {boolean} [estimated=false]
+ * @returns {string}
+ */
+export function formatLvlBarLabel(pct, estimated = false) {
+  const raw = Number(pct);
+  const p = Number.isFinite(raw) ? Math.round(raw) : 0;
+  const clampedPct = Math.min(100, Math.max(0, p));
+  const level = Math.min(10, Math.max(0, Math.floor(clampedPct / 10)));
+  // Empty/0% is exact — no tilde even when estimated (agent chat with no tokens yet).
+  const approx = estimated && clampedPct > 0 ? "~" : "";
+  return `LVL ${level} · ${approx}${clampedPct}%`;
+}
+
+/**
  * Hover / title line for the LVL bar.
  * @param {{
  *   used: number,

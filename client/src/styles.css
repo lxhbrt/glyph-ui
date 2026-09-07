@@ -104,6 +104,14 @@
   /* Shared stone size (matches Enter SnackBoard cell 10 / gap 0.14 → 8px) */
   --snack-pixel: 8px;
   --snack-pixel-gap: 2px;
+
+  /* LVL bar track / stones / meta — readable on dark */
+  --lvl-track: rgba(128, 128, 128, 0.22);
+  --lvl-gray: rgba(150, 150, 160, 0.58);
+  --lvl-gray-edge: rgba(190, 190, 200, 0.78);
+  --lvl-soft-cap: rgba(232, 200, 106, 0.85);
+  --lvl-meta: color-mix(in srgb, var(--text) 92%, var(--muted));
+  --lvl-meta-bg: color-mix(in srgb, var(--bg) 78%, transparent);
 }
 
 :root[data-theme="light"] {
@@ -155,6 +163,14 @@
   --snack-tongue: #e85a7a;
   --snack-tongue-tip: #ff8aa0;
   --snack-leaf: #5a9e4a;
+
+  /* LVL bar — stronger contrast on light surfaces */
+  --lvl-track: rgba(70, 62, 48, 0.18);
+  --lvl-gray: rgba(85, 78, 68, 0.58);
+  --lvl-gray-edge: rgba(55, 48, 40, 0.78);
+  --lvl-soft-cap: color-mix(in srgb, var(--gold-deep) 80%, transparent);
+  --lvl-meta: var(--text);
+  --lvl-meta-bg: color-mix(in srgb, var(--panel) 88%, transparent);
 }
 
 * {
@@ -1785,23 +1801,24 @@ button.send.send--stuffed .send-snack {
   position: relative;
 }
 
-/* Overlay: LVL left, % right — same vertical band as the pixel track */
+/* Overlay Option A: single label at fill from LEFT (not LVL-left + %-right) */
 .context-lvl-bar-meta {
   position: absolute;
-  inset: 0 8px;
+  inset: 0 6px;
   z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 0;
   pointer-events: none;
   font-size: 0.58rem;
   font-weight: 650;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--lvl-meta, var(--muted));
 }
 
 .context-lvl-bar-tag {
+  /* legacy — unused after Option A single-label; keep for mobile overrides */
   flex: 0 0 auto;
   padding: 1px 5px 0;
   border-radius: 4px;
@@ -1810,21 +1827,25 @@ button.send.send--stuffed .send-snack {
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.14em;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  background: var(--lvl-meta-bg, color-mix(in srgb, var(--bg) 72%, transparent));
   text-shadow: 0 0 6px color-mix(in srgb, var(--bg) 80%, transparent);
 }
 
 .context-lvl-bar-label {
   flex: 0 0 auto;
+  /* Follow gray-front from left; clamp near end so text stays in bar */
+  margin-left: min(calc(var(--lvl-fill, 0) * 1%), calc(100% - 5.5rem));
   padding: 1px 6px 0;
   border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.66rem;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--text) 90%, var(--muted));
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  color: var(--lvl-meta, color-mix(in srgb, var(--text) 92%, var(--muted)));
+  background: var(--lvl-meta-bg, color-mix(in srgb, var(--bg) 72%, transparent));
   text-shadow: 0 0 6px color-mix(in srgb, var(--bg) 80%, transparent);
+  white-space: nowrap;
 }
 
 .context-lvl-bar-canvas {

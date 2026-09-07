@@ -10,6 +10,7 @@ export {
   contextFillRatio,
   estimateTokensFromTexts,
   formatContextTooltip,
+  formatLvlBarLabel,
   formatTokenCount,
   goldFillRatio,
   isModelCompatibleWithProfile,

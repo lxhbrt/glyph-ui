@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useRef, useState } from "react";
-import { formatContextTooltip } from "../utils/contextMeter.js";
+import { formatContextTooltip, formatLvlBarLabel } from "../utils/contextMeter.js";
 
 const CELL = 10;
 const GAP = 1;
@@ -83,12 +83,12 @@ export function ContextLvlBar({
   });
 
   const pct = Math.round(Math.min(1, Math.max(0, contextFill)) * 100);
-  /* Compact on-bar value; LVL tag stays separate. Hover gets a short German hint. */
-  const label = `${estimated ? "~" : ""}${pct}%`;
+  /* Option A: single fill-aligned label `LVL N · [~]P%` (not LVL-left + %-right). */
+  const label = formatLvlBarLabel(pct, estimated);
   const shortHint =
     pct <= 0
-      ? "LVL — Kontext noch leer. Tippen für Legende."
-      : `LVL ${estimated ? "~" : ""}${pct}% Kontext belegt. Tippen für Legende.`;
+      ? `${label} — Kontext noch leer. Tippen für Legende.`
+      : `${label} Kontext belegt. Tippen für Legende.`;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -174,12 +174,14 @@ export function ContextLvlBar({
       }
 
       // Soft-cap tick
-      const softX = Math.min(
-        trackPx - 1,
-        Math.max(0, Math.round(cols * Math.min(1, Math.max(0, softCapRatio))) * CELL),
-      );
-      ctx.fillStyle = palette.soft;
-      ctx.fillRect(softX, padY - 2, 2, STONE + 4);
+      if (Math.round(displayContextFill * 100) > 0) {
+        const softX = Math.min(
+          trackPx - 1,
+          Math.max(0, Math.round(cols * Math.min(1, Math.max(0, softCapRatio))) * CELL),
+        );
+        ctx.fillStyle = palette.soft;
+        ctx.fillRect(softX, padY - 2, 2, STONE + 4);
+      }
     };
 
     const targetFill = Math.min(1, Math.max(0, contextFill));
@@ -262,8 +264,11 @@ export function ContextLvlBar({
     >
       <div className="context-lvl-bar-track">
         <canvas ref={canvasRef} className="context-lvl-bar-canvas" />
-        <div className="context-lvl-bar-meta" aria-hidden="true">
-          <span className="context-lvl-bar-tag">LVL</span>
+        <div
+          className="context-lvl-bar-meta"
+          aria-hidden="true"
+          style={{ "--lvl-fill": String(pct) }}
+        >
           <span className="context-lvl-bar-label">{label}</span>
         </div>
       </div>
