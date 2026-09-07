@@ -127,6 +127,7 @@ import {
   toWireSelected,
   vaultFindHttpError,
   vaultSendIntent,
+  hubSearchScopeLabel,
 } from "./utils/vaultSearch.js";
 import { LageFallback } from "./components/LageFallback.jsx";
 import { pickRecorderMime, textForSpeech, speakWithBrowser } from "./utils/voice.js";
@@ -334,6 +335,7 @@ export default function App() {
   const runVaultSearchRef = useRef(null);
   const vaultSearchAbortRef = useRef(null);
   const vaultLastPickedRef = useRef([]);
+  const vaultLastPickedQueryRef = useRef("");
   const isAgentProfile =
     agent?.id === "glyph-agent" || agent?.id === "agent";
   const isGrokProfile = agent?.id === "grok" || !agent?.id;
@@ -1964,6 +1966,7 @@ export default function App() {
     setVaultHitOn(new Set());
     setVaultSearchError("");
     vaultLastPickedRef.current = [];
+    vaultLastPickedQueryRef.current = "";
   }, []);
 
   const runVaultSearch = useCallback(async (query) => {
@@ -2110,6 +2113,7 @@ export default function App() {
         hitsStatus: vaultHits?.status,
         error: vaultSearchError,
         lastPickedCount: vaultLastPickedRef.current.length,
+        lastPickedQuery: vaultLastPickedQueryRef.current,
       });
       if (intent === "abort") {
         abortVaultSearch();
@@ -2117,11 +2121,15 @@ export default function App() {
       }
       if (intent === "abort-then-search") {
         abortVaultSearch();
+        vaultLastPickedRef.current = [];
+        vaultLastPickedQueryRef.current = "";
         setInput("");
         void runVaultSearch(text);
         return;
       }
       if (intent === "search") {
+        vaultLastPickedRef.current = [];
+        vaultLastPickedQueryRef.current = "";
         setInput("");
         void runVaultSearch(text);
         return;
@@ -2134,6 +2142,7 @@ export default function App() {
       : [];
     if (livePicked.length > 0) {
       vaultLastPickedRef.current = livePicked;
+      vaultLastPickedQueryRef.current = text;
     }
     const picked =
       livePicked.length > 0 ? livePicked : wantsVault ? vaultLastPickedRef.current : [];
@@ -2233,7 +2242,7 @@ export default function App() {
     });
   }, [busy, connected, dispatchPayload]);
 
-  /** „Mit Auswahl senden": markierte Treffer sofort als Agent-Kontext senden. */
+  /** „Übernehmen": markierte Treffer sofort als Agent-Kontext senden. */
   const sendVaultSelection = useCallback(() => {
     const picked = toWireSelected(
       selectedHits(vaultHits?.hits || [], vaultHitOn),
@@ -2241,6 +2250,7 @@ export default function App() {
     if (picked.length === 0) return;
     vaultLastPickedRef.current = picked;
     const text = String(vaultHits?.query || input.trim());
+    vaultLastPickedQueryRef.current = text;
     const payload = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       text,
@@ -2266,6 +2276,31 @@ export default function App() {
     vaultHitOn,
     dispatchPayload,
   ]);
+
+  /** „Ohne Auswahl weiter": Query senden, Wiki+Web, kein Arbeits-Vault-Kontext. */
+  const sendVaultContinueWithout = useCallback(() => {
+    const text = String(vaultHits?.query || input.trim()).trim();
+    vaultLastPickedRef.current = [];
+    vaultLastPickedQueryRef.current = "";
+    setVaultHits(null);
+    setVaultHitOn(new Set());
+    setVaultSearchError("");
+    if (!text) return;
+    const payload = {
+      id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      text,
+      action: "chat",
+      displayText: text,
+      vaultSearch: false,
+    };
+    if (input.trim() === text) setInput("");
+    if (busy || messages.some((m) => m.streaming)) {
+      queueRef.current = [...queueRef.current, payload];
+      setQueue([...queueRef.current]);
+      return;
+    }
+    dispatchPayload(payload);
+  }, [busy, messages, input, vaultHits, dispatchPayload]);
 
   const removeQueued = useCallback((id) => {
     queueRef.current = queueRef.current.filter((q) => q.id !== id);
@@ -2993,6 +3028,7 @@ export default function App() {
       setVaultHitOn(new Set());
       setVaultSearchError("");
       vaultLastPickedRef.current = [];
+      vaultLastPickedQueryRef.current = "";
       return;
     }
     const prev = prevSessionRef.current;
@@ -3006,6 +3042,7 @@ export default function App() {
     // Switching chats: new picker.
     if (prev && sessionId && prev !== sessionId) {
       vaultLastPickedRef.current = [];
+      vaultLastPickedQueryRef.current = "";
     }
     if (!on) {
       setVaultHits(null);
@@ -3024,6 +3061,7 @@ export default function App() {
     setVaultHitOn(new Set());
     setVaultSearchError("");
     vaultLastPickedRef.current = [];
+    vaultLastPickedQueryRef.current = "";
   }, [sessionId]);
   const workingSeconds = useWorkingSeconds(showWorking);
 
@@ -4299,6 +4337,7 @@ export default function App() {
               }}
               onDismiss={abortVaultSearch}
               onSend={sendVaultSelection}
+              onContinueWithout={sendVaultContinueWithout}
             />
           ) : null}
           {queue.length > 0 ? (
@@ -4368,6 +4407,7 @@ export default function App() {
                 on={vaultSearchOn}
                 disabled={!connected}
                 onToggle={toggleVaultSearch}
+                scopeLabel={hubSearchScopeLabel()}
               />
             ) : null}
           </div>

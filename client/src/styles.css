@@ -4048,10 +4048,40 @@ button.composer-sheet-head:hover {
   position: relative;
 }
 
-.composer-vault-btn {
+/* Hub+Copy: Scope-Chip + Apfel schweben zusammen über dem LVL. */
+.composer-vault-hub {
   position: absolute;
   right: 18px; /* Fluchtlinie: rechte Kante des Send-Buttons (composer-row padding) */
   bottom: calc(100% + 16px); /* schwebt frei über dem LVL-Balken (kein Quetschen) */
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(70vw, 22rem);
+  pointer-events: none;
+}
+
+.composer-vault-scope {
+  pointer-events: none;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  opacity: 0.92;
+}
+
+.composer-vault-hub.is-on .composer-vault-scope {
+  color: color-mix(in srgb, var(--gold-bright, var(--gold)) 55%, var(--muted));
+}
+
+.composer-vault-btn {
+  position: relative;
+  right: auto;
+  bottom: auto;
   z-index: 3;
   display: inline-flex;
   align-items: center;
@@ -4068,6 +4098,7 @@ button.composer-sheet-head:hover {
   opacity: 0.42;
   filter: brightness(0.82) saturate(0.85);
   cursor: pointer;
+  pointer-events: auto;
   transition:
     opacity 0.18s ease,
     filter 0.18s ease,
@@ -4174,6 +4205,11 @@ button.composer-sheet-head:hover {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+}
+
+.vault-hits-subtitle {
+  margin: 0 0 6px;
+  padding: 0 2px;
 }
 
 .vault-hits-list {
@@ -5228,7 +5264,9 @@ button.danger {
 .cal-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -5254,6 +5292,8 @@ button.danger {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
@@ -5593,6 +5633,8 @@ button.danger {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   padding: 4px 0 8px;
 }
 
@@ -5614,11 +5656,16 @@ button.danger {
 
 .cal-task-assign {
   display: grid;
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .cal-task-assign select {
   min-height: 32px;
-  max-width: 11rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   border-radius: 8px;
   padding: 4px 8px;
@@ -5710,14 +5757,20 @@ button.danger {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .cal-todo-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
@@ -5734,7 +5787,8 @@ button.danger {
 }
 
 .cal-todo-main {
-  flex: 1 1 12rem;
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -5745,6 +5799,8 @@ button.danger {
   font-weight: 650;
   font-size: 0.9rem;
   color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .cal-todo-title--done {
@@ -5765,19 +5821,34 @@ button.danger {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .cal-todo-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
-  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cal-todo-actions > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .cal-todo-btn {
-  font-size: 0.75rem !important;
-  padding: 4px 8px !important;
+  font-size: 0.72rem !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px !important;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .cal-todo-btn--danger:hover {
@@ -5797,8 +5868,7 @@ button.danger {
   padding: 4px 10px;
   border-radius: 999px;
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  white-space: nowrap;
 }
 
 .cal-todo-fertig:hover {

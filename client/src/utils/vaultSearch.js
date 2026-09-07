@@ -55,6 +55,58 @@ function hitVaultLabel(hit) {
   return path.split("/")[0] || "";
 }
 
+/** Picker + Hub: only these Arbeits-Vaults (names as in vaults.json). */
+const PICKER_VAULT_ALLOWLIST = Object.freeze([
+  "HSEQ Sync",
+  "ASI, BS. UWS, QM, EM",
+]);
+
+/** Never advertise in picker/hub (even if engine returns them). */
+const PICKER_VAULT_DENY = new Set([
+  "Privat",
+  "Peniel",
+  "memory-wiki",
+  "_RECOVERY",
+  "_hygiene-trash",
+]);
+
+function shortHubVaultLabel(name) {
+  const n = String(name || "").trim();
+  if (n === "ASI, BS. UWS, QM, EM") return "ASI…";
+  return n;
+}
+
+/** Hub chip near apple: „sucht in: HSEQ Sync · ASI…“ — allowlist only. */
+function hubSearchScopeLabel(vaultNames) {
+  const names =
+    Array.isArray(vaultNames) && vaultNames.length
+      ? vaultNames.filter(isPickerVaultVisible)
+      : PICKER_VAULT_ALLOWLIST.slice();
+  const parts = names.map(shortHubVaultLabel).filter(Boolean);
+  if (!parts.length) return "";
+  return `sucht in: ${parts.join(" · ")}`;
+}
+
+function isPickerVaultVisible(vaultName) {
+  const name = String(vaultName || "").trim();
+  if (!name) return false;
+  if (PICKER_VAULT_DENY.has(name)) return false;
+  if (name.startsWith("_RECOVERY") || name.startsWith("_hygiene-trash")) {
+    return false;
+  }
+  // memory-wiki + anything else: default deny for picker
+  return PICKER_VAULT_ALLOWLIST.includes(name);
+}
+
+/** Keep KomNet/DGUV web hits; drop Privat/Peniel/wiki/_RECOVERY/_hygiene. */
+function filterPickerHits(hits) {
+  return (hits || []).filter((h) => {
+    if (!h) return false;
+    if (h.kind === "web") return true;
+    return isPickerVaultVisible(hitVaultLabel(h));
+  });
+}
+
 function hitKindLabel(hit) {
   if (!hit) return "Datei";
   if (hit.kind === "folder") return "Ordner";
@@ -101,9 +153,11 @@ function normalizeHit(raw) {
 }
 
 function normalizePreviewPayload(json, query) {
-  const hits = Array.isArray(json?.hits)
-    ? json.hits.map(normalizeHit).filter(Boolean)
-    : [];
+  const hits = filterPickerHits(
+    Array.isArray(json?.hits)
+      ? json.hits.map(normalizeHit).filter(Boolean)
+      : [],
+  );
   return {
     query: String(json?.query || query || ""),
     hits,
@@ -137,6 +191,36 @@ function vaultFindHttpError(status) {
   return `Suche fehlgeschlagen (HTTP ${status})`;
 }
 
+/**
+ * Same-topic sticky picks: reuse last vault selection only when the new
+ * query is still about the same thing (exact, short follow-up, or ≥50% overlap).
+ */
+function tokenizeVaultQuery(q) {
+  return String(q || "")
+    .toLowerCase()
+    .trim()
+    .split(/[^a-z0-9äöüß]+/i)
+    .filter(Boolean);
+}
+
+function isSameVaultTopic(prevQuery, nextQuery) {
+  const prev = String(prevQuery || "").trim();
+  const next = String(nextQuery || "").trim();
+  if (!prev || !next) return false;
+  if (prev.toLowerCase() === next.toLowerCase()) return true;
+  const a = tokenizeVaultQuery(prev);
+  const b = tokenizeVaultQuery(next);
+  if (!a.length || !b.length) return false;
+  const setA = new Set(a);
+  const setB = new Set(b);
+  // Short follow-up: no new distinctive tokens.
+  if (next.length < 48 && [...setB].every((t) => setA.has(t))) return true;
+  let inter = 0;
+  for (const t of setB) if (setA.has(t)) inter += 1;
+  const union = new Set([...setA, ...setB]).size;
+  return union > 0 && inter / union >= 0.5;
+}
+
 function vaultSendIntent({
   appleOn,
   searchBusy,
@@ -145,6 +229,7 @@ function vaultSendIntent({
   hitsStatus,
   error,
   lastPickedCount = 0,
+  lastPickedQuery = "",
 } = {}) {
   if (!appleOn) return "send";
   const q = String(query || "").trim();
@@ -158,18 +243,23 @@ function vaultSendIntent({
     same && hitsStatus && hitsStatus !== "error" && hitsStatus !== "pending";
   const failedThis = Boolean(error) && same;
   if (q && !haveHits && !failedThis) {
-    // Follow-up after a pick: keep that context, do not open the picker again.
-    if (Number(lastPickedCount) > 0) return "send";
+    // Same-topic follow-up after a pick: keep context. New topic → fresh search.
+    if (
+      Number(lastPickedCount) > 0 &&
+      isSameVaultTopic(lastPickedQuery, q)
+    ) {
+      return "send";
+    }
     return "search";
   }
   return "send";
 }
 
-/** Apfel: Arbeits-Vault + KomNet/DGUV. Wiki und Web laufen immer. */
+/** Apfel: Allowlist-Hubs (HSEQ Sync · ASI…) + KomNet/DGUV. Wiki läuft immer; Privat nie. */
 function appleToggleLabel(on) {
   return on
-    ? "Ordner-Suche an — Arbeits-Vault, KomNet, DGUV"
-    : "Ordner-Suche aus — Wiki und Web laufen. Klick: Arbeits-Vault, KomNet, DGUV";
+    ? "Ordner-Suche an — Allowlist-Hubs (HSEQ Sync · ASI…), KomNet, DGUV"
+    : "Ordner-Suche aus — Wiki läuft; Klick: Enable Allowlist-Hubs (kein Privat)";
 }
 
 export {
@@ -181,6 +271,11 @@ export {
   hitId,
   hitKindLabel,
   hitVaultLabel,
+  PICKER_VAULT_ALLOWLIST,
+  hubSearchScopeLabel,
+  shortHubVaultLabel,
+  isPickerVaultVisible,
+  filterPickerHits,
   defaultSelectedIds,
   selectedHits,
   normalizeHit,
@@ -188,5 +283,6 @@ export {
   toWireSelected,
   vaultFindHttpError,
   vaultSendIntent,
+  isSameVaultTopic,
   appleToggleLabel,
 };

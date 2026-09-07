@@ -1,10 +1,11 @@
 /**
  * Composer-Toggle: Pixel-Apfel über dem Senden-Button.
  * Rot + brauner Stiel + grünes Blatt. Gold nur als Outline, wenn an.
+ * Hub-Scope (Allowlist) links vom Apfel, wenn an.
  * Copyright (c) 2026 Alexander Hubert
  * SPDX-License-Identifier: MIT
  */
-import { appleToggleLabel } from "../utils/vaultSearch.js";
+import { appleToggleLabel, hubSearchScopeLabel } from "../utils/vaultSearch.js";
 
 /** Minecraft-Apfel, 16×16: roter Körper, brauner Stiel, kleines Blatt. */
 function PixelApple({ size = 16 }) {
@@ -36,20 +37,38 @@ function PixelApple({ size = 16 }) {
   );
 }
 
-export function VaultSearchToggle({ on, disabled, onToggle, className = "" }) {
+export function VaultSearchToggle({
+  on,
+  disabled,
+  onToggle,
+  className = "",
+  scopeLabel,
+}) {
+  const hub = on ? scopeLabel || hubSearchScopeLabel() : "";
   return (
-    <button
-      type="button"
-      className={`composer-vault-btn${on ? " is-on" : ""}${
+    <div
+      className={`composer-vault-hub${on ? " is-on" : ""}${
         className ? ` ${className}` : ""
       }`}
-      aria-pressed={on}
-      aria-label={appleToggleLabel(on)}
-      title={appleToggleLabel(on)}
-      disabled={disabled}
-      onClick={onToggle}
     >
-      <PixelApple size={18} />
-    </button>
+      {hub ? (
+        <span className="composer-vault-scope" title={hub} aria-live="polite">
+          {hub}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        className={`composer-vault-btn${on ? " is-on" : ""}`}
+        aria-pressed={on}
+        aria-label={
+          hub ? `${appleToggleLabel(on)} — ${hub}` : appleToggleLabel(on)
+        }
+        title={hub ? `${appleToggleLabel(on)} — ${hub}` : appleToggleLabel(on)}
+        disabled={disabled}
+        onClick={onToggle}
+      >
+        <PixelApple size={18} />
+      </button>
+    </div>
   );
 }
