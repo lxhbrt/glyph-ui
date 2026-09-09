@@ -6,9 +6,11 @@
  * SPDX-License-Identifier: MIT
  *
  * Browser events (JSON):
- *   { type: "chat", text: "...", attachments?: AttachmentMeta[] }
+ *   { type: "chat", text: "...", attachments?: AttachmentMeta[],
+ *     vaultSearch?: boolean, vaultSelected?: VaultHit[] }
  *   { type: "deep_search", text: "...", attachments?: AttachmentMeta[] }
  *   { type: "fork", text?: "..." }        // ACP session/fork (+ optional directive)
+ *   { type: "rewind", dropUserIndex: number } // Verlauf vor diesem User-Turn kappen
  *   { type: "reset" }
  *   { type: "reconnect" }   // start/restart grok agent process
  *   { type: "disconnect" }  // quit agent (like /quit) — stay offline until reconnect
@@ -19,6 +21,7 @@
  * Server → browser:
  *   { type: "status", connected, busy, reconnecting?, ... }
  *   { type: "assistant_chunk", text }
+ *   { type: "draft_chunk", text }   // Zwischen-LLM / Entwürfe (°_Agent / ^_Code)
  *   { type: "thought_chunk", text }
  *   { type: "tool", title, status, kind?, toolCallId? }
  *   { type: "plan", entries: PlanEntry[], planId? }  // ACP agent plan (full replace)
@@ -42,6 +45,28 @@ import { Readable, Writable } from "node:stream";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
+import { parseSeat, SeatHub, webSeatKey, isWebSeatKey } from "./seats.js";
+import {
+  WEB_AGENT_ID,
+  WEB_COOKIE,
+  WEB_SEAT,
+  agentAllowedOnSeat,
+  defaultAgentIdForSeat,
+  isWebAdminApi,
+  isWebGateExempt,
+  isWebOrigin,
+  isWebRequest,
+  parseCookie,
+  parseStoredWebSessions,
+  serializeWebSessions,
+  validateNewWebPassword,
+  WEB_SESSION_TTL_S,
+  WEB_SESSIONS_MAX,
+} from "./webSurface.mjs";
+import {
+  VAULT_FIND_TIMEOUT_MS,
+  vaultFindProxyCatch,
+} from "./vaultFindProxy.mjs";
 import * as acp from "@agentclientprotocol/sdk";
 import {
   DEFAULT_AGENT_ID,
@@ -62,33 +87,48 @@ import {
 import {
   cleanupEmptySessions,
   closeSession,
+  applyDiskRewind,
   getSession,
   getSessionForOpen,
   isSessionId,
   listSessions,
   readSessionContext,
+  renameSession,
   resolveContextDefaults,
 } from "./sessions.js";
 import { buildActivity } from "./activity.js";
-import { getWikiRoot, writeSessionArchive } from "./wiki-archive.js";
-import {
-  buildFileName,
-  getWikiRoot as getSummaryWikiRoot,
-  renderSummaryDocument,
-  resolveTargetPath,
-  writeSummaryAtomically,
-} from "./summaries.js";
+import { mergeToolFields, resolveToolDisplayTitle } from "./toolTitle.mjs";
+import { getWikiRoot } from "./wiki-archive.js";
 import {
   listVoices,
   speechToText,
   textToSpeech,
   voiceStatus,
+  clearApiKeyCache,
 } from "./voice.js";
 import {
+  buildBindingsStatus,
+  buildAgentPush,
+  loadBindingsIntoEnv,
+  updateBindings,
+  pushModelsToAgent,
+  probeModelOnAgent,
+  resolveModelContextWindow,
+  syncModelsIfMismatch,
+  readBindingsFile,
+  bindingsPath,
+} from "./bindings.js";
+import {
   getGlyphRoot,
+  glyphBuildLabel,
   readGlyphBuild,
   readGlyphVersion,
 } from "../shared/meta.js";
+import {
+  canSwarm,
+  deepResearchPrompt,
+  parseForkResponse,
+} from "../shared/composerActions.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = getGlyphRoot();
@@ -102,6 +142,8 @@ const AGENT_PROFILES = buildAgentProfiles();
 const STATE_DIR =
   process.env.GLYPH_UI_STATE_DIR ||
   path.join(os.homedir(), ".glyph-ui");
+/** Load UI-saved API keys into process.env (does not override existing env). */
+await loadBindingsIntoEnv(path.join(STATE_DIR, "bindings.json"));
 const UPLOAD_DIR = path.join(STATE_DIR, "uploads");
 const MAX_ATTACHMENT_BYTES = Number(
   process.env.GLYPH_UI_MAX_ATTACHMENT || 12 * 1024 * 1024,
@@ -121,7 +163,7 @@ const DEV_UI_PORT = 5173;
  */
 const WS_TOKEN =
   process.env.GLYPH_WS_TOKEN || crypto.randomBytes(32).toString("hex");
-
+	
 /**
  * Bind host: loopback only unless GLYPH_ALLOW_REMOTE=1.
  * The bridge is unauthenticated and can delete sessions + drive the agent.
@@ -161,6 +203,18 @@ function isLoopbackAddress(addr) {
   return a === "127.0.0.1" || a === "::1" || a === "localhost";
 }
 
+/**
+ * Extra Origins (comma-separated), besides loopback and the Web-Fläche.
+ *   GLYPH_WS_ORIGINS=https://other.example:5174
+ */
+function originsFromEnvList() {
+  const raw = process.env.GLYPH_WS_ORIGINS || "";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** Allowed browser Origins for WebSocket upgrades (prod UI + Vite dev UI). */
 function allowedWsOrigins() {
   const origins = new Set([
@@ -169,12 +223,14 @@ function allowedWsOrigins() {
     `http://localhost:${DEV_UI_PORT}`,
     `http://127.0.0.1:${DEV_UI_PORT}`,
   ]);
+  for (const o of originsFromEnvList()) origins.add(o);
   return origins;
 }
 
 function isAllowedWsOrigin(origin) {
   if (!origin) return false;
-  return allowedWsOrigins().has(String(origin));
+  if (allowedWsOrigins().has(String(origin))) return true;
+  return isWebOrigin(origin);
 }
 
 /**
@@ -182,14 +238,144 @@ function isAllowedWsOrigin(origin) {
  * Origin alone is not enough on localhost (any local process can omit/forge it);
  * the shared token from the served UI raises the bar for drive-by WS clients.
  */
+/** token → issuedAt (ms). RAM-Spiegel von web-sessions.json. */
+const webSessions = new Map();
+let webPassword = "";
+const WEB_SESSIONS_FILE = path.join(STATE_DIR, "web-sessions.json");
+const WEB_SESSION_TTL_MS = WEB_SESSION_TTL_S * 1000;
+/** Env password cannot be changed from the Web-Fläche (would revert on restart). */
+const webPasswordFromEnv = Boolean(
+  String(process.env.GLYPH_WEB_PASSWORD || "").trim(),
+);
+const WEB_PASSWORD_FILE = path.join(STATE_DIR, "web-password");
+
+async function loadWebPassword() {
+  const fromEnv = String(process.env.GLYPH_WEB_PASSWORD || "").trim();
+  if (fromEnv) {
+    webPassword = fromEnv;
+    return;
+  }
+  try {
+    const existing = String(await fs.readFile(WEB_PASSWORD_FILE, "utf8")).trim();
+    if (existing) {
+      webPassword = existing;
+      return;
+    }
+  } catch {
+    /* create below */
+  }
+  const generated = crypto.randomBytes(16).toString("hex");
+  await fs.mkdir(STATE_DIR, { recursive: true });
+  await fs.writeFile(WEB_PASSWORD_FILE, `${generated}\n`, { mode: 0o600 });
+  webPassword = generated;
+  console.warn(`[glyph] Web-Tor: Passwort in ${WEB_PASSWORD_FILE}`);
+}
+
+async function saveWebPassword(next) {
+  await fs.mkdir(STATE_DIR, { recursive: true });
+  await fs.writeFile(WEB_PASSWORD_FILE, `${next}\n`, { mode: 0o600 });
+  webPassword = next;
+}
+
+async function loadWebSessions() {
+  try {
+    const raw = JSON.parse(await fs.readFile(WEB_SESSIONS_FILE, "utf8"));
+    for (const row of parseStoredWebSessions(raw, Date.now())) {
+      webSessions.set(row.token, row.iat);
+    }
+  } catch {
+    /* missing or unreadable — start empty */
+  }
+}
+
+async function persistWebSessions() {
+  const entries = [...webSessions.entries()].map(([token, iat]) => ({
+    token,
+    iat,
+  }));
+  await fs.mkdir(STATE_DIR, { recursive: true });
+  await fs.writeFile(WEB_SESSIONS_FILE, serializeWebSessions(entries), {
+    mode: 0o600,
+  });
+}
+
+function trimWebSessions(now = Date.now()) {
+  for (const [token, iat] of webSessions) {
+    if (now - iat >= WEB_SESSION_TTL_MS) webSessions.delete(token);
+  }
+  if (webSessions.size <= WEB_SESSIONS_MAX) return;
+  const sorted = [...webSessions.entries()].sort((a, b) => a[1] - b[1]);
+  while (webSessions.size > WEB_SESSIONS_MAX) {
+    const oldest = sorted.shift();
+    if (!oldest) break;
+    webSessions.delete(oldest[0]);
+  }
+}
+
+function webSessionToken(req) {
+  return parseCookie(req?.headers?.cookie, WEB_COOKIE);
+}
+
+function hasWebSession(req) {
+  const token = webSessionToken(req);
+  if (!token) return false;
+  const iat = webSessions.get(token);
+  if (iat == null) return false;
+  if (Date.now() - iat >= WEB_SESSION_TTL_MS) {
+    webSessions.delete(token);
+    void persistWebSessions();
+    return false;
+  }
+  return true;
+}
+
+function issueWebSession() {
+  const token = crypto.randomBytes(24).toString("hex");
+  webSessions.set(token, Date.now());
+  trimWebSessions();
+  void persistWebSessions();
+  return token;
+}
+
+function webCookieHeader(token) {
+  const parts = [
+    `${WEB_COOKIE}=${encodeURIComponent(token)}`,
+    "HttpOnly",
+    "Path=/",
+    "SameSite=Lax",
+    "Max-Age=2592000",
+  ];
+  // Tunnel is HTTPS; local preview of seat=web stays on http.
+  parts.push("Secure");
+  return parts.join("; ");
+}
+
+function passwordsMatch(got, expected) {
+  const a = Buffer.from(String(got || ""), "utf8");
+  const b = Buffer.from(String(expected || ""), "utf8");
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(a, b);
+}
+
+await loadWebPassword();
+await loadWebSessions();
+
 function verifyWsClient(info) {
-  const ip = info.req?.socket?.remoteAddress || "";
-  if (!ALLOW_REMOTE && !isLoopbackAddress(ip)) {
+  const req = info.req;
+  const web = isWebRequest(req);
+  const ip = req?.socket?.remoteAddress || "";
+  if (!ALLOW_REMOTE && !web && !isLoopbackAddress(ip)) {
     console.warn(`[glyph] WS rejected: non-loopback ${ip || "(unknown)"}`);
     return false;
   }
+  if (web && !hasWebSession(req)) {
+    console.warn("[glyph] WS rejected: web gate");
+    return false;
+  }
 
-  const origin = info.origin || info.req?.headers?.origin || "";
+  const origin = info.origin || req?.headers?.origin || "";
   if (!isAllowedWsOrigin(origin)) {
     console.warn(`[glyph] WS rejected: origin ${origin || "(none)"}`);
     return false;
@@ -225,11 +411,12 @@ function injectWsToken(html) {
   return `${inject}\n${html}`;
 }
 
-async function sendIndexHtml(res) {
+async function sendIndexHtml(req, res) {
   const filePath = path.join(ROOT, "client/dist", "index.html");
   const raw = await fs.readFile(filePath, "utf8");
   res.setHeader("Cache-Control", "no-store");
-  res.type("html").send(injectWsToken(raw));
+  const gated = isWebRequest(req) && !hasWebSession(req);
+  res.type("html").send(gated ? raw : injectWsToken(raw));
 }
 
 /** Safe single-segment filename for uploads. */
@@ -370,6 +557,20 @@ async function buildPromptBlocks(text, attachments = []) {
 
 const app = express();
 const httpServer = createServer(app);
+
+/** Filled after GrokBridge is defined. */
+let seats;
+function seatFromReq(req) {
+  if (isWebRequest(req)) {
+    // Web: pro Session-Token ein eigener Chat (Gerät getrennt).
+    const token = webSessionToken(req);
+    return webSeatKey(token);
+  }
+  return parseSeat(req.get("x-glyph-seat") || req.query?.seat);
+}
+function live(req) {
+  return seats.get(seatFromReq(req));
+}
 const wss = new WebSocketServer({
   server: httpServer,
   path: "/ws",
@@ -380,6 +581,23 @@ const wss = new WebSocketServer({
 app.use((req, res, next) => {
   if (req.path === "/api/stt" || req.path === "/api/attachments") return next();
   return express.json({ limit: "1mb" })(req, res, next);
+});
+
+/**
+ * glyph-ui.com: require the Web-Tor cookie. HTML/assets stay reachable so
+ * the login surface can load. Tunnel source IP is loopback — Host decides.
+ */
+app.use((req, res, next) => {
+  if (!isWebRequest(req)) return next();
+  if (isWebGateExempt(req)) return next();
+  if (hasWebSession(req)) return next();
+  res.status(401).json({ error: "Web-Tor", gate: true });
+});
+
+app.use((req, res, next) => {
+  if (!isWebRequest(req)) return next();
+  if (!isWebAdminApi(req.path)) return next();
+  res.status(403).json({ error: "Nur Admin-Fläche (Mac)" });
 });
 
 /**
@@ -517,26 +735,124 @@ async function saveAttachmentFile({ name, mimeType, dataBase64 }) {
 }
 
 // API routes are registered below BEFORE static — do not move static above them.
-app.get("/api/health", (_req, res) => {
-  res.json({
+app.get("/api/health", (req, res) => {
+  const b = seats ? live(req) : null;
+  const web = Boolean(
+    (b && isWebSeatKey(b.seat)) || isWebRequest(req),
+  );
+  const agent = publicAgent(b?.agentProfile?.() || null);
+  const allAgents = publicAgents(AGENT_PROFILES);
+  const agents = web
+    ? allAgents.filter((a) => agentAllowedOnSeat(WEB_SEAT, a.id))
+    : allAgents;
+  const payload = {
     ok: true,
     version: GLYPH_VERSION,
     build: GLYPH_BUILD,
     host: HOST,
     port: PORT,
-    root: ROOT,
-    connected: Boolean(bridge?.connected),
-    reconnecting: Boolean(bridge?.starting),
-    sessionId: bridge?.sessionId || null,
-    cwd: WORK_CWD,
-    agent: publicAgent(bridge?.agentProfile?.() || null),
-    agents: publicAgents(AGENT_PROFILES),
-    wikiRoot: getWikiRoot(),
-    wikiArchive: path.join(getWikiRoot(), "sources/grok-sessions"),
-    uploads: UPLOAD_DIR,
+    connected: Boolean(b?.connected),
+    reconnecting: Boolean(b?.starting),
+    sessionId: b?.sessionId || null,
+    seat: b ? (isWebSeatKey(b.seat) ? WEB_SEAT : b.seat) : web ? WEB_SEAT : "desk",
+    surface: web ? "web" : "admin",
+    cwd: web ? "" : WORK_CWD,
+    agent: web && agent && !agentAllowedOnSeat(WEB_SEAT, agent.id)
+      ? publicAgent(
+          AGENT_PROFILES.find((p) => p.id === WEB_AGENT_ID) || null,
+        )
+      : agent,
+    agents,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     maxAttachmentsPerMsg: MAX_ATTACHMENTS_PER_MSG,
+  };
+  if (!web) {
+    payload.root = ROOT;
+    payload.seats = seats
+      ? seats.all().map((x) => ({
+          seat: x.seat,
+          connected: Boolean(x.connected),
+          sessionId: x.sessionId || null,
+          agent: publicAgent(x.agentProfile?.() || null)?.id || null,
+        }))
+      : [];
+    payload.wikiRoot = getWikiRoot();
+    payload.uploads = UPLOAD_DIR;
+  }
+  res.json(payload);
+});
+
+app.get("/api/web-gate", (req, res) => {
+  const web = isWebRequest(req);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    required: web,
+    ok: web ? hasWebSession(req) : true,
+    seat: web ? WEB_SEAT : parseSeat(req.get("x-glyph-seat") || req.query?.seat),
   });
+});
+
+app.post("/api/web-gate", (req, res) => {
+  if (!isWebRequest(req)) {
+    res.json({ ok: true, required: false });
+    return;
+  }
+  const origin = req.get("origin") || "";
+  if (origin && !isAllowedWsOrigin(origin)) {
+    res.status(403).json({ error: "Forbidden", gate: true });
+    return;
+  }
+  if (!passwordsMatch(req.body?.password, webPassword)) {
+    res.status(401).json({ error: "Passwort falsch", gate: true });
+    return;
+  }
+  const token = issueWebSession();
+  res.setHeader("Set-Cookie", webCookieHeader(token));
+  res.json({ ok: true, required: true });
+});
+
+app.post("/api/web-gate/password", async (req, res) => {
+  if (!isWebRequest(req)) {
+    res.status(403).json({ error: "Nur auf der Web-Fläche" });
+    return;
+  }
+  if (!hasWebSession(req)) {
+    res.status(401).json({ error: "Web-Tor", gate: true });
+    return;
+  }
+  if (webPasswordFromEnv) {
+    res.status(409).json({
+      error: "Passwort kommt aus GLYPH_WEB_PASSWORD — Env auf dem Mac entfernen, dann in der Web-UI ändern",
+    });
+    return;
+  }
+  const origin = req.get("origin") || "";
+  if (origin && !isAllowedWsOrigin(origin)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (!passwordsMatch(req.body?.current, webPassword)) {
+    res.status(401).json({ error: "Aktuelles Passwort falsch" });
+    return;
+  }
+  const check = validateNewWebPassword(req.body?.next, webPassword);
+  if (!check.ok) {
+    res.status(400).json({ error: check.error });
+    return;
+  }
+  try {
+    await saveWebPassword(check.password);
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  webSessions.clear();
+  await persistWebSessions();
+  const token = issueWebSession();
+  res.setHeader("Set-Cookie", webCookieHeader(token));
+  res.json({ ok: true });
 });
 
 /**
@@ -545,7 +861,7 @@ app.get("/api/health", (_req, res) => {
  */
 app.get("/api/skills", async (req, res) => {
   try {
-    const activeId = bridge?.agentProfile?.()?.id;
+    const activeId = live(req)?.agentProfile?.()?.id;
     const profile = String(
       req.query.profile || activeId || DEFAULT_AGENT_ID || "grok",
     ).trim();
@@ -615,7 +931,12 @@ app.post(
  * Loopback + allowed Origin only — same bar as the WebSocket handshake itself.
  */
 app.get("/api/ws-token", (req, res) => {
-  if (!ALLOW_REMOTE && !isLoopbackAddress(req.socket?.remoteAddress || "")) {
+  if (isWebRequest(req)) {
+    if (!hasWebSession(req)) {
+      res.status(401).json({ error: "Web-Tor", gate: true });
+      return;
+    }
+  } else if (!ALLOW_REMOTE && !isLoopbackAddress(req.socket?.remoteAddress || "")) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -653,12 +974,9 @@ async function openInOs(targetPath, { reveal = false } = {}) {
 async function openWikiEntry() {
   const { promises: fs } = await import("node:fs");
   const wikiRoot = getWikiRoot();
-  const archive = path.join(wikiRoot, "sources/grok-sessions");
   const candidates = [
-    path.join(archive, "00 Index - Grok Sessions.md"),
     path.join(wikiRoot, "WIKI.md"),
     path.join(wikiRoot, "index.md"),
-    archive,
     wikiRoot,
   ];
   let target = wikiRoot;
@@ -692,7 +1010,6 @@ async function openWikiEntry() {
           via: "obsidian-uri",
           uri,
           wikiRoot,
-          archive,
         };
       }
     } catch (err) {
@@ -710,7 +1027,6 @@ async function openWikiEntry() {
         opened: target,
         via: "obsidian-app",
         wikiRoot,
-        archive,
       };
     } catch (err) {
       attempts.push(
@@ -728,7 +1044,6 @@ async function openWikiEntry() {
       opened: target,
       via: "open",
       wikiRoot,
-      archive,
     };
   } catch (err) {
     attempts.push(`open: ${err instanceof Error ? err.message : String(err)}`);
@@ -744,7 +1059,6 @@ async function openWikiEntry() {
         opened: target,
         via: "reveal",
         wikiRoot,
-        archive,
         note: "In Finder gezeigt (keine App zum Öffnen gefunden)",
       };
     } catch (err) {
@@ -786,9 +1100,9 @@ app.post("/api/workspace/open", async (_req, res) => {
   }
 });
 
-app.post("/api/bridge/cancel", async (_req, res) => {
+app.post("/api/bridge/cancel", async (req, res) => {
   try {
-    const result = await bridge.cancelTurn();
+    const result = await live(req).cancelTurn();
     res.json(result);
   } catch (err) {
     res.status(500).json({
@@ -808,7 +1122,7 @@ app.post("/api/bridge/cancel", async (_req, res) => {
  */
 app.post("/api/bridge/agent", async (req, res) => {
   try {
-    const result = await bridge.switchAgent(req.body?.id);
+    const result = await live(req).switchAgent(req.body?.id);
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -817,24 +1131,25 @@ app.post("/api/bridge/agent", async (req, res) => {
       : /wartet|warten|arbeitet/i.test(message)
         ? 409
         : 500;
+    const b = live(req);
     res.status(status).json({
       ok: false,
       error: message,
-      agent: publicAgent(bridge?.agentProfile?.() || null),
-      connected: Boolean(bridge?.connected),
+      agent: publicAgent(b?.agentProfile?.() || null),
+      connected: Boolean(b?.connected),
     });
   }
 });
 
-app.post("/api/bridge/reconnect", async (_req, res) => {
+app.post("/api/bridge/reconnect", async (req, res) => {
   try {
-    const result = await bridge.reconnect();
+    const result = await live(req).reconnect();
     res.json(result);
   } catch (err) {
     res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : String(err),
-      connected: Boolean(bridge?.connected),
+      connected: Boolean(live(req)?.connected),
     });
   }
 });
@@ -843,15 +1158,15 @@ app.post("/api/bridge/reconnect", async (_req, res) => {
  * Stop the local `grok agent` (equivalent to /quit in the TUI).
  * Bridge HTTP/WS stays up; agent goes offline until reconnect.
  */
-app.post("/api/bridge/disconnect", async (_req, res) => {
+app.post("/api/bridge/disconnect", async (req, res) => {
   try {
-    const result = await bridge.disconnect();
+    const result = await live(req).disconnect();
     res.json(result);
   } catch (err) {
     res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : String(err),
-      connected: Boolean(bridge?.connected),
+      connected: Boolean(live(req)?.connected),
     });
   }
 });
@@ -860,12 +1175,12 @@ app.post("/api/bridge/disconnect", async (_req, res) => {
  * List sessions only — never deletes.
  * Empty-shell cleanup is POST /api/sessions/cleanup-empty (explicit).
  */
-app.get("/api/sessions", async (_req, res) => {
+app.get("/api/sessions", async (req, res) => {
   try {
     const data = await listSessions();
     res.json({
       ...data,
-      activeSessionId: bridge?.sessionId || null,
+      activeSessionId: live(req).sessionId || null,
       wikiRoot: getWikiRoot(),
       cleaned: null,
     });
@@ -889,7 +1204,7 @@ app.post("/api/sessions/cleanup-empty", async (req, res) => {
       return;
     }
     const result = await cleanupEmptySessions({
-      protectId: bridge?.sessionId || null,
+      protectId: seats.all().map((b) => b.sessionId).filter(Boolean),
       deleteDisk: true,
     });
     res.json(result);
@@ -916,15 +1231,520 @@ app.get("/api/activity", async (req, res) => {
   }
 });
 
+/** Resolve glyph-agent base URL (bindings or env). */
+async function glyphAgentBaseUrl() {
+  try {
+    const file = await readBindingsFile(bindingsPath(STATE_DIR));
+    return (
+      String(
+        process.env.GLYPH_AGENT_URL || file.settings?.GLYPH_AGENT_URL || "",
+      ).trim() || "http://127.0.0.1:18899"
+    );
+  } catch {
+    return (
+      String(process.env.GLYPH_AGENT_URL || "").trim() || "http://127.0.0.1:18899"
+    );
+  }
+}
+
 /**
- * Grok Voice (xAI STT / TTS) — requires XAI_API_KEY (or grok auth fallback).
+ * Shared proxy for glyph-agent bind registries (vaults / workspaces).
+ * POST 30s; GET/PATCH/DELETE 15s. Engine 400 only on POST/PATCH; else 502.
+ * Body forwarded on POST/PATCH/DELETE (DELETE pins needs `{path}`).
+ */
+function proxyAgent(
+  prefix,
+  { postTimeout = 30000, otherTimeout = 15000, extra = [] } = {},
+) {
+  const pass400 = (method) => method === "POST" || method === "PATCH";
+  const timeoutOf = (method) => (method === "POST" ? postTimeout : otherTimeout);
+  const withBody = (method) =>
+    method === "POST" || method === "PATCH" || method === "DELETE";
+
+  async function forward(req, res, relPath, method) {
+    try {
+      const base = await glyphAgentBaseUrl();
+      const init = {
+        method,
+        signal: AbortSignal.timeout(timeoutOf(method)),
+      };
+      if (withBody(method)) {
+        init.headers = { "Content-Type": "application/json" };
+        init.body = JSON.stringify(req.body || {});
+      }
+      const r = await fetch(`${base}${relPath}`, init);
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok && r.status === 404 && (!json.error || json.error === "Not found")) {
+        res.status(502).json({
+          ok: false,
+          error: `${prefix}: Endpoint fehlt (glyph-agent neu starten).`,
+        });
+        return;
+      }
+      const status = r.ok
+        ? 200
+        : pass400(method) && r.status === 400
+          ? 400
+          : 502;
+      res.status(status).json(json);
+    } catch (err) {
+      res.status(502).json({
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  app.get(`/api/${prefix}`, (req, res) =>
+    forward(req, res, `/${prefix}`, "GET"),
+  );
+  app.post(`/api/${prefix}`, (req, res) =>
+    forward(req, res, `/${prefix}`, "POST"),
+  );
+  app.patch(`/api/${prefix}/:id`, (req, res) =>
+    forward(
+      req,
+      res,
+      `/${prefix}/${encodeURIComponent(req.params.id)}`,
+      "PATCH",
+    ),
+  );
+  app.delete(`/api/${prefix}/:id`, (req, res) =>
+    forward(
+      req,
+      res,
+      `/${prefix}/${encodeURIComponent(req.params.id)}`,
+      "DELETE",
+    ),
+  );
+  for (const name of extra) {
+    app.post(`/api/${prefix}/:id/${name}`, (req, res) =>
+      forward(
+        req,
+        res,
+        `/${prefix}/${encodeURIComponent(req.params.id)}/${name}`,
+        "POST",
+      ),
+    );
+    app.delete(`/api/${prefix}/:id/${name}`, (req, res) =>
+      forward(
+        req,
+        res,
+        `/${prefix}/${encodeURIComponent(req.params.id)}/${name}`,
+        "DELETE",
+      ),
+    );
+  }
+}
+
+/**
+ * Kabelsalat — Vault-Registry (glyph-agent /vaults → ~/.glyph/vaults.json).
+ */
+proxyAgent("vaults", { extra: ["pins"] });
+
+/**
+ * Manuelle Ordner-Suche (°_Agent): POST /api/vault/find → glyph-agent /vault/find
+ */
+app.post("/api/vault/find", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/vault/find`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(VAULT_FIND_TIMEOUT_MS),
+    });
+    const json = await r.json().catch(() => ({}));
+    if (r.ok) {
+      res.status(200).json(json);
+      return;
+    }
+    const status = r.status === 400 || r.status === 404 ? r.status : 502;
+    res.status(status).json({
+      ok: false,
+      hits: [],
+      ...json,
+      error:
+        json.error ||
+        (r.status === 404
+          ? "Vault-Suche: Endpoint fehlt (glyph-agent neu starten)."
+          : `Suche fehlgeschlagen (HTTP ${r.status})`),
+    });
+  } catch (err) {
+    const fail = vaultFindProxyCatch(err);
+    res.status(fail.status).json(fail.body);
+  }
+});
+
+/**
+ * Kabelsalat — Workspace-Registry (^_Code /workspaces → ~/.glyph/workspaces.json).
+ */
+proxyAgent("workspaces");
+
+app.get("/api/code/grants", async (_req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/code/grants`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/code/grants/close-task", async (_req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/code/grants/close-task`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(10000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/code/grants/:id/revoke", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(req.params.id);
+    const r = await fetch(`${base}/code/grants/${id}/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(10000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/** Gemeinsame, manuell übergebene Aufgaben (SoT: ~/.glyph/tasks.json). */
+proxyAgent("tasks");
+app.get("/api/tasks/:id/prompt", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/tasks/${id}/prompt`, {
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok && r.status === 404 && (!json.error || json.error === "Not found")) {
+      res.status(502).json({
+        ok: false,
+        error: "tasks: Endpoint fehlt (glyph-agent neu starten).",
+      });
+      return;
+    }
+    res.status(r.ok ? 200 : r.status === 404 ? 404 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/**
+ * Proxy againkehrende To-dos (glyph-agent /recurring).
+ * Plan-Tab in der UI — keine OpenClaw-Cron-Doppelbuchhaltung.
+ */
+app.get("/api/recurring", async (_req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/recurring`, {
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.get("/api/recurring/events", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const after = String(req.query.after || "");
+    const q = after ? `?after=${encodeURIComponent(after)}` : "";
+    const r = await fetch(`${base}/recurring/events${q}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/recurring", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const r = await fetch(`${base}/recurring`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.patch("/api/recurring/:id", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/recurring/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || {}),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : r.status === 400 ? 400 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.delete("/api/recurring/:id", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/recurring/${id}`, {
+      method: "DELETE",
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 404).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/recurring/:id/run", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/recurring/${id}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || { force: true }),
+      signal: AbortSignal.timeout(900000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.post("/api/recurring/:id/pause", async (req, res) => {
+  try {
+    const base = await glyphAgentBaseUrl();
+    const id = encodeURIComponent(String(req.params.id || ""));
+    const r = await fetch(`${base}/recurring/${id}/pause`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body || { paused: true }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = await r.json().catch(() => ({}));
+    res.status(r.ok ? 200 : 502).json(json);
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Voice STT/TTS — xAI primary, OpenRouter fallback (same OR key as chat).
  * Docs: https://docs.x.ai/developers/model-capabilities/audio/voice
+ *       https://openrouter.ai/docs/guides/overview/multimodal/tts
  */
 app.get("/api/voice/status", async (_req, res) => {
   try {
     res.json(await voiceStatus());
   } catch (err) {
     res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Connection bindings: OAuth/key status + local secret store (~/.glyph-ui/bindings.json).
+ * GET never returns raw secrets. PUT accepts DIRECT_API_KEY, DIRECT_API_URL,
+ * OPENROUTER_API_KEY, XAI_API_KEY, GLYPH_AGENT_URL (empty string clears).
+ */
+app.get("/api/bindings", async (_req, res) => {
+  try {
+    res.json(
+      await buildBindingsStatus({
+        stateDir: STATE_DIR,
+        env: process.env,
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+app.put("/api/bindings", async (req, res) => {
+  try {
+    const body = req.body || {};
+    // Optional contextWindow fill for shared primary on save
+    if (body.models?.shared?.primary && !body.models.shared.contextWindow) {
+      try {
+        const win = await resolveModelContextWindow(body.models.shared.primary, {
+          cached: body.models.shared.contextWindow,
+        });
+        body.models.shared.contextWindow = win.window;
+      } catch {
+        /* keep without window */
+      }
+    }
+    if (body.models?.code?.primary && !body.models.code.contextWindow) {
+      try {
+        const win = await resolveModelContextWindow(body.models.code.primary);
+        body.models.code.contextWindow = win.window;
+      } catch {
+        /* ignore */
+      }
+    }
+    const saved = await updateBindings(body, {
+      stateDir: STATE_DIR,
+      env: process.env,
+    });
+    clearApiKeyCache();
+
+    let modelsApply = null;
+    const agentUrl =
+      String(
+        process.env.GLYPH_AGENT_URL ||
+          saved.settings?.GLYPH_AGENT_URL ||
+          "",
+      ).trim() || "http://127.0.0.1:18899";
+    const plan = buildAgentPush(saved, body);
+    if (plan.push) {
+      modelsApply = await pushModelsToAgent(agentUrl, plan.models, {
+        direct: plan.direct,
+        provider: plan.provider,
+        kind: plan.kind,
+      });
+    }
+
+    res.json(
+      await buildBindingsStatus({
+        stateDir: STATE_DIR,
+        env: process.env,
+        modelsApply,
+      }),
+    );
+  } catch (err) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Apply bindings models to running glyph-agent (or sync if mismatch).
+ * POST { } empty → sync from file if mismatch; or { models } to push explicit.
+ */
+app.post("/api/models/apply", async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (body.models) {
+      const file = await readBindingsFile(bindingsPath(STATE_DIR));
+      const models = body.models;
+      const agentUrl =
+        String(
+          process.env.GLYPH_AGENT_URL || file.settings?.GLYPH_AGENT_URL || "",
+        ).trim() || "http://127.0.0.1:18899";
+      const push = await pushModelsToAgent(agentUrl, models);
+      res.status(push.ok ? 200 : 502).json(push);
+      return;
+    }
+    const result = await syncModelsIfMismatch({
+      stateDir: STATE_DIR,
+      env: process.env,
+    });
+    res.status(result.ok || result.skipped ? 200 : 502).json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/**
+ * Probe model via glyph-agent (production key/URL). Body: { model }
+ */
+app.post("/api/models/probe", async (req, res) => {
+  try {
+    const model = String(req.body?.model || req.body?.primary || "").trim();
+    if (!model) {
+      res.status(400).json({ ok: false, error: "model fehlt" });
+      return;
+    }
+    const file = await readBindingsFile(bindingsPath(STATE_DIR));
+    const agentUrl =
+      String(
+        process.env.GLYPH_AGENT_URL || file.settings?.GLYPH_AGENT_URL || "",
+      ).trim() || "http://127.0.0.1:18899";
+    const result = await probeModelOnAgent(agentUrl, model);
+    if (result.ok && result.context_length) {
+      /* client may cache */
+    } else if (result.ok) {
+      const win = await resolveModelContextWindow(model);
+      result.context_length = win.window;
+      result.context_source = win.source;
+    }
+    res.status(result.ok ? 200 : 502).json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
       error: err instanceof Error ? err.message : String(err),
     });
   }
@@ -1014,11 +1834,33 @@ app.get("/api/sessions/:id", async (req, res) => {
       res.status(404).json({ error: "Session not found" });
       return;
     }
-    res.json({ session, activeSessionId: bridge?.sessionId || null });
+    res.json({ session, activeSessionId: live(req).sessionId || null });
   } catch (err) {
     res.status(500).json({
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+});
+
+/**
+ * Manual title (TUI /rename). Body: { title: string }
+ */
+app.patch("/api/sessions/:id", async (req, res) => {
+  try {
+    if (!isSessionId(req.params.id)) {
+      res.status(400).json({ error: "Invalid session id" });
+      return;
+    }
+    const result = await renameSession(req.params.id, req.body?.title);
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = /not found/i.test(message)
+      ? 404
+      : /titel|invalid/i.test(message)
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
   }
 });
 
@@ -1029,14 +1871,15 @@ app.get("/api/sessions/:id", async (req, res) => {
  */
 app.get("/api/context", async (req, res) => {
   try {
+    const b = live(req);
     const profile = String(
-      req.query.profile || bridge?.agentProfile?.()?.id || DEFAULT_AGENT_ID || "grok",
+      req.query.profile || b?.agentProfile?.()?.id || DEFAULT_AGENT_ID || "grok",
     ).trim();
-    // Prefer explicit query sessionId. Only fall back to the live bridge
+    // Prefer explicit query sessionId. Only fall back to the live seat
     // session when the *active* profile is grok — a leftover grok UUID must
     // not pin the LVL window at 500k after switching to glyph-agent / claude.
-    const bridgeProfile = String(bridge?.agentProfile?.()?.id || "").trim();
-    const bridgeSid = String(bridge?.sessionId || "").trim();
+    const bridgeProfile = String(b?.agentProfile?.()?.id || "").trim();
+    const bridgeSid = String(b?.sessionId || "").trim();
     const querySid = String(req.query.sessionId || "").trim();
     let sessionId = querySid;
     if (!sessionId && bridgeSid && (profile === "grok" || bridgeProfile === profile)) {
@@ -1061,7 +1904,7 @@ app.get("/api/context", async (req, res) => {
       ok: true,
       ...ctx,
       profile,
-      activeSessionId: bridge?.sessionId || null,
+      activeSessionId: b?.sessionId || null,
     });
   } catch (err) {
     res.status(500).json({
@@ -1080,7 +1923,16 @@ app.post("/api/sessions/:id/open", async (req, res) => {
       res.status(400).json({ error: "Invalid session id" });
       return;
     }
-    const result = await bridge.openSession(req.params.id);
+    const owner = seats.findBySession(req.params.id);
+    const mine = live(req);
+    if (owner && owner.seat !== mine.seat) {
+      res.status(409).json({
+        error: `Session läuft auf Sitz ${owner.seat}`,
+        seat: owner.seat,
+      });
+      return;
+    }
+    const result = await mine.openSession(req.params.id);
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1095,10 +1947,7 @@ app.post("/api/sessions/:id/open", async (req, res) => {
 
 /**
  * Close session (UI: Lupe → Schließen).
- * Body:
- *   { deleteDisk?: boolean, writeWiki?: boolean }
- * Defaults: both true → Wiki-Archiv + Disk löschen (Ja + Wiki).
- * writeWiki:false + deleteDisk:true → TUI /delete (nur Disk).
+ * Body: { deleteDisk: true }. writeWiki ist tot (400) — Persistenz /merken.
  */
 app.post("/api/sessions/:id/close", async (req, res) => {
   try {
@@ -1109,23 +1958,22 @@ app.post("/api/sessions/:id/close", async (req, res) => {
     // Explicit flags only — empty/missing body must not default to disk wipe.
     const deleteDisk = req.body?.deleteDisk === true;
     const writeWiki = req.body?.writeWiki === true;
-    if (!deleteDisk && !writeWiki) {
+    if (writeWiki) {
       res.status(400).json({
-        error:
-          "Nichts zu tun: setze deleteDisk und/oder writeWiki explizit auf true",
+        error: "Wiki-Archiv tot — Persistenz nur /merken",
+      });
+      return;
+    }
+    if (!deleteDisk) {
+      res.status(400).json({
+        error: "Nichts zu tun: setze deleteDisk explizit auf true",
       });
       return;
     }
     const result = await closeSession(req.params.id, {
       deleteDisk,
-      writeWiki,
-      protectId: bridge?.sessionId || null,
-      wikiWriter: writeWiki
-        ? async (doc, meta) => {
-            const written = await writeSessionArchive(doc, meta);
-            return written.relativePath;
-          }
-        : undefined,
+      writeWiki: false,
+      protectId: seats.all().map((x) => x.sessionId).filter(Boolean),
     });
     res.json(result);
   } catch (err) {
@@ -1142,232 +1990,34 @@ app.post("/api/sessions/:id/close", async (req, res) => {
 });
 
 /**
- * Deterministische Zubereitung des Session-Transkripts zu einer Summary-Struktur.
- * Kein Modell nötig (robust): Titel, Kurzfassung, Entscheidungen, offene Punkte,
- * nächste Schritte werden aus User-/Assistant-Turns abgeleitet. Modell kann
- * optional in einem späteren Schritt nachschärfen.
- * @returns {{title:string, summary:string, decisions:string[], open_items:string[], next_steps:string[], references:string[]}}
- */
-function buildDraftFromTurns(turns, meta = {}) {
-  const userTurns = (turns || []).filter((t) => t.role === "user" && t.text && t.text.trim());
-  const assistantTurns = (turns || []).filter((t) => t.role === "assistant" && t.text && t.text.trim());
-
-  const title = meta.title || userTurns[0]?.text?.replace(/\s+/g, " ").slice(0, 80) || "Unbenannte Session";
-  const firstUser = userTurns[0]?.text?.replace(/\s+/g, " ") || "";
-  // Kurzfassung: erste User-Frage + letzte Assistant-Antwort als Kern.
-  const lastAssistant = assistantTurns.length
-    ? assistantTurns[assistantTurns.length - 1].text.replace(/\s+/g, " ").slice(0, 400)
-    : "";
-  const summary = firstUser
-    ? `Die Session befasste sich mit: „${firstUser.slice(0, 160)}".` +
-      (lastAssistant ? ` Ergebnis: ${lastAssistant.slice(0, 240)}` : "")
-    : "Keine Nachrichten vorhanden.";
-
-  // Entscheidungen/offene Punkte/nächste Schritte: einfache Heuristik aus User-Turns,
-  // die als Anweisung/Ziel formuliert sind (kann später durch Modell verbessert werden).
-  const decisions = userTurns.slice(-3).map((t) => t.text.replace(/\s+/g, " ").slice(0, 180));
-  const next_steps = assistantTurns.slice(-2).map((t) => t.text.replace(/\s+/g, " ").slice(0, 160));
-
-  return {
-    title,
-    summary,
-    decisions: decisions.length ? decisions : [],
-    open_items: [],
-    next_steps: next_steps.length ? next_steps : [],
-    references: [],
-  };
-}
-
-/**
- * Erweiterte Session-ID-Prüfung für Summarize/History: akzeptiert UUID (Grok/Disk)
- * ODER In-Memory-Adapter-IDs (openrouter-1, glyph-agent-1, claude-N) — nur sichere
- * Zeichen, keine Pfad-Tricks. isSessionId (sessions.js) bleibt für Disk-Endpunkte.
+ * Session-ID für In-Memory-Verlauf (ACP session/history): UUID oder Adapter-IDs.
+ * isSessionId (sessions.js) bleibt für Disk-Endpunkte.
  */
 const SAFE_SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
-function isSummarizeSessionId(id) {
+function isLiveSessionId(id) {
   if (typeof id !== "string" || !id.trim() || id.length > 64) return false;
   if (isSessionId(id)) return true;
-  // In-Memory-Adapter-IDs: „präfix-N“ (openrouter-1, glyph-agent-2, claude-3).
   return SAFE_SESSION_ID_RE.test(id);
 }
 
 /**
- * Erzeugt einen Zusammenfassungs-ENTWURF ohne zu schreiben (nicht-destruktiv).
- * Liefert Entwurf + geplanten Zielpfad/Dateiname + Datenschutz-Status.
- */
-app.post("/api/sessions/:id/summarize/draft", async (req, res) => {
-  try {
-    if (!isSummarizeSessionId(req.params.id)) {
-      res.status(400).json({ error: "Ungültige Session-ID" });
-      return;
-    }
-    const session = await getSessionForOpen(req.params.id);
-    let turns = session ? (session.turns || session.transcriptPreview || []) : [];
-    // Fallback für AKTIVE In-Memory-Session (openrouter/glyph-agent ohne Disk-Ordner):
-    // Verlauf über die ACP-Methode session.history beziehen, statt aus ~/.grok/sessions.
-    if (!turns.length && bridge && bridge.connected && req.params.id === bridge.sessionId) {
-      try {
-        const hist = await bridge.getSessionHistory(req.params.id);
-        turns = (hist.messages || []).map((m) => ({
-          role: m.role,
-          // content kann String ODER OpenAI-Array sein ([{type:'text',text}] / image_url) —
-          // extrahiere Text, damit buildDraftFromTurns (erwartet String) sauber läuft.
-          text: Array.isArray(m.content)
-            ? m.content
-                .filter((b) => b?.type === "text" && typeof b.text === "string")
-                .map((b) => b.text)
-                .join("\n")
-            : String(m.content ?? ""),
-        }));
-      } catch {
-        turns = [];
-      }
-    }
-    if (!turns.length) {
-      res.status(404).json({ error: "Session nicht gefunden oder ohne Nachrichten" });
-      return;
-    }
-
-    const profile = (req.body?.profile) || "glyph-agent";
-    const external = profile === "openrouter"; // Cloud-Verarbeitung
-    const includeAttachments = req.body?.include_attachments === true;
-
-    const draft = buildDraftFromTurns(turns, {
-      // session kann bei In-Memory-Session (openrouter-1) null sein → title optional.
-      title: session?.title || session?.transcriptTitle || undefined,
-    });
-    const wikiRoot = getSummaryWikiRoot();
-    const fileName = buildFileName({
-      title: draft.title,
-      // sessionId: disk-UUID oder die aktive In-Memory-ID (req.params.id).
-      sessionId: session?.id || req.params.id,
-      profile,
-    });
-    const target = resolveTargetPath(fileName, wikiRoot);
-
-    // Vorschau (gespeicherter Inhalt) zur Anzeige in der UI.
-    const previewDocument = renderSummaryDocument({
-      ...draft,
-      meta: {
-        sessionId: session?.id || req.params.id,
-        profile,
-        model: session?.model || "",
-        external_processing: external,
-      },
-    });
-
-    res.json({
-      ok: true,
-      draft,
-      external_processing: external,
-      include_attachments: includeAttachments,
-      target: { absolutePath: target, fileName, wikiRoot },
-      preview: previewDocument,
-      requires_external_consent: external,
-      message: external
-        ? `Dieses Profil (${profile}) ist extern — Session-Inhalte verlassen den Rechner. Bestätigung nötig.`
-        : null,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-  }
-});
-
-/**
- * Speichert die Zusammenfassung NUR nach expliziter Bestätigung, atomar,
- * ohne Überschreiben. Bei openrouter (Cloud) muss external_consent=true sein.
- */
-app.post("/api/sessions/:id/summarize/commit", async (req, res) => {
-  try {
-    if (!isSummarizeSessionId(req.params.id)) {
-      res.status(400).json({ error: "Ungültige Session-ID" });
-      return;
-    }
-    const session = await getSessionForOpen(req.params.id);
-    let turns = session ? (session.turns || session.transcriptPreview || []) : [];
-    if (!turns.length && bridge && bridge.connected && req.params.id === bridge.sessionId) {
-      try {
-        const hist = await bridge.getSessionHistory(req.params.id);
-        turns = (hist.messages || []).map((m) => ({
-          role: m.role,
-          text: Array.isArray(m.content)
-            ? m.content
-                .filter((b) => b?.type === "text" && typeof b.text === "string")
-                .map((b) => b.text)
-                .join("\n")
-            : String(m.content ?? ""),
-        }));
-      } catch {
-        turns = [];
-      }
-    }
-
-    const body = req.body || {};
-    const profile = body.profile || "glyph-agent";
-    const external = profile === "openrouter";
-    if (external && body.external_consent !== true) {
-      res.status(403).json({
-        error:
-          "Für das externe Profil openrouter ist eine ausdrückliche Bestätigung (external_consent: true) erforderlich, bevor Session-Inhalte verarbeitet werden.",
-      });
-      return;
-    }
-
-    // Entwurf aus dem vom Client ggf. bearbeiteten Body od. neu deterministisch.
-    const base = body.draft
-      ? body.draft
-      : buildDraftFromTurns(turns, { title: session?.title });
-
-    const data = {
-      title: base.title || "Unbenannte Session",
-      summary: base.summary || "",
-      decisions: Array.isArray(base.decisions) ? base.decisions : [],
-      open_items: Array.isArray(base.open_items) ? base.open_items : [],
-      next_steps: Array.isArray(base.next_steps) ? base.next_steps : [],
-      references: Array.isArray(base.references) ? base.references : [],
-      tags: Array.isArray(body.tags) ? body.tags : [],
-      meta: {
-        sessionId: session?.id || req.params.id,
-        profile,
-        model: session?.model || body.model || "",
-        external_processing: external,
-      },
-    };
-
-    const result = await writeSummaryAtomically(data, getSummaryWikiRoot());
-    if (result.written) {
-      res.status(201).json({ ok: true, written: true, path: result.path, fileName: result.fileName });
-    } else {
-      res.status(409).json({
-        ok: false,
-        written: false,
-        existed: true,
-        path: result.path,
-        error: "Es existiert bereits eine Zusammenfassung für diese Session — nicht überschrieben.",
-      });
-    }
-  } catch (err) {
-    const status = /bereits|existed/i.test(err?.message || "") ? 409 : 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
-  }
-});
-
-/**
- * Aktiven In-Memory-Verlauf einer Session abrufen (Option A: ACP session/history).
- * Kein serverseitiger Puffer; der Adapter liefert store.messages. Klare Antwort,
- * wenn die Session beendet/nicht vorhanden oder der Adapter kein history unterstützt.
+ * Aktiven In-Memory-Verlauf einer Session abrufen (ACP session/history).
+ * Kein serverseitiger Puffer; der Adapter liefert store.messages.
  */
 app.get("/api/sessions/:id/history", async (req, res) => {
   try {
-    if (!isSummarizeSessionId(req.params.id)) {
+    if (!isLiveSessionId(req.params.id)) {
       res.status(400).json({ error: "Ungültige Session-ID" });
       return;
     }
-    if (!bridge || !bridge.connected) {
+    const histBridge =
+      seats.findBySession(req.params.id) ||
+      (live(req).connected ? live(req) : null);
+    if (!histBridge || !histBridge.connected) {
       res.status(503).json({ error: "Kein aktiver Agent verbunden" });
       return;
     }
-    const result = await bridge.getSessionHistory(req.params.id);
+    const result = await histBridge.getSessionHistory(req.params.id);
     const messages = Array.isArray(result?.messages) ? result.messages : [];
     res.json({ ok: true, sessionId: req.params.id, messages });
   } catch (err) {
@@ -1379,15 +2029,48 @@ app.get("/api/sessions/:id/history", async (req, res) => {
 
 /** Tool kinds that should finish cleanly rather than hard-abort mid-flight. */
 const CRITICAL_TOOL_KINDS = new Set(["edit", "delete", "move", "execute"]);
+
+/** Pull a short preview string from an ACP toolCall for the permission modal. */
+function extractPermissionPreview(toolCall) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  const parts = [];
+  if (toolCall.rawInput && typeof toolCall.rawInput === "object") {
+    try {
+      parts.push(JSON.stringify(toolCall.rawInput, null, 2).slice(0, 2000));
+    } catch {
+      /* ignore */
+    }
+  }
+  const content = toolCall.content;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      const text =
+        block?.content?.text ||
+        block?.text ||
+        (typeof block?.content === "string" ? block.content : "");
+      if (text) parts.push(String(text).slice(0, 2500));
+    }
+  }
+  return parts.join("\n").slice(0, 4000);
+}
+
 class GrokBridge {
-  constructor() {
+  constructor(opts = {}) {
+    // web:<token>-Seats (Geräte-Sessions) behalten ihren Key — parseSeat
+    // würde sie auf 'desk' normalisieren. Nur desk/phone/web normalisieren.
+    const rawSeat = String(opts.seat || "").trim().toLowerCase();
+    this.seat = rawSeat.startsWith("web:") ? rawSeat : parseSeat(rawSeat);
     this.connected = false;
     this.sessionId = null;
     /**
      * Active ACP agent profile id. Switching spawns a different binary —
      * Glyph never talks to a model API, so this is the only "provider" knob.
+     * Web-Sitz is locked to °_Agent.
      */
-    this.agentId = resolveAgent(AGENT_PROFILES, process.env.GLYPH_AGENT).id;
+    this.agentId = resolveAgent(
+      AGENT_PROFILES,
+      defaultAgentIdForSeat(this.seat, process.env.GLYPH_AGENT),
+    ).id;
     this.process = null;
     this.connection = null;
     this.busy = false;
@@ -1415,6 +2098,12 @@ class GrokBridge {
      * @type {Array<{ name: string, description: string, inputHint: string }>}
      */
     this.availableCommands = [];
+    /**
+     * Pending ACP permission request (for ^_Code Write/Shell).
+     * { id, resolve, params, timer }
+     * @type {null | { id: string, resolve: Function, params: object, timer: NodeJS.Timeout }}
+     */
+    this.pendingPermission = null;
   }
 
   /** Currently selected agent profile (never null — resolveAgent falls back). */
@@ -1422,11 +2111,80 @@ class GrokBridge {
     return resolveAgent(AGENT_PROFILES, this.agentId);
   }
 
+  /**
+   * Interactive permission for ^_Code (never auto-approve shell/write).
+   * Broadcasts to browser; waits for permission_response or timeout/cancel.
+   */
+  askBrowserPermission(params) {
+    return new Promise((resolve) => {
+      // Cancel any previous waiter
+      if (this.pendingPermission) {
+        try {
+          clearTimeout(this.pendingPermission.timer);
+          this.pendingPermission.resolve({
+            outcome: { outcome: "cancelled" },
+          });
+        } catch {
+          /* ignore */
+        }
+        this.pendingPermission = null;
+      }
+      const id = `perm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const toolCall = params?.toolCall || {};
+      const options = Array.isArray(params?.options) ? params.options : [];
+      const timer = setTimeout(() => {
+        if (this.pendingPermission?.id === id) {
+          this.pendingPermission = null;
+          this.broadcast({ type: "permission_dismiss", id });
+          resolve({ outcome: { outcome: "cancelled" } });
+        }
+      }, 5 * 60 * 1000);
+      this.pendingPermission = { id, resolve, params, timer };
+      const raw = toolCall.rawInput && typeof toolCall.rawInput === "object"
+        ? toolCall.rawInput
+        : {};
+      const grant = raw._grant && typeof raw._grant === "object" ? raw._grant : null;
+      this.broadcast({
+        type: "permission_request",
+        id,
+        sessionId: params?.sessionId || this.sessionId,
+        title: toolCall.title || toolCall.toolCallId || "Aktion freigeben",
+        kind: toolCall.kind || "other",
+        preview: extractPermissionPreview(toolCall),
+        options: options.map((o) => ({
+          optionId: o.optionId,
+          name: o.name || o.optionId,
+          kind: o.kind || "allow_once",
+        })),
+        grant,
+      });
+    });
+  }
+
+  resolveBrowserPermission(id, optionId) {
+    if (!this.pendingPermission || this.pendingPermission.id !== id) {
+      return false;
+    }
+    clearTimeout(this.pendingPermission.timer);
+    const resolve = this.pendingPermission.resolve;
+    this.pendingPermission = null;
+    this.broadcast({ type: "permission_dismiss", id });
+    if (!optionId || optionId === "cancelled") {
+      resolve({ outcome: { outcome: "cancelled" } });
+    } else {
+      resolve({
+        outcome: { outcome: "selected", optionId: String(optionId) },
+      });
+    }
+    return true;
+  }
+
   statusPayload(extra = {}) {
     return {
       type: "status",
       connected: this.connected,
       sessionId: this.sessionId,
+      seat: this.seat,
       busy: this.busy || this.starting,
       cancelling: this.cancelling,
       reconnecting: this.starting,
@@ -1598,12 +2356,17 @@ class GrokBridge {
 
       const clientApp = acp
         .client({ name: "grok-build-terminal" })
-        .onRequest(acp.methods.client.session.requestPermission, async () => {
+        .onRequest(acp.methods.client.session.requestPermission, async ({ params }) => {
           // ACP: after session/cancel, pending permissions MUST be cancelled
           if (this.cancelling) {
             return { outcome: { outcome: "cancelled" } };
           }
-          // always-approve on agent CLI; still answer cleanly if asked
+          // ^_Code: Write/Shell immer interaktiv in Glyph bestätigen (nie auto-approve).
+          // Grok/Build: always-approve (CLI-Äquivalent --always-approve).
+          const profileId = this.agentId;
+          if (profileId === "_code" || profileId === "code") {
+            return await this.askBrowserPermission(params || {});
+          }
           return {
             outcome: { outcome: "selected", optionId: "allow-once" },
           };
@@ -1659,9 +2422,18 @@ class GrokBridge {
           agent:
             initialized.agentInfo?.title ||
             initialized.agentInfo?.name ||
-            "Grok",
+            "Grok Build",
         }),
       );
+
+      // OpenRouter model hot-apply when Code/Agent connects and bindings differ
+      const profileId = this.agentId || this.agentProfile?.()?.id;
+      if (profileId === "_code" || profileId === "glyph-agent") {
+        void syncModelsIfMismatch({
+          stateDir: STATE_DIR,
+          env: process.env,
+        }).catch(() => {});
+      }
 
       void connection.closed.then(() => {
         this.handleDisconnect("ACP channel closed");
@@ -1692,6 +2464,9 @@ class GrokBridge {
     const next = resolveAgent(AGENT_PROFILES, id);
     if (!next || next.id !== String(id)) {
       throw new Error(`Unbekannter Agent: ${id}`);
+    }
+    if (!agentAllowedOnSeat(this.seat, next.id)) {
+      throw new Error("Web-Fläche: nur °_Agent");
     }
     if (this.starting) {
       throw new Error("Verbindung wird gerade aufgebaut — bitte warten");
@@ -1816,13 +2591,34 @@ class GrokBridge {
     const kind = update?.sessionUpdate;
     if (!kind) return;
 
+    // Effective server trace via ACP _meta (glyph-agent adapter) or legacy
+    // agent_message_complete (pre-fix). Prefer _meta — complete is not in schema.
+    const glyphMeta =
+      params?._meta?.glyph ||
+      update?._meta?.glyph ||
+      update?.message?.metadata ||
+      null;
+    if (glyphMeta?.trace && typeof glyphMeta.trace === "object") {
+      this.broadcast({ type: "assistant_meta", trace: glyphMeta.trace });
+    }
+    // ^_Code hard-stop after failed write/shell — red banner with real reason
+    if (glyphMeta?.hardError) {
+      this.broadcast({
+        type: "error",
+        message: String(glyphMeta.hardError).slice(0, 800),
+      });
+    }
+
     if (kind === "agent_message_chunk") {
       const text = update.content?.text || update.text || "";
       if (!text) return;
       // Live-Tool-/Denk-Stufen (von glyph-agent-adapter) vom normalen Antworttext
       // trennen: ⏺STEP⏺... = Stufe beginnt, ⏹STEP⏹... = Ergebnis derselben Stufe.
+      // ⏺DRAFT⏺ / ⏺DRAFT+⏺ = Zwischen-LLM (Protokoll · Entwürfe), nie Primär.
       const STEP_START = "⏺STEP⏺";
       const STEP_END = "⏹STEP⏹";
+      const DRAFT_START = "⏺DRAFT⏺";
+      const DRAFT_CONT = "⏺DRAFT+⏺";
       if (text.startsWith(STEP_START)) {
         this.broadcast({ type: "step_chunk", phase: "start", text: text.slice(STEP_START.length) });
         return;
@@ -1831,16 +2627,20 @@ class GrokBridge {
         this.broadcast({ type: "step_chunk", phase: "end", text: text.slice(STEP_END.length) });
         return;
       }
+      if (text.startsWith(DRAFT_START)) {
+        this.broadcast({ type: "draft_chunk", text: text.slice(DRAFT_START.length), cont: false });
+        return;
+      }
+      if (text.startsWith(DRAFT_CONT)) {
+        this.broadcast({ type: "draft_chunk", text: text.slice(DRAFT_CONT.length), cont: true });
+        return;
+      }
       this.broadcast({ type: "assistant_chunk", text });
       return;
     }
-    // agent_message_complete: effektiven Trace (falls vom glyph-agent-Adapter geliefert)
-    // an die UI senden, damit Provider/Modell/Tool-Status aus dem ECHTEN Server stammen.
+    // Legacy: ignore invalid agent_message_complete if it ever reaches here
+    // (SDK usually rejects it before this handler).
     if (kind === "agent_message_complete") {
-      const metaTrace = update.message?.metadata?.trace;
-      if (metaTrace && typeof metaTrace === "object") {
-        this.broadcast({ type: "assistant_meta", trace: metaTrace });
-      }
       return;
     }
     if (kind === "agent_thought_chunk") {
@@ -1852,8 +2652,13 @@ class GrokBridge {
       const toolCallId = update.toolCallId || "";
       const status =
         update.status || (kind === "tool_call" ? "pending" : "in_progress");
-      const title = update.title || toolCallId || "tool";
-      const toolKind = update.kind || "";
+      const prev = toolCallId
+        ? this.activeTools.get(toolCallId) || {}
+        : {};
+      // Prefer title → name → kind/path — never dump opaque call-… UUIDs in the UI
+      const title = resolveToolDisplayTitle(update, prev);
+      const toolKind = update.kind || prev.kind || "";
+      const fields = mergeToolFields(update, prev);
 
       if (toolCallId) {
         const done =
@@ -1863,11 +2668,11 @@ class GrokBridge {
         if (done) {
           this.activeTools.delete(toolCallId);
         } else {
-          const prev = this.activeTools.get(toolCallId) || {};
           this.activeTools.set(toolCallId, {
-            title: title || prev.title || toolCallId,
-            kind: toolKind || prev.kind || "",
+            title,
+            kind: toolKind,
             status,
+            ...fields,
           });
         }
       }
@@ -1878,6 +2683,11 @@ class GrokBridge {
         status,
         kind: toolKind,
         toolCallId,
+        name: fields.name,
+        rawInput: fields.rawInput,
+        rawOutput: fields.rawOutput,
+        content: fields.content,
+        locations: fields.locations,
       });
       return;
     }
@@ -2019,7 +2829,7 @@ class GrokBridge {
    * @param {string} text
    * @param {Array<{ id?: string, name?: string, mimeType?: string, size?: number, path?: string, uri?: string }>} [attachments]
    */
-  async chat(text, attachments = []) {
+  async chat(text, attachments = [], opts = {}) {
     if (!this.connected || !this.connection || !this.sessionId) {
       throw new Error("Grok is not connected yet");
     }
@@ -2037,11 +2847,23 @@ class GrokBridge {
     let stopReason = "end_turn";
     let failed = null;
     try {
+      const glyph = {};
+      const isAgent =
+        this.agentId === "glyph-agent" || this.agentId === "agent";
+      if (isAgent) {
+        // Immer setzen: fehlt das Flag, fällt die Engine auf B+-Auto-Suche zurück.
+        glyph.vaultSearch = opts.vaultSearch === true;
+        if (Array.isArray(opts.vaultSelected)) {
+          glyph.vaultSelected = opts.vaultSelected;
+        }
+      }
+      if (opts.swarm === true) glyph.swarm = true;
       const result = await this.connection.agent.request(
         acp.methods.agent.session.prompt,
         {
           sessionId: this.sessionId,
           prompt,
+          ...(Object.keys(glyph).length ? { _meta: { glyph } } : {}),
         },
       );
       stopReason = result?.stopReason || "end_turn";
@@ -2071,72 +2893,99 @@ class GrokBridge {
   }
 
   /**
-   * Deep Search — same as TUI `/deep-research <query>`.
-   * Starts a background research workflow; results stream back as normal updates.
+   * Deep Search — Grok ACP intercepts `/deep-research` in session/prompt
+   * (slash_exec). Not a pager-only command. Other profiles have no host.
    * @param {string} query
    * @param {Array} [attachments]
    */
   async deepSearch(query, attachments = []) {
+    if (this.agentId !== "grok") {
+      throw new Error(
+        "Deep Search nur im Grok-Profil (TUI /deep-research).",
+      );
+    }
     const q = String(query || "").trim();
     const atts = normalizeAttachments(attachments);
     if (!q && !atts.length) throw new Error("Deep Search braucht eine Query");
-    // Avoid double-prefix if user already typed the slash command
-    const prompt = !q
-      ? ""
-      : q.startsWith("/deep-research")
-        ? q
-        : `/deep-research ${q}`;
+    const prompt = deepResearchPrompt(q);
     this.broadcast({
       type: "system",
-      text: `Deep Search gestartet — wie TUI \`/deep-research\`. Fortschritt über Workflows.`,
+      text: "Deep Search gestartet. Der Bericht kommt in diesen Chat, sobald die Recherche fertig ist.",
     });
     await this.chat(prompt, atts);
   }
 
   /**
-   * Fork current session (ACP session/fork), like TUI `/fork`.
-   * Optional directive is sent as the first prompt in the new session.
+   * Swarm — °_Agent / ^_Code Engine (Planer → Suche → Synthese).
+   * Grok bleibt bei Deep Search.
+   * @param {string} query
+   * @param {Array} [attachments]
+   */
+  async swarm(query, attachments = []) {
+    if (!canSwarm(this.agentId)) {
+      throw new Error(
+        "Swarm läuft über °_Agent und ^_Code (Grok: Deep Search).",
+      );
+    }
+    const q = String(query || "").trim();
+    const atts = normalizeAttachments(attachments);
+    if (!q && !atts.length) throw new Error("Swarm braucht ein Thema");
+    this.broadcast({
+      type: "system",
+      text: "Swarm gestartet (°_Agent / ^_Code). Bericht kommt in diesen Chat.",
+    });
+    await this.chat(q, atts, { swarm: true });
+  }
+
+  /**
+   * Fork current session (Grok `x.ai/session/fork`, else ACP `session/fork`).
+   * Optional directive is the first prompt in the new session.
+   * Slash-as-prompt is not a fallback — that leaves Glyph on the old session.
    */
   async forkSession(directive = "") {
     if (!this.connected || !this.connection || !this.sessionId) {
-      throw new Error("Grok is not connected yet");
+      throw new Error("Agent ist noch nicht verbunden");
     }
     if (this.busy) throw new Error("A turn is already running");
 
     const sourceId = this.sessionId;
-    let result;
-    try {
-      result = await this.connection.agent.request(
-        acp.methods.agent.session.fork,
-        {
-          sessionId: sourceId,
-          cwd: WORK_CWD,
-          mcpServers: [],
-          _meta: { yoloMode: true },
-        },
+    const params = {
+      sessionId: sourceId,
+      sourceSessionId: sourceId,
+      cwd: WORK_CWD,
+      mcpServers: [],
+      _meta: { yoloMode: true, noWorktree: true },
+    };
+
+    const tryRequest = async (method) => {
+      try {
+        return {
+          method,
+          result: await this.connection.agent.request(method, params),
+        };
+      } catch (err) {
+        const code = err?.code ?? err?.data?.code;
+        const msg = String(err?.message || err || "");
+        const missing =
+          code === -32601 ||
+          /method not found|unknown method|not implemented|unrecognized/i.test(
+            msg,
+          );
+        if (missing) return null;
+        throw err;
+      }
+    };
+
+    const hit =
+      (await tryRequest("x.ai/session/fork")) ||
+      (await tryRequest(acp.methods.agent.session.fork));
+    if (!hit) {
+      throw new Error(
+        "Fork: Agent bietet weder x.ai/session/fork noch session/fork.",
       );
-    } catch {
-      // Fallback: let the agent shell handle /fork as a slash command
-      const d = String(directive || "").trim();
-      const slash = d
-        ? d.startsWith("/fork")
-          ? d
-          : `/fork --no-worktree ${d}`
-        : "/fork --no-worktree";
-      this.broadcast({
-        type: "system",
-        text: `ACP session/fork nicht verfügbar — sende \`${slash}\` als Prompt.`,
-      });
-      await this.chat(slash);
-      return {
-        ok: true,
-        via: "slash",
-        sourceSessionId: sourceId,
-        sessionId: this.sessionId,
-      };
     }
 
-    const newId = result?.sessionId;
+    const newId = parseForkResponse(hit.result);
     if (!newId) {
       throw new Error("Fork fehlgeschlagen: keine neue sessionId");
     }
@@ -2165,10 +3014,106 @@ class GrokBridge {
 
     return {
       ok: true,
-      via: "session/fork",
+      via: hit.method,
       sourceSessionId: sourceId,
       sessionId: newId,
     };
+  }
+
+  /**
+   * Rewind: drop the chosen user turn and everything after.
+   * Files on disk stay. Grok: ACP method or disk+session/load.
+   * °_Agent / ^_Code: session.rewind on the adapter.
+   */
+  async rewindTurn(dropUserIndex) {
+    const drop = Number(dropUserIndex);
+    if (!Number.isInteger(drop) || drop < 0) {
+      throw new Error("dropUserIndex ungültig");
+    }
+    if (this.busy) throw new Error("Agent arbeitet noch — erst abbrechen oder warten");
+
+    const sessionId = this.sessionId;
+    const profile = this.agentId;
+    let via = "ui";
+
+    const tryRequest = async (method, params) => {
+      if (!this.connection?.agent?.request) return null;
+      try {
+        return await this.connection.agent.request(method, params);
+      } catch (err) {
+        const code = err?.code ?? err?.data?.code;
+        const msg = String(err?.message || err || "");
+        const missing =
+          code === -32601 ||
+          /method not found|unknown method|not implemented|unrecognized/i.test(
+            msg,
+          );
+        if (missing) return null;
+        throw err;
+      }
+    };
+
+    if (this.connected && this.connection && sessionId) {
+      const params = { sessionId, dropUserIndex: drop, promptIndex: drop };
+      const grok = await tryRequest("x.ai/rewind", params);
+      if (grok) {
+        via = "x.ai/rewind";
+      } else {
+        const grokApply = await tryRequest("x.ai/rewind/apply", params);
+        if (grokApply) via = "x.ai/rewind/apply";
+        else {
+          const local = await tryRequest("session.rewind", params);
+          if (local) via = "session.rewind";
+        }
+      }
+    }
+
+    if (
+      via === "ui" &&
+      profile === "grok" &&
+      sessionId &&
+      isSessionId(sessionId)
+    ) {
+      await applyDiskRewind(sessionId, drop);
+      via = "disk";
+      if (this.connected && this.connection && this.loadSessionSupported) {
+        this.suppressUpdates = true;
+        try {
+          await this.connection.agent.request(acp.methods.agent.session.load, {
+            sessionId,
+            cwd: WORK_CWD,
+            mcpServers: [],
+            _meta: { yoloMode: true },
+          });
+          via = "disk+load";
+        } catch {
+          /* disk truncated; live context may still hold later turns */
+        } finally {
+          this.suppressUpdates = false;
+        }
+      }
+    }
+
+    if (via === "ui" && profile !== "grok") {
+      throw new Error("Rewind: Adapter ohne session.rewind — Agent nicht verbunden?");
+    }
+
+    this.clearPlan({ broadcast: true });
+    this.broadcast({
+      type: "rewind_result",
+      ok: true,
+      dropUserIndex: drop,
+      via,
+      sessionId: sessionId || null,
+    });
+    this.broadcast({
+      type: "system",
+      text:
+        via === "ui"
+          ? `Rewind · Turn ${drop} (nur Anzeige).`
+          : `Rewind · Turn ${drop} weg (${via}). Dateien bleiben.`,
+    });
+    return { ok: true, dropUserIndex: drop, via, sessionId };
   }
 
   /**
@@ -2180,6 +3125,10 @@ class GrokBridge {
   async cancelTurn() {
     if (!this.connected || !this.connection || !this.sessionId) {
       throw new Error("Grok is not connected");
+    }
+    // Offene ^_Code-Genehmigung verwerfen
+    if (this.pendingPermission) {
+      this.resolveBrowserPermission(this.pendingPermission.id, "cancelled");
     }
     if (!this.busy) {
       return { ok: true, cancelled: false, reason: "not_busy" };
@@ -2376,10 +3325,33 @@ class GrokBridge {
   }
 }
 
-const bridge = new GrokBridge();
+seats = new SeatHub((seat) => new GrokBridge({ seat }));
 
-wss.on("connection", (ws) => {
-  bridge.addClient(ws);
+wss.on("connection", (ws, req) => {
+  let seat = "desk";
+  try {
+    if (isWebRequest(req)) {
+      seat = webSeatKey(webSessionToken(req));
+    } else {
+      const host = req?.headers?.host || `127.0.0.1:${PORT}`;
+      const url = new URL(req.url || "/ws", `http://${host}`);
+      seat = parseSeat(url.searchParams.get("seat"));
+    }
+  } catch {
+    seat = isWebRequest(req) ? webSeatKey(webSessionToken(req)) : "desk";
+  }
+  const b = seats.get(seat);
+  if (
+    (seat === "phone" || isWebSeatKey(seat)) &&
+    !b.connected &&
+    !b.starting &&
+    !b.process
+  ) {
+    b.start().catch((err) => {
+      console.error(`Failed to start ${seat} seat:`, err);
+    });
+  }
+  b.addClient(ws);
 
   ws.on("message", async (raw) => {
     let msg;
@@ -2392,25 +3364,48 @@ wss.on("connection", (ws) => {
 
     try {
       if (msg.type === "chat") {
-        await bridge.chat(msg.text || "", normalizeAttachments(msg.attachments));
+        await b.chat(msg.text || "", normalizeAttachments(msg.attachments), {
+          vaultSearch: msg.vaultSearch,
+          vaultSelected: msg.vaultSelected,
+        });
       } else if (msg.type === "deep_search" || msg.type === "deep-search") {
-        await bridge.deepSearch(
+        await b.deepSearch(
+          msg.text || msg.query || "",
+          normalizeAttachments(msg.attachments),
+        );
+      } else if (msg.type === "swarm") {
+        await b.swarm(
           msg.text || msg.query || "",
           normalizeAttachments(msg.attachments),
         );
       } else if (msg.type === "fork") {
-        const result = await bridge.forkSession(msg.text || msg.directive || "");
+        const result = await b.forkSession(msg.text || msg.directive || "");
         ws.send(JSON.stringify({ type: "fork_result", ...result }));
+      } else if (msg.type === "rewind") {
+        const result = await b.rewindTurn(msg.dropUserIndex);
+        ws.send(JSON.stringify({ type: "rewind_ack", ...result }));
       } else if (msg.type === "reset") {
-        await bridge.reset();
+        await b.reset();
       } else if (msg.type === "cancel" || msg.type === "stop") {
-        await bridge.cancelTurn();
+        await b.cancelTurn();
       } else if (msg.type === "reconnect") {
-        await bridge.reconnect();
+        await b.reconnect();
       } else if (msg.type === "disconnect" || msg.type === "quit") {
-        await bridge.disconnect();
+        await b.disconnect();
       } else if (msg.type === "ping") {
         ws.send(JSON.stringify({ type: "pong" }));
+      } else if (msg.type === "permission_response") {
+        const ok = b.resolveBrowserPermission(
+          msg.id,
+          msg.optionId || (msg.allow ? "allow-once" : "reject-once"),
+        );
+        ws.send(
+          JSON.stringify({
+            type: "permission_ack",
+            id: msg.id,
+            ok,
+          }),
+        );
       }
     } catch (err) {
       ws.send(
@@ -2422,7 +3417,7 @@ wss.on("connection", (ws) => {
     }
   });
 
-  ws.on("close", () => bridge.removeClient(ws));
+  ws.on("close", () => b.removeClient(ws));
 });
 
 // Static UI after all API routes (POST /api/* must not be swallowed).
@@ -2433,7 +3428,7 @@ app.use("/docs", express.static(path.join(ROOT, "docs"), { index: false }));
 // SPA fallback for client-side routes (GET only)
 app.get(/.*/, (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/ws")) return next();
-  sendIndexHtml(res).catch((err) => next(err));
+  sendIndexHtml(req, res).catch((err) => next(err));
 });
 
 // Listen first so Dock / health checks work even while the agent is connecting.
@@ -2452,13 +3447,29 @@ httpServer.listen(PORT, HOST, () => {
   console.log(
     `Glyph bridge → http://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}`,
   );
-  console.log(`Build              → #${GLYPH_BUILD} · v${GLYPH_VERSION}`);
+  console.log(
+    `Build              → ${glyphBuildLabel(GLYPH_BUILD) || `#${GLYPH_BUILD}`} · v${GLYPH_VERSION}`,
+  );
   console.log(
     `WebSocket          → ws://${HOST === "127.0.0.1" ? "localhost" : HOST}:${PORT}/ws`,
   );
   console.log(`Working directory  → ${WORK_CWD}`);
   console.log(`Uploads            → ${UPLOAD_DIR}`);
-  console.log(`Grok connected     → ${bridge.connected}`);
+  console.log(`Grok connected     → ${seats.get("desk").connected}`);
+
+  // Re-push OpenRouter models from bindings if agent is up but drifted
+  // (agent restart loses hot-apply; bindings.json is source of truth).
+  void syncModelsIfMismatch({
+    stateDir: STATE_DIR,
+    env: process.env,
+  })
+    .then((r) => {
+      if (r?.applied) console.log("Models sync         → applied to glyph-agent");
+      else if (r?.reason === "in_sync") console.log("Models sync         → in sync");
+      else if (r?.reason === "agent_down")
+        console.log("Models sync         → agent offline (apply on connect)");
+    })
+    .catch(() => {});
 
   // Ensure upload dir exists so the first attachment does not race mkdir.
   const logUploadCleanup = (r) => {
@@ -2487,7 +3498,7 @@ httpServer.listen(PORT, HOST, () => {
   }
 
   // Connect ACP agent after the UI is already reachable.
-  bridge.start().catch((err) => {
+  seats.get("desk").start().catch((err) => {
     console.error("Failed to start Grok bridge:", err);
     console.error(
       "Is `grok` on PATH and authenticated? Try: grok doctor / grok login",
@@ -2496,7 +3507,7 @@ httpServer.listen(PORT, HOST, () => {
 });
 
 async function shutdown() {
-  await bridge.stop();
+  await Promise.all(seats.all().map((b) => b.stop()));
   httpServer.close();
   process.exit(0);
 }

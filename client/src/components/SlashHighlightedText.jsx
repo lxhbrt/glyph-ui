@@ -35,6 +35,10 @@ export function SlashHighlightedText({
     return <MarkdownBody text={text} />;
   }
 
+  // Textarea shows a blank line after a trailing \n; a pre-wrap div collapses it
+  // unless something follows. Zero-width space keeps line height without a visible glyph.
+  const needsTrailingLine = typeof text === "string" && text.endsWith("\n");
+
   return (
     <div className={className || "slash-highlighted-text"}>
       {segments.map((seg, i) =>
@@ -46,6 +50,7 @@ export function SlashHighlightedText({
           <span key={i}>{seg.text}</span>
         ),
       )}
+      {needsTrailingLine ? "\u200b" : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { useEffect, useRef } from "react";
+import { slashItemLabel } from "../utils/slash.js";
 
 /**
  * @param {object} props
@@ -74,9 +75,25 @@ function SlashPopup({
                   onClick={() => onPick(item)}
                 >
                   <span className="slash-popup-name">
-                    /{item.name}
-                    <span className={`slash-badge slash-badge--${item.kind}`}>
-                      {item.kind === "skill" ? "Skill" : "Agent"}
+                    {slashItemLabel(item)}
+                    <span
+                      className={`slash-badge slash-badge--${
+                        item.kind === "ui"
+                          ? "ui"
+                          : item.kind === "skill"
+                            ? item.source === "user"
+                              ? "user"
+                              : "skill"
+                            : "user"
+                      }`}
+                    >
+                      {item.kind === "ui"
+                        ? "UI"
+                        : item.kind === "skill"
+                          ? item.source === "user"
+                            ? "USER"
+                            : "SKILL"
+                          : "USER"}
                     </span>
                   </span>
                   {item.description ? (

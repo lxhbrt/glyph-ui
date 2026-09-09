@@ -8,6 +8,7 @@ import {
   contextFillRatio,
   estimateTokensFromTexts,
   formatContextTooltip,
+  formatLvlBarLabel,
   formatTokenCount,
   goldFillRatio,
   resolveContextWindow,
@@ -29,6 +30,20 @@ describe("resolveContextWindow", () => {
   it("maps deepseek-v4-flash to 1M", () => {
     assert.equal(
       resolveContextWindow("deepseek-v4-flash-0731", "glyph-agent").window,
+      1_000_000,
+    );
+  });
+
+  it("maps deepseek-v4-flash-vision-exp to 1M on Agent and Code", () => {
+    const agent = resolveContextWindow(
+      "deepseek-v4-flash-vision-exp",
+      "glyph-agent",
+    );
+    assert.equal(agent.window, 1_000_000);
+    assert.equal(agent.source, "map");
+    assert.equal(agent.matchedKey, "deepseek-v4-flash-vision-exp");
+    assert.equal(
+      resolveContextWindow("deepseek-v4-flash-vision-exp", "_code").window,
       1_000_000,
     );
   });
@@ -116,6 +131,35 @@ describe("estimateTokensFromTexts / format", () => {
     assert.match(t, /gpt-5.6-luna/);
     assert.match(t, /50%/);
     assert.match(t, /soft-cap 80%/);
+  });
+});
+
+
+describe("formatLvlBarLabel", () => {
+  it("empty → LVL 0 · 0%", () => {
+    assert.equal(formatLvlBarLabel(0), "LVL 0 · 0%");
+    assert.equal(formatLvlBarLabel(0, false), "LVL 0 · 0%");
+  });
+
+  it("level digit = floor(pct/10) clamped 0..10", () => {
+    assert.equal(formatLvlBarLabel(1), "LVL 0 · 1%");
+    assert.equal(formatLvlBarLabel(9), "LVL 0 · 9%");
+    assert.equal(formatLvlBarLabel(10), "LVL 1 · 10%");
+    assert.equal(formatLvlBarLabel(45), "LVL 4 · 45%");
+    assert.equal(formatLvlBarLabel(99), "LVL 9 · 99%");
+    assert.equal(formatLvlBarLabel(100), "LVL 10 · 100%");
+  });
+
+  it("~ when estimated and pct > 0; empty estimated has no tilde", () => {
+    assert.equal(formatLvlBarLabel(0, true), "LVL 0 · 0%");
+    assert.equal(formatLvlBarLabel(48, true), "LVL 4 · ~48%");
+    assert.equal(formatLvlBarLabel(48, false), "LVL 4 · 48%");
+  });
+
+  it("clamps / coerces non-finite", () => {
+    assert.equal(formatLvlBarLabel(-5), "LVL 0 · 0%");
+    assert.equal(formatLvlBarLabel(150), "LVL 10 · 100%");
+    assert.equal(formatLvlBarLabel(NaN), "LVL 0 · 0%");
   });
 });
 

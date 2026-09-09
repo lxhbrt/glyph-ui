@@ -16,6 +16,11 @@ import {
   isModelCompatibleWithProfile,
   resolveContextWindow,
 } from "../shared/contextMeter.mjs";
+import {
+  sliceHistoryJsonl,
+  sliceRewindPointsJsonl,
+  sliceUpdatesJsonl,
+} from "../shared/rewind.mjs";
 
 const GROK_HOME = process.env.GROK_HOME || path.join(os.homedir(), ".grok");
 const SESSIONS_ROOT = path.join(GROK_HOME, "sessions");
@@ -26,6 +31,12 @@ const STATE_DIR =
 const CLOSED_LOG = path.join(STATE_DIR, "closed-sessions.json");
 
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isProtectedSession(sessionId, protectId) {
+  if (!protectId) return false;
+  if (Array.isArray(protectId)) return protectId.includes(sessionId);
+  return sessionId === protectId;
+}
 
 /**
  * Read Grok models_cache entry for window + soft-cap.
@@ -326,9 +337,36 @@ async function assertSafeSessionDir(dir) {
   return dirReal;
 }
 
-function titleFromSummary(summary) {
+/**
+ * Manual /rename: pin the title so Grok auto-titling leaves it.
+ * @param {object} summary
+ * @param {string} title
+ */
+export function applyManualTitle(summary, title) {
+  const t = String(title || "").trim();
+  if (!t) throw new Error("Titel fehlt");
+  if (t.length > 120) throw new Error("Titel zu lang (max. 120 Zeichen)");
+  const now = new Date().toISOString();
+  return {
+    ...(summary && typeof summary === "object" ? summary : {}),
+    title: t,
+    generated_title: t,
+    session_summary: t,
+    title_is_manual: true,
+    updated_at: now,
+  };
+}
+
+export function titleFromSummary(summary) {
+  if (summary?.title_is_manual) {
+    const pinned = String(
+      summary.title || summary.generated_title || "",
+    ).trim();
+    if (pinned) return pinned;
+  }
   return (
     summary?.generated_title ||
+    summary?.title ||
     summary?.session_summary ||
     summary?.info?.id ||
     "Untitled session"
@@ -401,86 +439,6 @@ export async function extractTranscript(sessionDir, { maxTurns = 80, maxChars = 
     if (turns.length >= maxTurns) return { turns, truncated: true };
   }
   return { turns, truncated: false };
-}
-
-function buildSummaryMarkdown({ meta, turns, truncated, freedBytes }) {
-  const title = meta.title;
-  const date = (meta.updatedAt || meta.createdAt || new Date().toISOString()).slice(0, 10);
-  const userTurns = turns.filter((t) => t.role === "user");
-  const assistantTurns = turns.filter((t) => t.role === "assistant");
-
-  const highlights = [];
-  for (const t of userTurns.slice(0, 3)) {
-    const line = t.text.replace(/\s+/g, " ").slice(0, 220);
-    if (line) highlights.push(`- (User) ${line}`);
-  }
-  for (const t of assistantTurns.slice(-2)) {
-    const line = t.text.replace(/\s+/g, " ").slice(0, 220);
-    if (line) highlights.push(`- (Grok) ${line}`);
-  }
-
-  const excerpt = turns
-    .slice(0, 12)
-    .map((t) => {
-      const body = t.text.length > 600 ? `${t.text.slice(0, 600)}…` : t.text;
-      return `### ${t.role === "user" ? "User" : "Grok"}\n\n${body}`;
-    })
-    .join("\n\n");
-
-  return {
-    title: `Grok Session: ${title}`,
-    body: [
-      `<!-- openclaw:wiki:raw-source -->`,
-      `---`,
-      `pageType: source`,
-      `sourceType: grok-session-archive`,
-      `id: source.grok-session.${meta.id}`,
-      `title: ${JSON.stringify(`Grok Session: ${title}`)}`,
-      `sessionId: ${meta.id}`,
-      `cwd: ${JSON.stringify(meta.cwd || "")}`,
-      `model: ${JSON.stringify(meta.model || "")}`,
-      `agent: ${JSON.stringify(meta.agent || "")}`,
-      `createdAt: ${JSON.stringify(meta.createdAt || "")}`,
-      `updatedAt: ${JSON.stringify(meta.updatedAt || "")}`,
-      `archivedAt: ${JSON.stringify(new Date().toISOString())}`,
-      `diskBytes: ${meta.diskBytes || 0}`,
-      `status: archived`,
-      `---`,
-      ``,
-      `# Grok Session: ${title}`,
-      ``,
-      `Archiviert aus Glyph UI (Command Overview) am ${date}.`,
-      ``,
-      `## Meta`,
-      ``,
-      `| Feld | Wert |`,
-      `| --- | --- |`,
-      `| Session ID | \`${meta.id}\` |`,
-      `| Workspace | \`${meta.cwd || "—"}\` |`,
-      `| Model | ${meta.model || "—"} |`,
-      `| Agent | ${meta.agent || "—"} |`,
-      `| Messages | ${meta.messages ?? "—"} |`,
-      `| Chat messages | ${meta.chatMessages ?? "—"} |`,
-      `| Disk (vor Close) | ${formatBytes(meta.diskBytes || 0)} |`,
-      `| Freigegeben | ${formatBytes(freedBytes || 0)} |`,
-      ``,
-      `## Kurzfassung`,
-      ``,
-      meta.summary && meta.summary !== title
-        ? meta.summary
-        : `Session „${title}“ — ${userTurns.length} User- und ${assistantTurns.length} Assistant-Turns extrahiert${truncated ? " (gekürzt)" : ""}.`,
-      ``,
-      `## Highlights`,
-      ``,
-      highlights.length ? highlights.join("\n") : "_Keine extrahierbaren Highlights._",
-      ``,
-      `## Auszug`,
-      ``,
-      excerpt || "_Kein Transcript gefunden._",
-      truncated ? `\n\n_… Transcript gekürzt._` : "",
-      ``,
-    ].join("\n"),
-  };
 }
 
 /**
@@ -640,7 +598,7 @@ export async function cleanupEmptySessions({
   const inventory = await listSessions({ includeClosed: false });
   const empties = inventory.sessions.filter((s) => {
     if (!s.empty) return false;
-    if (protectId && s.id === protectId) return false;
+    if (isProtectedSession(s.id, protectId)) return false;
     return true;
   });
 
@@ -703,26 +661,27 @@ export async function getSessionForOpen(sessionId) {
 }
 
 /**
- * Close session: optional wiki summary → optional disk delete.
- * Modes:
- *   writeWiki + deleteDisk  → Ja + Wiki (archive then remove folder)
- *   !writeWiki + deleteDisk → TUI /delete (disk only, no wiki)
- * Does NOT delete if sessionId === protectId (active chat session).
+ * Close session: disk delete. Wiki-Archiv ist tot (Persistenz `/merken`).
+ * writeWiki:true wirft. Does NOT delete if sessionId === protectId (active chat).
  */
 export async function closeSession(sessionId, {
   deleteDisk = true,
-  writeWiki = true,
+  writeWiki = false,
   protectId = null,
   wikiWriter,
 } = {}) {
   if (!isSessionId(sessionId)) {
     throw new Error("Invalid session id");
   }
-  if (protectId && sessionId === protectId) {
+  if (writeWiki) {
+    throw new Error("Wiki-Archiv tot — Persistenz nur /merken");
+  }
+  void wikiWriter;
+  if (isProtectedSession(sessionId, protectId)) {
     throw new Error("Aktive Chat-Session kann nicht geschlossen werden. Starte zuerst eine neue Session.");
   }
-  if (!writeWiki && !deleteDisk) {
-    throw new Error("Nichts zu tun: writeWiki und deleteDisk sind beide false");
+  if (!deleteDisk) {
+    throw new Error("Nichts zu tun: deleteDisk ist false");
   }
 
   const dir = await findSessionDir(sessionId);
@@ -733,16 +692,7 @@ export async function closeSession(sessionId, {
   if (!meta) throw new Error("Session metadata missing");
 
   const freedBytes = deleteDisk ? meta.diskBytes : 0;
-  let wikiPath = null;
-
-  if (writeWiki) {
-    if (typeof wikiWriter !== "function") {
-      throw new Error("Wiki writer missing");
-    }
-    const { turns, truncated } = await extractTranscript(dir);
-    const doc = buildSummaryMarkdown({ meta, turns, truncated, freedBytes });
-    wikiPath = await wikiWriter(doc, meta);
-  }
+  const wikiPath = null;
 
   if (deleteDisk) {
     const safeDir = await assertSafeSessionDir(dir);
@@ -769,6 +719,77 @@ export async function closeSession(sessionId, {
     diskDeleted: Boolean(deleteDisk),
     wikiWritten: Boolean(writeWiki && wikiPath),
   };
+}
+
+/**
+ * Manual session title (TUI /rename). Writes summary.json.
+ */
+export async function renameSession(sessionId, title) {
+  if (!isSessionId(sessionId)) throw new Error("Invalid session id");
+  const dir = await findSessionDir(sessionId);
+  if (!dir) throw new Error("Session not found on disk");
+  const summaryPath = path.join(dir, "summary.json");
+  let summary = {};
+  try {
+    summary = JSON.parse(await fs.readFile(summaryPath, "utf8"));
+  } catch {
+    summary = { info: { id: sessionId } };
+  }
+  const next = applyManualTitle(summary, title);
+  const tmp = `${summaryPath}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await fs.rename(tmp, summaryPath);
+  return {
+    ok: true,
+    id: sessionId,
+    title: titleFromSummary(next),
+    titleIsManual: true,
+  };
+}
+
+async function rewriteIfPresent(filePath, transform) {
+  let raw;
+  try {
+    raw = await fs.readFile(filePath, "utf8");
+  } catch (err) {
+    if (err && err.code === "ENOENT") return false;
+    throw err;
+  }
+  const next = transform(raw);
+  const tmp = `${filePath}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, next, "utf8");
+  await fs.rename(tmp, filePath);
+  return true;
+}
+
+/**
+ * Truncate a Grok disk session to before user-turn `dropUserIndex`.
+ * Does not restore files. Caller should session/load afterwards if live.
+ */
+export async function applyDiskRewind(sessionId, dropUserIndex) {
+  if (!isSessionId(sessionId)) throw new Error("Invalid session id");
+  const drop = Number(dropUserIndex);
+  if (!Number.isInteger(drop) || drop < 0) {
+    throw new Error("dropUserIndex ungültig");
+  }
+  const dir = await findSessionDir(sessionId);
+  if (!dir) throw new Error("Session not found on disk");
+
+  await rewriteIfPresent(path.join(dir, "updates.jsonl"), (raw) =>
+    sliceUpdatesJsonl(raw, drop),
+  );
+  await rewriteIfPresent(path.join(dir, "chat_history.jsonl"), (raw) =>
+    sliceHistoryJsonl(raw, drop),
+  );
+  await rewriteIfPresent(path.join(dir, "rewind_points.jsonl"), (raw) =>
+    sliceRewindPointsJsonl(raw, drop),
+  );
+
+  const { turns } = await extractTranscript(dir, {
+    maxTurns: 200,
+    maxChars: 400_000,
+  });
+  return { ok: true, id: sessionId, dropUserIndex: drop, turns };
 }
 
 export { formatBytes, SESSIONS_ROOT, STATE_DIR };

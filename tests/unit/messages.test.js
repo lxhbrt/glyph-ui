@@ -5,8 +5,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  TRANSCRIPT_WINDOW,
   formatToolText,
+  priorUserMessage,
   toolMessageId,
+  transcriptWindow,
   upsertToolMessage,
 } from "../../client/src/utils/messages.js";
 
@@ -31,6 +34,19 @@ describe("formatToolText", () => {
 
   it("omits status when empty", () => {
     assert.equal(formatToolText({ title: "Read file" }), "Read file");
+  });
+
+  it("does not show call-… ids; keeps previous title", () => {
+    assert.equal(
+      formatToolText(
+        {
+          title: "call-af890ea9-3946-46b2-b43d-0a16a2f552d0-17",
+          status: "completed",
+        },
+        "read_file · pending",
+      ),
+      "read_file · completed",
+    );
   });
 });
 
@@ -119,5 +135,97 @@ describe("upsertToolMessage", () => {
     });
     assert.notEqual(next, prev);
     assert.equal(prev.length, 0);
+  });
+
+  it("keeps rawInput / content / kind across status-only updates", () => {
+    let list = upsertToolMessage([], {
+      toolCallId: "t1",
+      title: "read_file",
+      kind: "read",
+      status: "pending",
+      rawInput: { target_file: "/tmp/a.js" },
+    });
+    list = upsertToolMessage(list, {
+      toolCallId: "t1",
+      status: "completed",
+      content: [
+        { type: "content", content: { type: "text", text: "ok" } },
+      ],
+    });
+    assert.equal(list.length, 1);
+    assert.equal(list[0].kind, "read");
+    assert.equal(list[0].status, "completed");
+    assert.deepEqual(list[0].rawInput, { target_file: "/tmp/a.js" });
+    assert.equal(list[0].content[0].content.text, "ok");
+  });
+});
+
+describe("transcriptWindow", () => {
+  const ids = (n) => Array.from({ length: n }, (_, i) => ({ id: String(i) }));
+
+  it("mounts the whole list when it fits the window", () => {
+    const list = ids(3);
+    const slice = transcriptWindow(list, 0, 40);
+    assert.equal(slice.hiddenCount, 0);
+    assert.equal(slice.start, 0);
+    assert.equal(slice.visible, list);
+  });
+
+  it("keeps only the last window by default", () => {
+    const list = ids(100);
+    const slice = transcriptWindow(list);
+    assert.equal(slice.hiddenCount, 100 - TRANSCRIPT_WINDOW);
+    assert.equal(slice.visible.length, TRANSCRIPT_WINDOW);
+    assert.equal(slice.visible[0].id, String(100 - TRANSCRIPT_WINDOW));
+    assert.equal(slice.visible.at(-1).id, "99");
+  });
+
+  it("reveals extra older rows without mounting the rest", () => {
+    const list = ids(100);
+    const slice = transcriptWindow(list, TRANSCRIPT_WINDOW);
+    assert.equal(slice.visible.length, TRANSCRIPT_WINDOW * 2);
+    assert.equal(slice.hiddenCount, 100 - TRANSCRIPT_WINDOW * 2);
+    assert.equal(slice.visible[0].id, "20");
+  });
+
+  it("clamps when revealed covers the whole transcript", () => {
+    const list = ids(50);
+    const slice = transcriptWindow(list, 1000);
+    assert.equal(slice.hiddenCount, 0);
+    assert.equal(slice.visible.length, 50);
+    assert.equal(slice.start, 0);
+  });
+});
+
+describe("priorUserMessage", () => {
+  const rows = [
+    { id: "u1", role: "user", text: "Bitte den Apfel verschieben" },
+    { id: "a1", role: "assistant", text: "Apfel sitzt über dem Kopf." },
+    { id: "t1", role: "tool", text: "read" },
+    { id: "a2", role: "assistant", text: "Fertig." },
+    { id: "u2", role: "user", text: "   " },
+    { id: "a3", role: "assistant", text: "Ohne Meldung." },
+  ];
+
+  it("finds the last user turn with text, skipping tools", () => {
+    assert.equal(priorUserMessage(rows, 1)?.id, "u1");
+    assert.equal(priorUserMessage(rows, 3)?.id, "u1");
+  });
+
+  it("skips blank user rows and still finds the last real message", () => {
+    assert.equal(priorUserMessage(rows, 5)?.id, "u1");
+  });
+
+  it("returns null when no user text exists before the answer", () => {
+    assert.equal(
+      priorUserMessage(
+        [
+          { id: "u0", role: "user", text: "   " },
+          { id: "a0", role: "assistant", text: "Ohne Meldung." },
+        ],
+        1,
+      ),
+      null,
+    );
   });
 });

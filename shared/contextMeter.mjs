@@ -9,8 +9,8 @@
 /** Default soft-cap when model catalog has no auto_compact_threshold_percent. */
 export const DEFAULT_SOFT_CAP_PERCENT = 80;
 
-/** Conservative fallback when model id is unknown. */
-export const DEFAULT_CONTEXT_WINDOW = 200_000;
+/** Conservative fallback when model id is unknown (and OpenRouter lookup misses). */
+export const DEFAULT_CONTEXT_WINDOW = 250_000;
 
 /**
  * Known model → context window (tokens).
@@ -34,7 +34,10 @@ export const CONTEXT_WINDOWS = {
   "claude-3-7-sonnet": 200_000,
   "sonnet-5": 1_000_000,
   "sonnet 5": 1_000_000,
+  "deepseek/deepseek-v4-flash-vision-exp": 1_000_000,
+  "deepseek-v4-flash-vision-exp": 1_000_000,
   "deepseek/deepseek-v4-flash": 1_000_000,
+  "deepseek/deepseek-v4-flash-0731": 1_000_000,
   "deepseek-v4-flash": 1_000_000,
   "deepseek-v4-flash-0731": 1_000_000,
   "deepseek/deepseek-reasoner": 1_000_000,
@@ -45,7 +48,9 @@ export const CONTEXT_WINDOWS = {
 /** Profile defaults when no model id is known. */
 export const PROFILE_DEFAULT_WINDOWS = {
   grok: 500_000,
-  claude: 1_000_000,
+  claude: 1_000_000, // legacy alias → ^_Code
+  _code: 1_000_000,
+  code: 1_000_000,
   "glyph-agent": 1_000_000,
 };
 
@@ -72,7 +77,10 @@ export function normalizeModelId(model) {
 export function modelProfileFamily(model) {
   const id = normalizeModelId(model);
   if (!id) return null;
-  if (id === "grok" || id === "claude" || id === "glyph-agent") return id;
+  if (id === "grok" || id === "claude" || id === "glyph-agent" || id === "_code" || id === "code") {
+    if (id === "claude" || id === "code") return "_code";
+    return id;
+  }
   if (id.includes("grok")) return "grok";
   if (
     id.includes("claude") ||
@@ -81,9 +89,10 @@ export function modelProfileFamily(model) {
     id.includes("anthropic") ||
     id.includes("fable")
   ) {
-    return "claude";
+    return "_code"; // Claude-Ersatz: ^_Code
   }
-  // gpt / luna / deepseek / openrouter / minimax / … → cloud path under glyph-agent
+  if (id.includes("deepseek") && id.includes("flash")) return "_code";
+  // gpt / luna / openrouter / minimax / … → cloud path under glyph-agent
   return "glyph-agent";
 }
 
@@ -93,10 +102,15 @@ export function modelProfileFamily(model) {
  * @returns {boolean}
  */
 export function isModelCompatibleWithProfile(model, profile) {
-  const p = String(profile || "")
+  let p = String(profile || "")
     .trim()
     .toLowerCase();
   if (!p) return true;
+  // Aliase: claude/code → _code
+  if (p === "claude" || p === "code" || p === "^_code") p = "_code";
+  const id = normalizeModelId(model);
+  // Direct DeepSeek is the hop for both °_Agent and ^_Code.
+  if (id.includes("deepseek")) return true;
   const fam = modelProfileFamily(model);
   if (!fam) return false;
   return fam === p;
@@ -211,6 +225,25 @@ export function formatTokenCount(n) {
     return `${k.toFixed(1).replace(/\.0$/, "")}k`;
   }
   return String(Math.round(v));
+}
+
+/**
+ * On-bar LVL label (Option A): `LVL N · [~]P%`.
+ * Level digit = floor(pct/10) clamped 0..10. `~` when estimated and pct > 0.
+ * Empty → `LVL 0 · 0%` (no tilde even if estimated).
+ *
+ * @param {number} pct fill percent 0..100 (typically already rounded)
+ * @param {boolean} [estimated=false]
+ * @returns {string}
+ */
+export function formatLvlBarLabel(pct, estimated = false) {
+  const raw = Number(pct);
+  const p = Number.isFinite(raw) ? Math.round(raw) : 0;
+  const clampedPct = Math.min(100, Math.max(0, p));
+  const level = Math.min(10, Math.max(0, Math.floor(clampedPct / 10)));
+  // Empty/0% is exact — no tilde even when estimated (agent chat with no tokens yet).
+  const approx = estimated && clampedPct > 0 ? "~" : "";
+  return `LVL ${level} · ${approx}${clampedPct}%`;
 }
 
 /**
