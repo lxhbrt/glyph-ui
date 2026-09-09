@@ -742,7 +742,7 @@ function SnackBoard({ running, stuffed = false, onStopClick }) {
         }, 80);
       }
     };
-    const onClick = (ev) => {
+    const onClick = (_ev) => {
       // Don't preventDefault — allow bubble to send button as Abbruch backup
       fireStop();
     };
